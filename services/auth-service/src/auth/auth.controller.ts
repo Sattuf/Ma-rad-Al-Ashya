@@ -7,6 +7,7 @@ import {
   Req,
   HttpCode,
   HttpStatus,
+  BadRequestException,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
@@ -112,6 +113,26 @@ export class AuthController {
   @ApiOperation({ summary: 'الدخول عن طريق فيسبوك — Login via Facebook' })
   async facebookLogin() {
     // Initiates redirect to Facebook
+  }
+
+  @Post('google/token')
+  @ApiOperation({ summary: 'الدخول عبر جوجل من تطبيقات الجوال — Login via Google Token' })
+  @ApiResponse({ status: 200, type: AuthResponseDto })
+  async googleTokenLogin(@Body('id_token') idToken: string) {
+    if (!idToken) {
+      throw new BadRequestException('id_token is required');
+    }
+    return this.authService.verifyGoogleToken(idToken);
+  }
+
+  @Post('facebook/token')
+  @ApiOperation({ summary: 'الدخول عبر فيسبوك من تطبيقات الجوال — Login via Facebook Token' })
+  @ApiResponse({ status: 200, type: AuthResponseDto })
+  async facebookTokenLogin(@Body('access_token') accessToken: string) {
+    if (!accessToken) {
+      throw new BadRequestException('access_token is required');
+    }
+    return this.authService.verifyFacebookToken(accessToken);
   }
 
   @Get('facebook/callback')

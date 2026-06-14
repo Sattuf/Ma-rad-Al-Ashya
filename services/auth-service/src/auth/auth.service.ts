@@ -15,6 +15,7 @@ import { AuthResponseDto } from './dto/auth-response.dto';
 import { User, AuthProvider, UserStatus } from '../users/entities/user.entity';
 import * as bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
+import { OAuth2Client } from 'google-auth-library';
 
 @Injectable()
 export class AuthService {
@@ -204,6 +205,56 @@ export class AuthService {
     }
 
     return this.loginWithoutPassword(user);
+  }
+
+  async verifyGoogleToken(idToken: string): Promise<AuthResponseDto> {
+    try {
+      const clientId = this.configService.get<string>('GOOGLE_CLIENT_ID');
+      const client = new OAuth2Client(clientId);
+      const ticket = await client.verifyIdToken({
+        idToken,
+        audience: clientId,
+      });
+      const payload = ticket.getPayload();
+      if (!payload) {
+        throw new BadRequestException('Invalid Google token');
+      }
+
+      const profile = {
+        id: payload.sub,
+        email: payload.email,
+        displayName: payload.name,
+        picture: payload.picture,
+      };
+
+      return this.handleOAuth(profile, AuthProvider.GOOGLE);
+    } catch (error) {
+      throw new UnauthorizedException('فشل التحقق من رمز Google');
+    }
+  }
+
+  async verifyFacebookToken(accessToken: string): Promise<AuthResponseDto> {
+    try {
+      // Use fetch to get user profile from Facebook Graph API
+      const response = await fetch(
+        `https://graph.facebook.com/me?fields=id,name,email,picture&access_token=${accessToken}`
+      );
+      if (!response.ok) {
+        throw new BadRequestException('Invalid Facebook token');
+      }
+      const data = await response.json();
+      
+      const profile = {
+        id: data.id,
+        email: data.email,
+        displayName: data.name,
+        picture: data.picture?.data?.url,
+      };
+
+      return this.handleOAuth(profile, AuthProvider.FACEBOOK);
+    } catch (error) {
+      throw new UnauthorizedException('فشل التحقق من رمز Facebook');
+    }
   }
 
   async generateTokensForUser(user: User): Promise<{ access_token: string; refresh_token: string }> {

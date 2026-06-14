@@ -2,6 +2,29 @@
 
 جميع التغييرات الملحوظة في المشروع موثقة هنا.
 
+## [0.2.0] - 2026-06-14
+
+### Sprint 2 — الأسبوع 5: شاشات المصادقة (Flutter + Next.js)
+
+#### أُضيف
+- **Flutter Mobile App**:
+  - إعداد هيكلية Riverpod و GoRouter و Dio.
+  - تطبيق ثيم مميز (Emerald/Teal) متوافق مع العرض العربي (RTL).
+  - إنشاء 5 شاشات: `SplashScreen`, `LoginScreen`, `RegisterScreen`, `OtpScreen`, و `HomeScreen`.
+  - إدارة حالة المصادقة (`AuthState`) وربطها مع مخزن آمن `flutter_secure_storage`.
+  - اعتراض طلبات Dio (Interceptors) لإضافة رمز الوصول وتجديده تلقائياً.
+  - اختبار `login_screen_test.dart` يعمل بنجاح.
+- **Next.js Web App**:
+  - إعداد Tailwind CSS v4، Zustand، و Axios.
+  - تخطيط مصادقة (Auth Layout) ببطاقة مركزية أنيقة مع تدرجات لونية.
+  - إنشاء 3 صفحات: `/login`, `/register`, و `/verify-otp`.
+  - اعتراض طلبات Axios لإضافة رمز الوصول من `localStorage` وتجديده عبر `Cookies`.
+  - إضافة `middleware.ts` لحماية المسارات.
+  - إعداد بيئة Jest واختبار `login.test.tsx` الذي اجتاز الفحص.
+- **auth-service**:
+  - إضافة نهايات طرفية (Endpoints) لـ `POST /auth/google/token` و `POST /auth/facebook/token`.
+  - دمج `google-auth-library` و `fetch` للتحقق من الرموز المميزة لتطبيقات الجوال من جانب الخادم (Server-Side).
+
 ## [0.1.0] - 2026-06-14
 
 ### Sprint 1 — الأسبوعان 3+4: خدمة المصادقة الكاملة (Auth Service)
