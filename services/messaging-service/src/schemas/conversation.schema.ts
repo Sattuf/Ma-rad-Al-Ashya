@@ -17,6 +17,9 @@ export class Conversation extends Document {
 
   @Prop()
   updatedAt: Date;
+
+  @Prop({ type: [{ type: String }], default: [] })
+  blockedBy: string[];
 }
 
 export const ConversationSchema = SchemaFactory.createForClass(Conversation);

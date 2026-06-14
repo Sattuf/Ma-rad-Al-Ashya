@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dio/dio.dart';
 import 'package:marad_mobile/core/network/api_client.dart';
 import '../models/conversation_model.dart';
 import '../models/message_model.dart';
@@ -44,5 +45,26 @@ class MessagingRepository {
       print('Error getting messages: $e');
       return [];
     }
+  }
+
+  Future<void> deleteMessage(String conversationId, String messageId) async {
+    await apiClient.dio.delete('/messaging/conversations/$conversationId/messages/$messageId');
+  }
+
+  Future<void> blockConversation(String conversationId) async {
+    await apiClient.dio.post('/messaging/conversations/$conversationId/block');
+  }
+
+  Future<Message> uploadImageMessage(String conversationId, String filePath) async {
+    String fileName = filePath.split('/').last;
+    FormData formData = FormData.fromMap({
+      'image': await MultipartFile.fromFile(filePath, filename: fileName),
+    });
+
+    final response = await apiClient.dio.post(
+      '/messaging/conversations/$conversationId/messages/image',
+      data: formData,
+    );
+    return Message.fromJson(response.data['data']);
   }
 }

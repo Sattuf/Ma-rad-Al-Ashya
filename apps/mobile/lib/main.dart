@@ -4,8 +4,17 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 
-void main() {
+import 'package:firebase_core/firebase_core.dart';
+import 'core/services/fcm_service.dart';
+
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await Firebase.initializeApp();
+    await FCMService().initialize();
+  } catch (e) {
+    print('Firebase initialization failed: $e');
+  }
   runApp(const ProviderScope(child: MyApp()));
 }
 

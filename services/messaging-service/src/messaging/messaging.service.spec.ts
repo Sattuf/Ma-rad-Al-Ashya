@@ -4,6 +4,7 @@ import { getModelToken } from '@nestjs/mongoose';
 import { Conversation } from '../schemas/conversation.schema';
 import { Message } from '../schemas/message.schema';
 import { FcmService } from '../fcm/fcm.service';
+import { StorageService } from './storage.service';
 
 describe('MessagingService', () => {
   let service: MessagingService;
@@ -25,15 +26,16 @@ describe('MessagingService', () => {
 
   class MockConversationModelClass {
     constructor(public data: any) {}
-    save = jest.fn().mockResolvedValue(this.data);
+    save() { return Promise.resolve(this.data); }
   }
 
   class MockMessageModelClass {
+    _id: string;
     constructor(public data: any) {
       Object.assign(this, data);
       this._id = 'mockMessageId';
     }
-    save = jest.fn().mockResolvedValue(this);
+    save() { return Promise.resolve(this); }
   }
 
   beforeEach(async () => {
@@ -46,11 +48,15 @@ describe('MessagingService', () => {
         },
         {
           provide: getModelToken(Message.name),
-          useValue: mockMessageModelClass, // Use class constructor mock for 'new model()'
+          useValue: MockMessageModelClass, // Use class constructor mock for 'new model()'
         },
         {
           provide: FcmService,
           useValue: { sendNotification: jest.fn() },
+        },
+        {
+          provide: StorageService,
+          useValue: { uploadImage: jest.fn() },
         },
       ],
     }).compile();

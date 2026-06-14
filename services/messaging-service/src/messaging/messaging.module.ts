@@ -9,6 +9,8 @@ import { MessagingGateway } from './messaging.gateway';
 import { FcmService } from '../fcm/fcm.service';
 import { RedisService } from '../redis/redis.service';
 
+import { StorageService } from './storage.service';
+
 @Module({
   imports: [
     MongooseModule.forFeature([
@@ -17,6 +19,6 @@ import { RedisService } from '../redis/redis.service';
     ]),
   ],
   controllers: [ConversationsController, MessagesController],
-  providers: [MessagingService, MessagingGateway, FcmService, RedisService],
+  providers: [MessagingService, MessagingGateway, FcmService, RedisService, StorageService],
 })
 export class MessagingModule {}

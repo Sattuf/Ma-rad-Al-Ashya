@@ -9,6 +9,8 @@ export interface Message {
   conversationId: string;
   senderId: string;
   content: string;
+  type?: 'text' | 'image';
+  imageUrl?: string;
   createdAt: string;
   readAt?: string;
 }

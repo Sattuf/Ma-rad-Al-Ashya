@@ -54,3 +54,17 @@ Received when another user starts or stops typing.
 ### `presence_update`
 Received globally when a user connects or disconnects.
 - **Payload**: `{ userId: string, status: 'online' | 'offline' }`
+
+---
+
+## REST API Integration
+
+Some messaging features are provided via REST endpoints to handle file uploads or access control effectively:
+
+- **Send Image Message**: `POST /conversations/:id/messages/image`
+  - Uploads an image using Multer and Sharp.
+  - Automatically emits a `new_message` event over WebSockets to other participants.
+- **Delete Message**: `DELETE /conversations/:id/messages/:messageId`
+  - Deletes a message (only allowed within 5 minutes of sending).
+- **Block Conversation**: `POST /conversations/:id/block`
+  - Blocks a conversation so no further messages can be sent.

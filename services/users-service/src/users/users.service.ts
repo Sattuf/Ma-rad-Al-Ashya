@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { User } from './entities/user.entity';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UpdateNotificationsDto } from './dto/update-notifications.dto';
+import { UpdateFcmTokenDto } from './dto/update-fcm-token.dto';
 import { StorageService } from '../storage/storage.service';
 
 @Injectable()
@@ -38,6 +39,12 @@ export class UsersService {
   async updateNotifications(userId: string, updateNotificationsDto: UpdateNotificationsDto): Promise<User> {
     const user = await this.getProfile(userId);
     Object.assign(user, updateNotificationsDto);
+    return this.usersRepository.save(user);
+  }
+
+  async updateFcmToken(userId: string, updateFcmTokenDto: UpdateFcmTokenDto): Promise<User> {
+    const user = await this.getProfile(userId);
+    user.fcm_token = updateFcmTokenDto.fcm_token;
     return this.usersRepository.save(user);
   }
 }

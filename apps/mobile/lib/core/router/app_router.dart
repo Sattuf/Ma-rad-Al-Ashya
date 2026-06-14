@@ -20,6 +20,7 @@ import '../../features/search/presentation/screens/map_screen.dart';
 import '../presentation/screens/main_shell_screen.dart';
 import '../../features/messaging/presentation/screens/conversations_screen.dart';
 import '../../features/messaging/presentation/screens/chat_screen.dart';
+import '../../features/messaging/presentation/screens/image_viewer_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authProvider);
@@ -112,6 +113,13 @@ final routerProvider = Provider<GoRouter>((ref) {
           final id = state.pathParameters['id']!;
           final otherUserName = state.extra as String? ?? 'مستخدم';
           return ChatScreen(conversationId: id, otherUserName: otherUserName);
+        },
+      ),
+      GoRoute(
+        path: '/image_viewer',
+        builder: (context, state) {
+          final imageUrl = state.extra as String;
+          return ImageViewerScreen(imageUrl: imageUrl);
         },
       ),
       GoRoute(

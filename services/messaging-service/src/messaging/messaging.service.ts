@@ -4,6 +4,7 @@ import { Model, Types } from 'mongoose';
 import { Conversation } from '../schemas/conversation.schema';
 import { Message } from '../schemas/message.schema';
 import { FcmService } from '../fcm/fcm.service';
+import { StorageService } from './storage.service';
 
 @Injectable()
 export class MessagingService {
@@ -11,6 +12,7 @@ export class MessagingService {
     @InjectModel(Conversation.name) private conversationModel: Model<Conversation>,
     @InjectModel(Message.name) private messageModel: Model<Message>,
     private fcmService: FcmService,
+    private storageService: StorageService,
   ) {}
 
   async createOrGetConversation(participants: string[]): Promise<Conversation> {
@@ -37,6 +39,12 @@ export class MessagingService {
       .exec();
   }
 
+  async getConversationById(conversationId: string): Promise<Conversation> {
+    const conv = await this.conversationModel.findById(conversationId);
+    if (!conv) throw new NotFoundException('Conversation not found');
+    return conv;
+  }
+
   async getMessages(conversationId: string, limit = 50, skip = 0): Promise<Message[]> {
     return this.messageModel
       .find({ conversationId })
@@ -47,17 +55,21 @@ export class MessagingService {
   }
 
   async sendMessage(conversationId: string, senderId: string, content: string): Promise<Message> {
+    const conversation = await this.conversationModel.findById(conversationId);
+    if (!conversation) {
+      throw new NotFoundException('Conversation not found');
+    }
+
+    if (conversation.blockedBy && conversation.blockedBy.length > 0) {
+      throw new Error('Conversation is blocked');
+    }
+
     const message = new this.messageModel({
       conversationId,
       senderId,
       content,
     });
     await message.save();
-
-    const conversation = await this.conversationModel.findById(conversationId);
-    if (!conversation) {
-      throw new NotFoundException('Conversation not found');
-    }
 
     conversation.lastMessage = message._id as Types.ObjectId;
     
@@ -71,14 +83,68 @@ export class MessagingService {
     conversation.unreadCounts = newUnread;
     await conversation.save();
 
-    // send FCM to other participants
+    // Do not send FCM here, it will be done in the gateway if the user is offline
+    
+    return message;
+  }
+
+  async sendImageMessage(conversationId: string, senderId: string, file: Express.Multer.File): Promise<Message> {
+    const conversation = await this.conversationModel.findById(conversationId);
+    if (!conversation) throw new NotFoundException('Conversation not found');
+    if (conversation.blockedBy && conversation.blockedBy.length > 0) {
+      throw new Error('Conversation is blocked');
+    }
+
+    const imageUrl = await this.storageService.uploadImage(file);
+    const message = new this.messageModel({
+      conversationId,
+      senderId,
+      content: 'Image',
+      imageUrl,
+    });
+    await message.save();
+
+    conversation.lastMessage = message._id as Types.ObjectId;
+    const newUnread = { ...conversation.unreadCounts };
     conversation.participants.forEach((p) => {
       if (p !== senderId) {
-        this.fcmService.sendNotification(p, 'New Message', content, { conversationId, messageId: message._id });
+        newUnread[p] = (newUnread[p] || 0) + 1;
       }
     });
+    conversation.unreadCounts = newUnread;
+    await conversation.save();
 
     return message;
+  }
+
+  async blockConversation(conversationId: string, userId: string): Promise<Conversation> {
+    const conversation = await this.conversationModel.findById(conversationId);
+    if (!conversation) throw new NotFoundException('Conversation not found');
+
+    if (!conversation.blockedBy) {
+      conversation.blockedBy = [];
+    }
+    if (!conversation.blockedBy.includes(userId)) {
+      conversation.blockedBy.push(userId);
+    }
+    return conversation.save();
+  }
+
+  async deleteMessage(conversationId: string, messageId: string, userId: string): Promise<void> {
+    const message = await this.messageModel.findById(messageId);
+    if (!message) throw new NotFoundException('Message not found');
+
+    if (message.senderId !== userId) {
+      throw new Error('You can only delete your own messages');
+    }
+
+    // Check if within 5 minutes
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    if (message.createdAt < fiveMinutesAgo) {
+      throw new Error('Can only delete messages within 5 minutes of sending');
+    }
+
+    await this.messageModel.findByIdAndDelete(messageId);
   }
 
   async markRead(conversationId: string, userId: string): Promise<void> {

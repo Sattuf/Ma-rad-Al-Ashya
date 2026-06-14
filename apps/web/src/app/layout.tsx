@@ -18,6 +18,8 @@ export const metadata: Metadata = {
   description: "منصة معرض الأشياء لبيع وشراء الأغراض المستعملة والجديدة",
 };
 
+import FCMProvider from "@/components/providers/FCMProvider";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -26,6 +28,7 @@ export default function RootLayout({
   return (
     <html lang="ar" dir="rtl" className={`${inter.variable} ${cairo.variable}`}>
       <body className="antialiased min-h-screen flex flex-col bg-gray-50">
+        <FCMProvider />
         <Navbar />
         {children}
       </body>

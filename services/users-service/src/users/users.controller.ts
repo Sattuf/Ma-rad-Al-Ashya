@@ -3,6 +3,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { UsersService } from './users.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UpdateNotificationsDto } from './dto/update-notifications.dto';
+import { UpdateFcmTokenDto } from './dto/update-fcm-token.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller()
@@ -29,5 +30,10 @@ export class UsersController {
   @Put('notifications')
   updateNotifications(@Request() req, @Body() updateNotificationsDto: UpdateNotificationsDto) {
     return this.usersService.updateNotifications(req.user.userId, updateNotificationsDto);
+  }
+
+  @Put('fcm-token')
+  updateFcmToken(@Request() req, @Body() updateFcmTokenDto: UpdateFcmTokenDto) {
+    return this.usersService.updateFcmToken(req.user.userId, updateFcmTokenDto);
   }
 }

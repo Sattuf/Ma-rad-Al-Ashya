@@ -11,6 +11,7 @@ import { Server, Socket } from 'socket.io';
 import { MessagingService } from './messaging.service';
 
 import { RedisService } from '../redis/redis.service';
+import { FcmService } from '../fcm/fcm.service';
 
 @WebSocketGateway({ cors: { origin: '*' } })
 export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnect {
@@ -23,6 +24,7 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
   constructor(
     private messagingService: MessagingService,
     private redisService: RedisService,
+    private fcmService: FcmService,
   ) {}
 
   async handleConnection(client: Socket) {
@@ -56,9 +58,31 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
     @ConnectedSocket() client: Socket,
   ) {
     const message = await this.messagingService.sendMessage(data.conversationId, data.senderId, data.content);
-    // Emit to conversation room
-    this.server.to(`conversation_${data.conversationId}`).emit('new_message', message);
+    await this.handleNewMessageSent(message);
     return message;
+  }
+
+  async handleNewMessageSent(message: any) {
+    const conversationId = message.conversationId.toString();
+    const senderId = message.senderId;
+    const content = message.content;
+
+    // Emit to conversation room
+    this.server.to(`conversation_${conversationId}`).emit('new_message', message);
+
+    const conversation = await this.messagingService.getConversationById(conversationId);
+    
+    for (const p of conversation.participants) {
+      if (p !== senderId) {
+        const status = await this.redisService.getUserPresence(p);
+        if (status !== 'online') {
+          this.fcmService.sendNotification(p, 'New Message', content, {
+            conversationId,
+            messageId: message._id.toString(),
+          });
+        }
+      }
+    }
   }
 
   @SubscribeMessage('mark_read')

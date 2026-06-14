@@ -155,6 +155,54 @@ class ChatNotifier extends StateNotifier<ChatState> {
     socketService.sendMessage(payload);
   }
 
+  Future<void> sendImage(String filePath, String senderId) async {
+    // Optimistic loading message
+    final msgId = DateTime.now().millisecondsSinceEpoch.toString();
+    final tempMsg = Message(
+      id: msgId,
+      conversationId: conversationId,
+      senderId: senderId,
+      text: '',
+      imageUrl: filePath, // Using local path temporarily
+      createdAt: DateTime.now(),
+    );
+    
+    state = state.copyWith(messages: [tempMsg, ...state.messages]);
+
+    try {
+      final msg = await repo.uploadImageMessage(conversationId, filePath);
+      // Replace temp message with actual message
+      final newMessages = state.messages.map((m) => m.id == msgId ? msg : m).toList();
+      state = state.copyWith(messages: newMessages);
+    } catch (e) {
+      print('Error uploading image: $e');
+      // Remove temp message on error
+      state = state.copyWith(messages: state.messages.where((m) => m.id != msgId).toList());
+    }
+  }
+
+  Future<void> deleteMessage(String messageId) async {
+    // Optimistic update
+    final currentMessages = state.messages.toList();
+    state = state.copyWith(messages: currentMessages.where((m) => m.id != messageId).toList());
+    
+    try {
+      await repo.deleteMessage(conversationId, messageId);
+    } catch (e) {
+      // Revert if failed
+      state = state.copyWith(messages: currentMessages);
+    }
+  }
+
+  Future<void> blockConversation() async {
+    try {
+      await repo.blockConversation(conversationId);
+      // Optional: Update conversation list status to blocked
+    } catch (e) {
+      print('Error blocking conversation: $e');
+    }
+  }
+
   void sendTyping(bool isTyping, String userId) {
     socketService.sendTyping({
       'conversationId': conversationId,

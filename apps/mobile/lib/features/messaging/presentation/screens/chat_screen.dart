@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/messaging_provider.dart';
 import '../widgets/chat_bubble.dart';
 import '../../auth/presentation/providers/auth_provider.dart';
+import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import 'dart:async';
 
 class ChatScreen extends ConsumerStatefulWidget {
@@ -71,6 +73,38 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     );
   }
 
+  Future<void> _pickImage() async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+    if (pickedFile != null) {
+      final userId = ref.read(authProvider).user?.id ?? '';
+      ref.read(chatProvider(widget.conversationId).notifier).sendImage(pickedFile.path, userId);
+    }
+  }
+
+  void _showDeleteMenu(String messageId) {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.delete, color: Colors.red),
+                title: const Text('حذف الرسالة', style: TextStyle(color: Colors.red)),
+                onTap: () {
+                  Navigator.pop(context);
+                  ref.read(chatProvider(widget.conversationId).notifier).deleteMessage(messageId);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final chatState = ref.watch(chatProvider(widget.conversationId));
@@ -89,6 +123,25 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               ),
           ],
         ),
+        actions: [
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              if (value == 'block') {
+                ref.read(chatProvider(widget.conversationId).notifier).blockConversation();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('تم حظر المحادثة')),
+                );
+                context.pop();
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'block',
+                child: Text('حظر المحادثة'),
+              ),
+            ],
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -102,9 +155,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   return const Center(child: CircularProgressIndicator());
                 }
                 final message = chatState.messages[index];
+                final isMe = message.senderId == currentUserId;
                 return ChatBubble(
                   message: message,
-                  isMe: message.senderId == currentUserId,
+                  isMe: isMe,
+                  onLongPress: isMe && DateTime.now().difference(message.createdAt).inMinutes <= 5
+                      ? () => _showDeleteMenu(message.id)
+                      : null,
+                  onImageTap: message.imageUrl != null
+                      ? () => context.push('/image_viewer', extra: message.imageUrl)
+                      : null,
                 );
               },
             ),
@@ -116,9 +176,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 children: [
                   IconButton(
                     icon: const Icon(Icons.image),
-                    onPressed: () {
-                      // Implement image picker and upload
-                    },
+                    onPressed: _pickImage,
                   ),
                   Expanded(
                     child: TextField(
