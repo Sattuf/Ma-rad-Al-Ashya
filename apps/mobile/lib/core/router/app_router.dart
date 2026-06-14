@@ -7,6 +7,9 @@ import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/register_screen.dart';
 import '../../features/auth/presentation/screens/otp_screen.dart';
 import '../../features/auth/presentation/screens/home_screen.dart';
+import '../../features/profile/presentation/screens/profile_screen.dart';
+import '../../features/profile/presentation/screens/edit_profile_screen.dart';
+import '../../features/profile/presentation/screens/notifications_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authProvider);
@@ -49,6 +52,18 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/home',
         builder: (context, state) => const HomeScreen(),
+      ),
+      GoRoute(
+        path: '/profile',
+        builder: (context, state) => const ProfileScreen(),
+      ),
+      GoRoute(
+        path: '/profile/edit',
+        builder: (context, state) => const EditProfileScreen(),
+      ),
+      GoRoute(
+        path: '/profile/notifications',
+        builder: (context, state) => const NotificationsScreen(),
       ),
     ],
   );

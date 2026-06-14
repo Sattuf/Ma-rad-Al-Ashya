@@ -1,0 +1,143 @@
+'use client';
+
+import React, { useEffect, useState } from 'react';
+import Image from 'next/image';
+import Link from 'next/link';
+import { Edit2, Mail, Phone, MapPin, Calendar, ShieldCheck } from 'lucide-react';
+import { userApi } from '@/lib/api/users';
+
+interface UserProfile {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  avatar: string;
+  role: string;
+  location: string;
+  createdAt: string;
+}
+
+export default function ProfilePage() {
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const data = await userApi.getProfile();
+        // Adjust depending on the actual API response structure
+        setProfile(data.user || data);
+      } catch (error) {
+        console.error('Failed to fetch profile', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProfile();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  if (!profile) {
+    return (
+      <div className="text-center py-20 text-gray-500">
+        لم يتم العثور على بيانات المستخدم.
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+      {/* Header Cover */}
+      <div className="h-32 bg-gradient-to-r from-blue-600 to-indigo-600"></div>
+      
+      <div className="px-8 pb-8 relative">
+        {/* Avatar & Action */}
+        <div className="flex justify-between items-end -mt-12 mb-8">
+          <div className="relative">
+            <div className="w-24 h-24 rounded-full border-4 border-white bg-white overflow-hidden shadow-md">
+              <Image
+                src={profile.avatar || '/placeholder-avatar.png'}
+                alt={profile.name}
+                width={96}
+                height={96}
+                className="object-cover w-full h-full"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = 'https://ui-avatars.com/api/?name=' + encodeURIComponent(profile.name) + '&background=random';
+                }}
+              />
+            </div>
+          </div>
+          <Link
+            href="/profile/edit"
+            className="flex items-center gap-2 bg-blue-50 text-blue-700 px-4 py-2 rounded-xl hover:bg-blue-100 transition-colors font-medium text-sm"
+          >
+            <Edit2 className="w-4 h-4" />
+            تعديل
+          </Link>
+        </div>
+
+        {/* User Info */}
+        <div className="mb-8">
+          <h1 className="text-2xl font-bold text-gray-900 mb-1">{profile.name}</h1>
+          <div className="flex items-center gap-2 text-gray-500 text-sm">
+            <ShieldCheck className="w-4 h-4 text-green-500" />
+            <span>{profile.role === 'admin' ? 'مدير النظام' : 'مستخدم'}</span>
+          </div>
+        </div>
+
+        {/* Details Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="flex items-start gap-4 p-4 rounded-2xl bg-gray-50/50 border border-gray-100">
+            <div className="p-3 bg-white rounded-xl shadow-sm text-blue-600">
+              <Mail className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-500 mb-1">البريد الإلكتروني</p>
+              <p className="font-medium text-gray-900">{profile.email || 'غير متوفر'}</p>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-4 p-4 rounded-2xl bg-gray-50/50 border border-gray-100">
+            <div className="p-3 bg-white rounded-xl shadow-sm text-blue-600">
+              <Phone className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-500 mb-1">رقم الهاتف</p>
+              <p className="font-medium text-gray-900" dir="ltr">{profile.phone || 'غير متوفر'}</p>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-4 p-4 rounded-2xl bg-gray-50/50 border border-gray-100">
+            <div className="p-3 bg-white rounded-xl shadow-sm text-blue-600">
+              <MapPin className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-500 mb-1">الموقع</p>
+              <p className="font-medium text-gray-900">{profile.location || 'غير متوفر'}</p>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-4 p-4 rounded-2xl bg-gray-50/50 border border-gray-100">
+            <div className="p-3 bg-white rounded-xl shadow-sm text-blue-600">
+              <Calendar className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-500 mb-1">تاريخ الانضمام</p>
+              <p className="font-medium text-gray-900">
+                {profile.createdAt ? new Date(profile.createdAt).toLocaleDateString('ar-SA') : 'غير متوفر'}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

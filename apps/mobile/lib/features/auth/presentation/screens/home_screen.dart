@@ -9,10 +9,23 @@ class HomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('معرض الأشياء'),
+        title: const Text('معرض الأشياء', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF0D9488), Color(0xFF10B981)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.logout),
+            icon: const Icon(Icons.person, color: Colors.white),
+            onPressed: () => context.push('/profile'),
+          ),
+          IconButton(
+            icon: const Icon(Icons.logout, color: Colors.white),
             onPressed: () {
               ref.read(authProvider.notifier).logout();
             },

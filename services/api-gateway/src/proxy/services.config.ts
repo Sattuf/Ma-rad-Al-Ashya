@@ -58,4 +58,10 @@ export const SERVICES_CONFIG: ServiceConfig[] = [
     prefix: 'recommendations',
     description: 'خدمة التخصيص والتوصيات — Personalization & Recommendations',
   },
+  {
+    name: 'users-service',
+    url: process.env.USERS_SERVICE_URL || 'http://localhost:3007',
+    prefix: 'users',
+    description: 'User Profile and Notifications Management',
+  },
 ];
