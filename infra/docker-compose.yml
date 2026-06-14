@@ -110,6 +110,7 @@ services:
       - TRANSACTIONS_SERVICE_URL=http://transactions-service:3005
       - IDENTITY_SERVICE_URL=http://identity-service:3006
       - USERS_SERVICE_URL=http://users-service:3007
+      - LISTINGS_SERVICE_URL=http://listings-service:3002
       - FRAUD_SERVICE_URL=http://fraud-service:8001
       - PERSONALIZATION_SERVICE_URL=http://personalization-service:8002
       - REDIS_HOST=redis
@@ -302,6 +303,37 @@ services:
       - "3007:3007"
     volumes:
       - ../services/users-service/src:/app/src:delegated
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - marad-network
+
+  listings-service:
+    build:
+      context: ../services/listings-service
+      dockerfile: Dockerfile
+      target: builder
+    container_name: marad-listings-service
+    restart: unless-stopped
+    command: npm run start:dev
+    environment:
+      - PORT=3002
+      - NODE_ENV=development
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=marad_user
+      - DB_PASSWORD=marad_dev_password
+      - DB_NAME=marad_db
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - JWT_ACCESS_SECRET=dev-jwt-secret-change-in-production
+    ports:
+      - "3002:3002"
+    volumes:
+      - ../services/listings-service/src:/app/src:delegated
     depends_on:
       postgres:
         condition: service_healthy

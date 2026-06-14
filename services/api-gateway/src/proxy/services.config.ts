@@ -64,4 +64,16 @@ export const SERVICES_CONFIG: ServiceConfig[] = [
     prefix: 'users',
     description: 'User Profile and Notifications Management',
   },
+  {
+    name: 'listings-service',
+    url: process.env.LISTINGS_SERVICE_URL || 'http://localhost:3002',
+    prefix: 'listings',
+    description: 'Listings and Categories Management',
+  },
+  {
+    name: 'categories-service',
+    url: process.env.LISTINGS_SERVICE_URL || 'http://localhost:3002',
+    prefix: 'categories',
+    description: 'Categories Management (routes to listings-service)',
+  },
 ];

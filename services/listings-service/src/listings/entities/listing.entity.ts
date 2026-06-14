@@ -1,0 +1,53 @@
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, OneToMany, JoinColumn } from 'typeorm';
+import { Category } from '../../categories/entities/category.entity';
+import { ListingImage } from './listing-image.entity';
+
+export enum ListingStatus {
+  ACTIVE = 'active',
+  SOLD = 'sold',
+  EXPIRED = 'expired',
+  DELETED = 'deleted',
+}
+
+@Entity('listings')
+export class Listing {
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
+
+  @Column({ name: 'user_id' })
+  userId: string;
+
+  @Column({ name: 'category_id', nullable: true })
+  categoryId: string;
+
+  @ManyToOne(() => Category)
+  @JoinColumn({ name: 'category_id' })
+  category: Category;
+
+  @Column()
+  title: string;
+
+  @Column('text')
+  description: string;
+
+  @Column('decimal', { precision: 12, scale: 2 })
+  price: number;
+
+  @Column({ default: 'USD' })
+  currency: string;
+
+  @Column({ type: 'varchar', default: ListingStatus.ACTIVE })
+  status: ListingStatus;
+
+  @Column({ name: 'views_count', default: 0 })
+  viewsCount: number;
+
+  @OneToMany(() => ListingImage, image => image.listing, { cascade: true })
+  images: ListingImage[];
+
+  @CreateDateColumn({ name: 'created_at' })
+  createdAt: Date;
+
+  @UpdateDateColumn({ name: 'updated_at' })
+  updatedAt: Date;
+}
