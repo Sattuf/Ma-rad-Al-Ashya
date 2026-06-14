@@ -1,0 +1,34 @@
+{
+  "name": "marad-alashya",
+  "version": "0.0.1",
+  "private": true,
+  "description": "معرض الأشياء — منصة سوق C2C (شبيهة بـ OLX/Sahibinden)",
+  "workspaces": [
+    "apps/web",
+    "services/api-gateway",
+    "services/auth-service",
+    "services/listings-service",
+    "services/search-service",
+    "services/messaging-service",
+    "services/transactions-service",
+    "services/identity-service"
+  ],
+  "scripts": {
+    "dev:gateway": "npm run start:dev --workspace=services/api-gateway",
+    "dev:auth": "npm run start:dev --workspace=services/auth-service",
+    "dev:listings": "npm run start:dev --workspace=services/listings-service",
+    "dev:search": "npm run start:dev --workspace=services/search-service",
+    "dev:messaging": "npm run start:dev --workspace=services/messaging-service",
+    "dev:transactions": "npm run start:dev --workspace=services/transactions-service",
+    "dev:identity": "npm run start:dev --workspace=services/identity-service",
+    "dev:web": "npm run dev --workspace=apps/web",
+    "test:all": "npm run test --workspaces --if-present",
+    "lint:all": "npm run lint --workspaces --if-present",
+    "docker:up": "docker-compose -f infra/docker-compose.yml up -d",
+    "docker:down": "docker-compose -f infra/docker-compose.yml down"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  }
+}

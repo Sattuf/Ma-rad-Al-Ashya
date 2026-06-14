@@ -1,0 +1,10 @@
+# معرض الأشياء — Docker Compose (Development)
+# سيتم تكوين هذا الملف بالكامل في Sprint 0 / الأسبوع 2
+
+version: '3.8'
+
+services:
+  # TODO: Week 2 - Add PostgreSQL, MongoDB, Redis, Elasticsearch
+  # TODO: Week 2 - Add all microservices
+  placeholder:
+    image: hello-world
