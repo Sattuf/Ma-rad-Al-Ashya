@@ -5,6 +5,7 @@ import { useListingDetail } from '@/hooks/useListings';
 import Map from '@/components/Map';
 import { MapPin, BedDouble, Bath, Square, Calendar, Share2, Heart, Phone } from 'lucide-react';
 import Image from 'next/image';
+import RelatedListings from '@/components/listings/RelatedListings';
 
 export default function ListingDetailPage() {
   const params = useParams();
@@ -181,6 +182,9 @@ export default function ListingDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Related Listings */}
+      <RelatedListings currentListingId={id} categoryId={listing.category || 'real-estate'} />
     </div>
   );
 }

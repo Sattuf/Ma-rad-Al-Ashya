@@ -1,11 +1,53 @@
 import { Controller, Get, Post, Body, Query, Headers, UnauthorizedException, HttpException, HttpStatus } from '@nestjs/common';
 import { SearchService } from './search.service';
 import { ApiTags, ApiOperation, ApiQuery, ApiHeader } from '@nestjs/swagger';
+import { MapSearchDto } from './dto/map-search.dto';
+import { RelatedSearchDto } from './dto/related-search.dto';
+import { SuggestionsSearchDto } from './dto/suggestions-search.dto';
 
 @ApiTags('Search')
 @Controller('search')
 export class SearchController {
   constructor(private readonly searchService: SearchService) {}
+
+  @Get('map')
+  @ApiOperation({ summary: 'Search listings on map' })
+  async mapSearch(@Query() query: MapSearchDto) {
+    if (!query.topLeftLat || !query.topLeftLon || !query.bottomRightLat || !query.bottomRightLon) {
+      throw new HttpException('Missing bounding box coordinates', HttpStatus.BAD_REQUEST);
+    }
+    return this.searchService.mapSearch(
+      parseFloat(query.topLeftLat as any),
+      parseFloat(query.topLeftLon as any),
+      parseFloat(query.bottomRightLat as any),
+      parseFloat(query.bottomRightLon as any),
+      query.zoom ? parseInt(query.zoom as any, 10) : undefined
+    );
+  }
+
+  @Get('categories/stats')
+  @ApiOperation({ summary: 'Get category statistics' })
+  async categoryStats() {
+    return this.searchService.categoryStats();
+  }
+
+  @Get('related')
+  @ApiOperation({ summary: 'Get related listings' })
+  async relatedSearch(@Query() query: RelatedSearchDto) {
+    if (!query.id) {
+      throw new HttpException('Listing ID is required', HttpStatus.BAD_REQUEST);
+    }
+    return this.searchService.relatedSearch(query.id);
+  }
+
+  @Get('suggestions')
+  @ApiOperation({ summary: 'Get search suggestions' })
+  async suggestions(@Query() query: SuggestionsSearchDto) {
+    if (!query.q) {
+      throw new HttpException('Query string is required', HttpStatus.BAD_REQUEST);
+    }
+    return this.searchService.suggestions(query.q);
+  }
 
   @Get()
   @ApiOperation({ summary: 'Search listings' })

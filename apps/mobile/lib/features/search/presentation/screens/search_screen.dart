@@ -7,7 +7,6 @@ import 'package:easy_debounce/easy_debounce.dart';
 import '../providers/search_provider.dart';
 import '../../../listings/data/models/listing.dart';
 import '../../../listings/presentation/widgets/listing_card.dart';
-import '../../../listings/presentation/widgets/shimmer_listing_card.dart';
 
 class SearchScreen extends ConsumerStatefulWidget {
   final String? initialQuery;
@@ -24,8 +23,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   
   static const _pageSize = 20;
 
-  final PagingController<int, Listing> _pagingController =
-      PagingController(firstPageKey: 1);
+  late final PagingController<int, Listing> _pagingController;
 
   @override
   void initState() {
@@ -37,37 +35,28 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       });
     }
 
-    _pagingController.addPageRequestListener((pageKey) {
-      _fetchPage(pageKey);
-    });
-  }
-
-  Future<void> _fetchPage(int pageKey) async {
-    try {
-      final filters = ref.read(searchFiltersProvider);
-      final repository = ref.read(searchRepositoryProvider);
-      
-      final newItems = await repository.searchListings(
-        query: filters.query,
-        page: pageKey,
-        limit: _pageSize,
-        categoryId: filters.categoryId,
-        sort: filters.sort,
-        minPrice: filters.minPrice,
-        maxPrice: filters.maxPrice,
-        condition: filters.condition,
-      );
-
-      final isLastPage = newItems.length < _pageSize;
-      if (isLastPage) {
-        _pagingController.appendLastPage(newItems);
-      } else {
-        final nextPageKey = pageKey + 1;
-        _pagingController.appendPage(newItems, nextPageKey);
-      }
-    } catch (error) {
-      _pagingController.error = error;
-    }
+    _pagingController = PagingController<int, Listing>(
+      fetchPage: (pageKey) async {
+        final filters = ref.read(searchFiltersProvider);
+        final repository = ref.read(searchRepositoryProvider);
+        
+        return await repository.searchListings(
+          query: filters.query,
+          page: pageKey,
+          limit: _pageSize,
+          categoryId: filters.categoryId,
+          sort: filters.sort,
+          minPrice: filters.minPrice,
+          maxPrice: filters.maxPrice,
+          condition: filters.condition,
+        );
+      },
+      getNextPageKey: (state) {
+        final lastPage = state.pages?.last;
+        if (lastPage != null && lastPage.length < _pageSize) return null;
+        return (state.keys?.last ?? 0) + 1;
+      },
+    );
   }
 
   @override
@@ -155,35 +144,41 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         children: [
           _buildFilterChips(filters),
           Expanded(
-            child: PagedGridView<int, Listing>(
-              pagingController: _pagingController,
-              padding: const EdgeInsets.all(8),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                childAspectRatio: 0.65,
-                crossAxisSpacing: 8,
-                mainAxisSpacing: 8,
-              ),
-              builderDelegate: PagedChildBuilderDelegate<Listing>(
-                itemBuilder: (context, listing, index) {
-                  return ListingCard(
-                    listing: listing,
-                    onTap: () {
-                      context.push('/listing/${listing.id}');
-                    },
-                  );
-                },
-                firstPageProgressIndicatorBuilder: (_) => const Center(
-                  child: CircularProgressIndicator(),
-                ),
-                newPageProgressIndicatorBuilder: (_) => const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(8.0),
-                    child: CircularProgressIndicator(),
+            child: ValueListenableBuilder<PagingState<int, Listing>>(
+              valueListenable: _pagingController,
+              builder: (context, state, child) {
+                return PagedGridView<int, Listing>(
+                  state: state,
+                  fetchNextPage: _pagingController.fetchNextPage,
+                  padding: const EdgeInsets.all(8),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    childAspectRatio: 0.65,
+                    crossAxisSpacing: 8,
+                    mainAxisSpacing: 8,
                   ),
-                ),
-                noItemsFoundIndicatorBuilder: (_) => _buildNoItemsFound(),
-              ),
+                  builderDelegate: PagedChildBuilderDelegate<Listing>(
+                    itemBuilder: (context, listing, index) {
+                      return ListingCard(
+                        listing: listing,
+                        onTap: () {
+                          context.push('/listings/${listing.id}');
+                        },
+                      );
+                    },
+                    firstPageProgressIndicatorBuilder: (_) => const Center(
+                      child: CircularProgressIndicator(),
+                    ),
+                    newPageProgressIndicatorBuilder: (_) => const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(8.0),
+                        child: CircularProgressIndicator(),
+                      ),
+                    ),
+                    noItemsFoundIndicatorBuilder: (_) => _buildNoItemsFound(),
+                  ),
+                );
+              },
             ),
           ),
         ],

@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:infinite_scroll_pagination/infinite_scroll_pagination.dart';
-import '../data/models/listing.dart';
-import '../data/models/category.dart';
+import '../../data/models/listing.dart';
+import '../../data/models/category.dart';
 import '../providers/listing_provider.dart';
 import '../providers/category_provider.dart';
 import '../widgets/listing_card.dart';
@@ -18,7 +18,7 @@ class ListingsScreen extends ConsumerStatefulWidget {
 
 class _ListingsScreenState extends ConsumerState<ListingsScreen> {
   static const _pageSize = 20;
-  final PagingController<int, Listing> _pagingController = PagingController(firstPageKey: 1);
+  late final PagingController<int, Listing> _pagingController;
   String? _selectedCategoryId;
   String? _searchQuery;
   final TextEditingController _searchController = TextEditingController();
@@ -26,30 +26,22 @@ class _ListingsScreenState extends ConsumerState<ListingsScreen> {
   @override
   void initState() {
     super.initState();
-    _pagingController.addPageRequestListener((pageKey) {
-      _fetchPage(pageKey);
-    });
-  }
-
-  Future<void> _fetchPage(int pageKey) async {
-    try {
-      final repository = ref.read(listingRepositoryProvider);
-      final newItems = await repository.getListings(
-        page: pageKey,
-        limit: _pageSize,
-        categoryId: _selectedCategoryId,
-        search: _searchQuery,
-      );
-      final isLastPage = newItems.length < _pageSize;
-      if (isLastPage) {
-        _pagingController.appendLastPage(newItems);
-      } else {
-        final nextPageKey = pageKey + 1;
-        _pagingController.appendPage(newItems, nextPageKey);
-      }
-    } catch (error) {
-      _pagingController.error = error;
-    }
+    _pagingController = PagingController<int, Listing>(
+      fetchPage: (pageKey) async {
+        final repository = ref.read(listingRepositoryProvider);
+        return await repository.getListings(
+          page: pageKey,
+          limit: _pageSize,
+          categoryId: _selectedCategoryId,
+          search: _searchQuery,
+        );
+      },
+      getNextPageKey: (state) {
+        final lastPage = state.pages?.last;
+        if (lastPage != null && lastPage.length < _pageSize) return null;
+        return (state.keys?.last ?? 0) + 1;
+      },
+    );
   }
 
   @override
@@ -134,22 +126,28 @@ class _ListingsScreenState extends ConsumerState<ListingsScreen> {
           Expanded(
             child: RefreshIndicator(
               onRefresh: () => Future.sync(() => _pagingController.refresh()),
-              child: PagedListView<int, Listing>(
-                pagingController: _pagingController,
-                builderDelegate: PagedChildBuilderDelegate<Listing>(
-                  itemBuilder: (context, item, index) => ListingCard(
-                    listing: item,
-                    onTap: () => context.push('/listings/${item.id}'),
-                  ),
-                  firstPageProgressIndicatorBuilder: (_) => ListView.builder(
-                    itemCount: 5,
-                    itemBuilder: (context, index) => const ShimmerListingCard(),
-                  ),
-                  newPageProgressIndicatorBuilder: (_) => const ShimmerListingCard(),
-                  noItemsFoundIndicatorBuilder: (_) => const Center(
-                    child: Text('لا توجد إعلانات'),
-                  ),
-                ),
+              child: ValueListenableBuilder<PagingState<int, Listing>>(
+                valueListenable: _pagingController,
+                builder: (context, state, child) {
+                  return PagedListView<int, Listing>(
+                    state: state,
+                    fetchNextPage: _pagingController.fetchNextPage,
+                    builderDelegate: PagedChildBuilderDelegate<Listing>(
+                      itemBuilder: (context, item, index) => ListingCard(
+                        listing: item,
+                        onTap: () => context.push('/listings/${item.id}'),
+                      ),
+                      firstPageProgressIndicatorBuilder: (_) => ListView.builder(
+                        itemCount: 5,
+                        itemBuilder: (context, index) => const ShimmerListingCard(),
+                      ),
+                      newPageProgressIndicatorBuilder: (_) => const ShimmerListingCard(),
+                      noItemsFoundIndicatorBuilder: (_) => const Center(
+                        child: Text('لا توجد إعلانات'),
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
           ),

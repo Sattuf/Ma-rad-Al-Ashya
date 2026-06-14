@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../data/repositories/category_repository.dart';
-import '../data/models/category.dart';
+import '../../data/repositories/category_repository.dart';
+import '../../data/models/category.dart';
 
 final categoryRepositoryProvider = Provider((ref) => CategoryRepository());
 

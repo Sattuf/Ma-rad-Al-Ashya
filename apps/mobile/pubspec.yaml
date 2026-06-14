@@ -38,6 +38,7 @@ dependencies:
   image_cropper: ^12.2.1
   cached_network_image: ^3.4.1
   flutter_map: ^8.3.0
+  flutter_map_marker_cluster: any
   latlong2: ^0.9.1
   geolocator: ^14.0.2
   carousel_slider: ^5.1.2

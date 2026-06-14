@@ -93,4 +93,66 @@ describe('SearchService', () => {
       redis: 'ok'
     });
   });
+
+  it('should perform map search', async () => {
+    jest.spyOn(service['redisClient'], 'get').mockResolvedValue(null);
+    const esResponse = {
+      hits: {
+        hits: [{ _id: '1', _source: { title: 'Test' } }]
+      },
+      aggregations: {
+        grid: { buckets: [] }
+      }
+    };
+    (esService.client.search as jest.Mock).mockResolvedValue(esResponse);
+
+    const result = await service.mapSearch(10, 10, 0, 0, 5);
+    expect(result).toEqual({
+      hits: [{ id: '1', title: 'Test' }],
+      grid: { buckets: [] }
+    });
+    expect(esService.client.search).toHaveBeenCalled();
+  });
+
+  it('should get category stats', async () => {
+    jest.spyOn(service['redisClient'], 'get').mockResolvedValue(null);
+    const esResponse = {
+      aggregations: {
+        categories: { buckets: [{ key: 'cars', doc_count: 5 }] }
+      }
+    };
+    (esService.client.search as jest.Mock).mockResolvedValue(esResponse);
+
+    const result = await service.categoryStats();
+    expect(result).toEqual({ buckets: [{ key: 'cars', doc_count: 5 }] });
+    expect(esService.client.search).toHaveBeenCalled();
+  });
+
+  it('should get related search', async () => {
+    jest.spyOn(service['redisClient'], 'get').mockResolvedValue(null);
+    const esResponse = {
+      hits: {
+        hits: [{ _id: '2', _source: { title: 'Related' } }]
+      }
+    };
+    (esService.client.search as jest.Mock).mockResolvedValue(esResponse);
+
+    const result = await service.relatedSearch('1');
+    expect(result).toEqual([{ id: '2', title: 'Related' }]);
+    expect(esService.client.search).toHaveBeenCalled();
+  });
+
+  it('should get suggestions', async () => {
+    jest.spyOn(service['redisClient'], 'get').mockResolvedValue(null);
+    const esResponse = {
+      suggest: {
+        simple_phrase: [{ options: [{ text: 'suggestion 1' }] }]
+      }
+    };
+    (esService.client.search as jest.Mock).mockResolvedValue(esResponse);
+
+    const result = await service.suggestions('sug');
+    expect(result).toEqual([{ text: 'suggestion 1' }]);
+    expect(esService.client.search).toHaveBeenCalled();
+  });
 });

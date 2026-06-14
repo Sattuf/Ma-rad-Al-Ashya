@@ -100,6 +100,150 @@ export class SearchService {
     }
   }
 
+  async mapSearch(topLeftLat: number, topLeftLon: number, bottomRightLat: number, bottomRightLon: number, zoom?: number) {
+    const precision = 4;
+    const cacheKey = this.generateCacheKey('mapSearch', { topLeftLat, topLeftLon, bottomRightLat, bottomRightLon, zoom });
+    const cachedResult = await this.redisClient.get(cacheKey);
+    if (cachedResult) return JSON.parse(cachedResult);
+
+    try {
+      const response = await this.esService.client.search({
+        index: this.indexName,
+        body: {
+          query: {
+            bool: {
+              filter: {
+                geo_bounding_box: {
+                  location: {
+                    top_left: { lat: topLeftLat, lon: topLeftLon },
+                    bottom_right: { lat: bottomRightLat, lon: bottomRightLon }
+                  }
+                }
+              }
+            }
+          },
+          aggs: {
+            grid: {
+              geohash_grid: {
+                field: 'location',
+                precision: precision
+              }
+            }
+          },
+          size: 100
+        }
+      });
+
+      const result = {
+        hits: response.hits.hits.map((hit: any) => ({ id: hit._id, ...hit._source })),
+        grid: (response.aggregations as any)?.grid
+      };
+
+      await this.redisClient.set(cacheKey, JSON.stringify(result), 'EX', 300);
+      return result;
+    } catch (error) {
+      this.logger.error(`Map search failed: ${error.message}`);
+      throw new HttpException('Map search failed', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  async categoryStats() {
+    const cacheKey = this.generateCacheKey('categoryStats', {});
+    const cachedResult = await this.redisClient.get(cacheKey);
+    if (cachedResult) return JSON.parse(cachedResult);
+
+    try {
+      const response = await this.esService.client.search({
+        index: this.indexName,
+        body: {
+          size: 0,
+          aggs: {
+            categories: {
+              terms: {
+                field: 'category',
+                size: 50
+              }
+            }
+          }
+        }
+      });
+
+      const result = (response.aggregations as any)?.categories;
+      await this.redisClient.set(cacheKey, JSON.stringify(result), 'EX', 600);
+      return result;
+    } catch (error) {
+      this.logger.error(`Category stats failed: ${error.message}`);
+      throw new HttpException('Category stats failed', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  async relatedSearch(id: string) {
+    const cacheKey = this.generateCacheKey('relatedSearch', { id });
+    const cachedResult = await this.redisClient.get(cacheKey);
+    if (cachedResult) return JSON.parse(cachedResult);
+
+    try {
+      const response = await this.esService.client.search({
+        index: this.indexName,
+        body: {
+          query: {
+            more_like_this: {
+              fields: ['title', 'description'],
+              like: [{ _index: this.indexName, _id: id }],
+              min_term_freq: 1,
+              max_query_terms: 12
+            }
+          },
+          size: 10
+        }
+      });
+
+      const result = response.hits.hits.map((hit: any) => ({ id: hit._id, ...hit._source }));
+      await this.redisClient.set(cacheKey, JSON.stringify(result), 'EX', 300);
+      return result;
+    } catch (error) {
+      this.logger.error(`Related search failed: ${error.message}`);
+      throw new HttpException('Related search failed', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  async suggestions(q: string) {
+    if (!q || q.length < 2) return [];
+
+    const cacheKey = this.generateCacheKey('suggestions', { q });
+    const cachedResult = await this.redisClient.get(cacheKey);
+    if (cachedResult) return JSON.parse(cachedResult);
+
+    try {
+      const response = await this.esService.client.search({
+        index: this.indexName,
+        body: {
+          suggest: {
+            text: q,
+            simple_phrase: {
+              phrase: {
+                field: 'title',
+                size: 5,
+                gram_size: 2,
+                direct_generator: [{
+                  field: 'title',
+                  suggest_mode: 'always'
+                }]
+              }
+            }
+          }
+        }
+      });
+
+      const result = (response.suggest as any)?.simple_phrase?.[0]?.options || [];
+      await this.redisClient.set(cacheKey, JSON.stringify(result), 'EX', 600);
+      return result;
+    } catch (error) {
+      this.logger.error(`Suggestions failed: ${error.message}`);
+      return [];
+    }
+  }
+
   async autocomplete(query: string) {
     if (!query || query.length < 2) return [];
 

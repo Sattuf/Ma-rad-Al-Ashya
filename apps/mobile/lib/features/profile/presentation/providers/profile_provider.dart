@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../repositories/profile_repository.dart';
+import '../../data/repositories/profile_repository.dart';
 
 enum ProfileStatus { initial, loading, success, error }
 
