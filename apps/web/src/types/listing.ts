@@ -31,4 +31,5 @@ export interface ListingsQuery {
   maxPrice?: number;
   city?: string;
   bedrooms?: number;
+  userId?: string;
 }

@@ -21,7 +21,9 @@ import '../presentation/screens/main_shell_screen.dart';
 import '../../features/messaging/presentation/screens/conversations_screen.dart';
 import '../../features/messaging/presentation/screens/chat_screen.dart';
 import '../../features/messaging/presentation/screens/image_viewer_screen.dart';
-
+import '../../features/transactions/presentation/screens/transactions_screen.dart';
+import '../../features/transactions/presentation/screens/transaction_detail_screen.dart';
+import '../../features/transactions/presentation/screens/review_screen.dart';
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authProvider);
 
@@ -105,6 +107,14 @@ final routerProvider = Provider<GoRouter>((ref) {
               ),
             ],
           ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/transactions',
+                builder: (context, state) => const TransactionsScreen(),
+              ),
+            ],
+          ),
         ],
       ),
       GoRoute(
@@ -155,6 +165,14 @@ final routerProvider = Provider<GoRouter>((ref) {
           final initialQuery = state.uri.queryParameters['q'];
           return SearchScreen(initialQuery: initialQuery);
         },
+      ),
+      GoRoute(
+        path: '/transactions/:id',
+        builder: (context, state) => TransactionDetailScreen(id: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: '/transactions/:id/review',
+        builder: (context, state) => ReviewScreen(transactionId: state.pathParameters['id']!),
       ),
     ],
   );

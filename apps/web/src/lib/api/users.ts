@@ -6,6 +6,11 @@ export const userApi = {
     return response.data;
   },
 
+  getUser: async (id: string) => {
+    const response = await api.get(`/users/${id}`);
+    return response.data;
+  },
+
   updateProfile: async (data: any) => {
     const response = await api.patch('/users/profile', data);
     return response.data;

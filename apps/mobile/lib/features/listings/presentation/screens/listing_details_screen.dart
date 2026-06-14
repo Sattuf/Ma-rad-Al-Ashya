@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 import '../providers/listing_provider.dart';
+import 'package:marad_mobile/features/auth/presentation/providers/auth_provider.dart';
+import 'package:marad_mobile/features/transactions/presentation/providers/transactions_provider.dart';
+import 'package:go_router/go_router.dart';
 
 class ListingDetailsScreen extends ConsumerWidget {
   final String listingId;
@@ -180,6 +183,55 @@ class ListingDetailsScreen extends ConsumerWidget {
         ),
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, stack) => Center(child: Text('خطأ: $err')),
+      ),
+      bottomNavigationBar: listingAsync.whenOrNull(
+        data: (listing) {
+          final authState = ref.watch(authProvider);
+          final currentUserId = authState.user?.id;
+          final isSeller = currentUserId == listing.userId;
+          final isActive = listing.status == 'active';
+
+          if (!isSeller && isActive) {
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: ElevatedButton(
+                  onPressed: () async {
+                    if (currentUserId == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('الرجاء تسجيل الدخول أولاً')),
+                      );
+                      return;
+                    }
+                    try {
+                      final repo = ref.read(transactionsRepositoryProvider);
+                      final transaction = await repo.createTransaction(listing.id, listing.userId);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('تم طلب الشراء بنجاح!'), backgroundColor: Colors.green),
+                      );
+                      if (context.mounted) {
+                        context.push('/transactions/${transaction.id}');
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('حدث خطأ: $e'), backgroundColor: Colors.red),
+                        );
+                      }
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(context).primaryColor,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text('طلب شراء', style: TextStyle(fontSize: 18, color: Colors.white)),
+                ),
+              ),
+            );
+          }
+          return null;
+        },
       ),
     );
   }

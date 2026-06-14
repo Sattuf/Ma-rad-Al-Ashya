@@ -47,6 +47,12 @@ export const SERVICES_CONFIG: ServiceConfig[] = [
     description: 'خدمة إدارة المعاملات — Transactions Management',
   },
   {
+    name: 'transactions-service-reviews',
+    url: process.env.TRANSACTIONS_SERVICE_URL || 'http://localhost:3005',
+    prefix: 'reviews',
+    description: 'Reviews Management',
+  },
+  {
     name: 'identity-service',
     url: process.env.IDENTITY_SERVICE_URL || 'http://localhost:3006',
     prefix: 'identity',

@@ -247,6 +247,8 @@ services:
       - DATABASE_URL=postgresql://marad_user:marad_dev_password@postgres:5432/marad_db
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+    ports:
+      - "3005:3005"
     volumes:
       - ../services/transactions-service/src:/app/src:delegated
     depends_on:

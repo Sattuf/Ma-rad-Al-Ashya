@@ -120,6 +120,18 @@ export class ListingsService {
     return savedListing;
   }
 
+  async updateStatusInternal(id: string, status: ListingStatus): Promise<Listing> {
+    const listing = await this.findOne(id);
+    listing.status = status;
+    const savedListing = await this.listingsRepository.save(listing);
+    if (status === ListingStatus.DELETED) {
+      await this.triggerSearchIndex('delete', { id });
+    } else {
+      await this.triggerSearchIndex('update', savedListing);
+    }
+    return savedListing;
+  }
+
   async addImage(listingId: string, userId: string, file: Express.Multer.File): Promise<ListingImage> {
     const listing = await this.findOne(listingId);
     if (listing.userId !== userId) throw new BadRequestException('Not authorized');

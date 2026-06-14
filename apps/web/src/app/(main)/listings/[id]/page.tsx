@@ -1,16 +1,24 @@
 'use client';
 
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useListingDetail } from '@/hooks/useListings';
 import Map from '@/components/Map';
 import { MapPin, BedDouble, Bath, Square, Calendar, Share2, Heart, Phone } from 'lucide-react';
 import Image from 'next/image';
 import RelatedListings from '@/components/listings/RelatedListings';
+import { useState } from 'react';
+
+import { useAuthStore } from '@/lib/store/auth-store';
+import { transactionsApi } from '@/lib/api/transactions';
+import { ShoppingCart } from 'lucide-react';
 
 export default function ListingDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const id = params.id as string;
   const { listing, isLoading, error } = useListingDetail(id);
+  const { user, isAuthenticated } = useAuthStore();
+  const [isBuying, setIsBuying] = useState(false);
 
   if (isLoading) {
     return (
@@ -171,6 +179,27 @@ export default function ListingDetailPage() {
             </div>
             
             <div className="space-y-3">
+              {isAuthenticated && user?.id !== listing.userId && listing.status === 'active' && (
+                <button 
+                  onClick={async () => {
+                    try {
+                      setIsBuying(true);
+                      const transaction = await transactionsApi.createTransaction(listing.id, listing.userId);
+                      const tId = transaction.data?.id || transaction.id;
+                      router.push(`/transactions/${tId}`);
+                    } catch (err) {
+                      console.error(err);
+                      alert('حدث خطأ أثناء إنشاء الطلب');
+                      setIsBuying(false);
+                    }
+                  }}
+                  disabled={isBuying}
+                  className="w-full bg-teal-600 hover:bg-teal-700 text-white font-medium py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors mb-2 disabled:opacity-75"
+                >
+                  <ShoppingCart size={20} />
+                  <span>{isBuying ? 'جاري الطلب...' : 'طلب شراء الآن'}</span>
+                </button>
+              )}
               <button className="w-full bg-primary hover:bg-primary/90 text-white font-medium py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors">
                 <Phone size={20} />
                 <span>إظهار الرقم</span>

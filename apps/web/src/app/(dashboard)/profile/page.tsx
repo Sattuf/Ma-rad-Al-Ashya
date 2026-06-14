@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Edit2, Mail, Phone, MapPin, Calendar, ShieldCheck } from 'lucide-react';
+import { Edit2, Mail, Phone, MapPin, Calendar, ShieldCheck, Star } from 'lucide-react';
 import { userApi } from '@/lib/api/users';
 
 interface UserProfile {
@@ -15,6 +15,8 @@ interface UserProfile {
   role: string;
   location: string;
   createdAt: string;
+  rating?: number;
+  ratingCount?: number;
 }
 
 export default function ProfilePage() {
@@ -87,9 +89,19 @@ export default function ProfilePage() {
         {/* User Info */}
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-gray-900 mb-1">{profile.name}</h1>
-          <div className="flex items-center gap-2 text-gray-500 text-sm">
+          <div className="flex items-center gap-2 text-gray-500 text-sm mb-3">
             <ShieldCheck className="w-4 h-4 text-green-500" />
             <span>{profile.role === 'admin' ? 'مدير النظام' : 'مستخدم'}</span>
+          </div>
+          {/* Rating Summary Section */}
+          <div className="flex items-center gap-2 bg-gray-50 inline-flex px-3 py-1.5 rounded-lg border border-gray-100">
+            <div className="flex text-yellow-400">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <Star key={star} className={`w-4 h-4 ${star <= Math.round(profile.rating || 0) ? 'fill-current' : 'text-gray-300'}`} />
+              ))}
+            </div>
+            <span className="font-medium text-gray-900 ml-1">{(profile.rating || 0).toFixed(1)}</span>
+            <span className="text-gray-500 text-sm">({profile.ratingCount || 0} تقييم)</span>
           </div>
         </div>
 

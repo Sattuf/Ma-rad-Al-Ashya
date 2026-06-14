@@ -100,6 +100,18 @@ export class ListingsController {
     return this.listingsService.updateStatus(id, req.user.userId, status);
   }
 
+  @Put(':id/status')
+  @ApiOperation({ summary: 'Internal: Update listing status' })
+  @ApiBody({ schema: { properties: { status: { type: 'string', enum: Object.values(ListingStatus) } } } })
+  async updateStatusInternal(@Param('id') id: string, @Request() req, @Body('status') status: ListingStatus) {
+    const internalSecret = req.headers['x-internal-secret'];
+    if (internalSecret !== (process.env.INTERNAL_SECRET || 'marad-internal-secret-for-webhooks')) {
+      throw new import('@nestjs/common').UnauthorizedException('Invalid internal secret');
+    }
+    // Update status internally, bypassing owner check
+    return this.listingsService.updateStatusInternal(id, status);
+  }
+
   @Get('user/:userId')
   @ApiOperation({ summary: 'Get listings by user ID' })
   findByUser(@Param('userId') userId: string) {

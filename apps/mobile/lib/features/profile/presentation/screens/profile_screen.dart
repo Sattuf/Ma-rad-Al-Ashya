@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../providers/profile_provider.dart';
+import 'package:flutter_rating_bar/flutter_rating_bar.dart';
+import 'package:marad_mobile/features/transactions/presentation/providers/transactions_provider.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -186,6 +188,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                 ],
                               ),
                             ),
+                            const SizedBox(height: 20),
+                            _buildRatingSection(context, ref, user.id),
                             const SizedBox(height: 30),
                             SizedBox(
                               width: double.infinity,
@@ -206,4 +210,120 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     ),
     );
   }
+
+  Widget _buildRatingSection(BuildContext context, WidgetRef ref, String userId) {
+    final summaryAsync = ref.watch(userRatingSummaryProvider(userId));
+    final reviewsAsync = ref.watch(userReviewsProvider(userId));
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('التقييمات', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF374151))),
+              TextButton(
+                onPressed: () {}, // Could navigate to full reviews list
+                child: const Text('عرض الكل'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          summaryAsync.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (e, st) => Text('تعذر تحميل التقييم: $e', style: const TextStyle(color: Colors.red)),
+            data: (summary) => Row(
+              children: [
+                Text(
+                  summary.averageRating.toStringAsFixed(1),
+                  style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(width: 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    RatingBarIndicator(
+                      rating: summary.averageRating,
+                      itemBuilder: (context, index) => const Icon(Icons.star, color: Colors.amber),
+                      itemCount: 5,
+                      itemSize: 20.0,
+                      direction: Axis.horizontal,
+                    ),
+                    const SizedBox(height: 4),
+                    Text('${summary.totalReviews} تقييم', style: const TextStyle(color: Colors.grey)),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 32),
+          reviewsAsync.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (e, st) => const Text(''),
+            data: (reviews) {
+              if (reviews.isEmpty) {
+                return const Text('لا توجد تقييمات بعد', style: TextStyle(color: Colors.grey));
+              }
+              return Column(
+                children: reviews.map((review) {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12.0),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        CircleAvatar(
+                          radius: 16,
+                          backgroundImage: review.reviewerAvatar != null ? CachedNetworkImageProvider(review.reviewerAvatar!) : null,
+                          child: review.reviewerAvatar == null ? const Icon(Icons.person, size: 16) : null,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(review.reviewerName ?? 'مستخدم', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                  RatingBarIndicator(
+                                    rating: review.rating,
+                                    itemBuilder: (context, index) => const Icon(Icons.star, color: Colors.amber),
+                                    itemCount: 5,
+                                    itemSize: 12.0,
+                                  ),
+                                ],
+                              ),
+                              if (review.comment != null && review.comment!.isNotEmpty) ...[
+                                const SizedBox(height: 4),
+                                Text(review.comment!),
+                              ]
+                            ],
+                          ),
+                        )
+                      ],
+                    ),
+                  );
+                }).toList(),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
 }
+

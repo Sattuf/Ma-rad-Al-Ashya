@@ -44,6 +44,11 @@ class MainShellScreen extends StatelessWidget {
             selectedIcon: Icon(Icons.person),
             label: 'حسابي',
           ),
+          NavigationDestination(
+            icon: Icon(Icons.receipt_long_outlined),
+            selectedIcon: Icon(Icons.receipt_long),
+            label: 'المعاملات',
+          ),
         ],
       ),
     );
