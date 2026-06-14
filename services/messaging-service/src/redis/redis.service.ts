@@ -21,6 +21,10 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  async incr(key: string): Promise<number> {
+    return this.redisClient.incr(key);
+  }
+
   async getUserPresence(userId: string): Promise<'online' | 'offline'> {
     const status = await this.redisClient.get(`presence:${userId}`);
     return status === 'online' ? 'online' : 'offline';

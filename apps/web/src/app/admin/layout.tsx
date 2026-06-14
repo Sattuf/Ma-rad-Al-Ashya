@@ -4,7 +4,7 @@ import { useAuthStore } from '@/lib/store/auth-store';
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { LayoutDashboard, Flag, Home, LogOut } from 'lucide-react';
+import { LayoutDashboard, Flag, Home, LogOut, BarChart3 } from 'lucide-react';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated } = useAuthStore();
@@ -28,6 +28,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const navItems = [
     { name: 'لوحة التحكم', href: '/admin', icon: LayoutDashboard },
     { name: 'البلاغات', href: '/admin/reports', icon: Flag },
+    { name: 'الترتيب الذكي', href: '/admin/ranking', icon: BarChart3 },
   ];
 
   return (

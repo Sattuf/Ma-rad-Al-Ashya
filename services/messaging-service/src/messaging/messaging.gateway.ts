@@ -72,6 +72,10 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
 
     const conversation = await this.messagingService.getConversationById(conversationId);
     
+    if (conversation.listingId) {
+      await this.redisService.incr(`listing:messages:${conversation.listingId}`);
+    }
+    
     for (const p of conversation.participants) {
       if (p !== senderId) {
         const status = await this.redisService.getUserPresence(p);

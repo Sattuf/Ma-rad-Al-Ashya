@@ -1,6 +1,7 @@
 import useSWR from 'swr';
 import { api } from './auth';
-import { Listing, PaginatedResponse } from '@/types/listing';
+import { Listing } from '@/types/listing';
+import { PaginatedResponse } from './listings';
 
 export interface SearchQuery {
   q?: string;
@@ -13,15 +14,22 @@ export interface SearchQuery {
   city?: string;
   page?: number;
   limit?: number;
+  ab_variant?: string;
+  session_id?: string;
+}
+
+export interface SearchResponse extends PaginatedResponse<Listing> {
+  variant?: string;
 }
 
 export const searchApi = {
-  searchListings: async (query: SearchQuery): Promise<PaginatedResponse<Listing>> => {
+  searchListings: async (query: SearchQuery): Promise<SearchResponse> => {
     // Clear out empty parameters
     const params = Object.fromEntries(
       Object.entries(query).filter(([_, v]) => v !== '' && v !== undefined)
     );
     const response = await api.get('/listings', { params });
+    // Expecting variant to be returned from backend in response.data.variant
     return response.data;
   },
 
@@ -29,28 +37,27 @@ export const searchApi = {
     if (!q || q.length < 2) return [];
     
     try {
-      // In a real scenario, this might be a dedicated /search/autocomplete endpoint.
-      // We'll fallback to /listings?q=...&limit=5
       const response = await api.get('/listings', { params: { q, limit: 5 } });
-      
-      // If the response is PaginatedResponse, we map over data
       if (response.data && Array.isArray(response.data.data)) {
         return response.data.data.map((item: Listing) => ({
           title: item.title,
           id: item.id
         }));
       }
-      
       return [];
     } catch (error) {
       console.error('Autocomplete error:', error);
       return [];
     }
+  },
+
+  trackClick: (params: { query: string; listing_id: string; position: number; variant: string; session_id: string }) => {
+    api.post('/search/track-click', params).catch(console.error);
   }
 };
 
 export const useSearch = (query: SearchQuery) => {
-  return useSWR<PaginatedResponse<Listing>>(
+  return useSWR<SearchResponse>(
     ['/listings/search', JSON.stringify(query)],
     () => searchApi.searchListings(query),
     { keepPreviousData: true }

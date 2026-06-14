@@ -73,4 +73,21 @@ export class ElasticsearchService implements OnModuleInit {
       this.logger.error(`Error initializing Elasticsearch index: ${error.message}`);
     }
   }
+  async updateDocumentFields(
+    id: string,
+    fields: Partial<{ images_count: number; description_length: number; seller_average_rating: number }>
+  ) {
+    try {
+      await this.client.update({
+        index: this.indexName,
+        id,
+        body: {
+          doc: fields,
+        },
+      });
+      this.logger.log(`Updated fields for document ${id}`);
+    } catch (error) {
+      this.logger.error(`Failed to update document ${id}: ${error.message}`);
+    }
+  }
 }

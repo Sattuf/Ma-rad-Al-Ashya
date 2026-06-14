@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { SearchService } from './search.service';
 import { ElasticsearchService } from './elasticsearch.service';
+import { RankingService } from '../ranking/ranking.service';
 
 jest.mock('ioredis', () => {
   const mRedis = jest.fn().mockImplementation(() => {
@@ -35,6 +36,14 @@ describe('SearchService', () => {
             },
           },
         },
+        {
+          provide: RankingService,
+          useValue: {
+            getABVariant: jest.fn().mockResolvedValue('A'),
+            getEngagementScores: jest.fn().mockResolvedValue(new Map()),
+            buildFunctionScore: jest.fn().mockReturnValue({}),
+          },
+        },
       ],
     }).compile();
 
@@ -50,7 +59,7 @@ describe('SearchService', () => {
     const cachedResult = { total: 1, hits: [{ id: '1', title: 'Test' }] };
     jest.spyOn(service['redisClient'], 'get').mockResolvedValue(JSON.stringify(cachedResult));
     
-    const result = await service.search('Test');
+    const result = await service.search({ q: 'Test' });
     expect(result).toEqual(cachedResult);
     expect(esService.client.search).not.toHaveBeenCalled();
   });
@@ -65,8 +74,8 @@ describe('SearchService', () => {
     };
     (esService.client.search as jest.Mock).mockResolvedValue(esResponse);
 
-    const result = await service.search('Test');
-    expect(result).toEqual({ total: 1, hits: [{ id: '1', title: 'Test' }] });
+    const result = await service.search({ q: 'Test' });
+    expect(result).toEqual({ total: 1, data: [{ id: '1', title: 'Test' }], variant: 'A' });
     expect(esService.client.search).toHaveBeenCalled();
     expect(service['redisClient'].set).toHaveBeenCalled();
   });

@@ -1,16 +1,23 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { useSearch, SearchQuery } from '@/lib/api/search';
+import { useSearch, SearchQuery, searchApi } from '@/lib/api/search';
 import { ListingCard } from '@/components/ListingCard';
 import { Filter, Loader2, X } from 'lucide-react';
+import { getOrCreateSessionId } from '@/lib/ab-testing';
 
 export function SearchClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [sessionId, setSessionId] = useState<string>('');
+  
+  useEffect(() => {
+    setSessionId(getOrCreateSessionId());
+  }, []);
+
   const [filters, setFilters] = useState<SearchQuery>({
     q: searchParams.get('q') || '',
     type: searchParams.get('type') || '',
@@ -21,7 +28,20 @@ export function SearchClient() {
     city: searchParams.get('city') || '',
   });
 
-  const { data, isLoading, error } = useSearch(filters);
+  const queryWithSession = { ...filters, session_id: sessionId };
+  const { data, isLoading, error } = useSearch(queryWithSession);
+
+  const onResultClicked = (listingId: string, position: number) => {
+    if (data?.variant && sessionId) {
+      searchApi.trackClick({
+        query: filters.q || '',
+        listing_id: listingId,
+        position,
+        variant: data.variant,
+        session_id: sessionId
+      });
+    }
+  };
 
   // Sync state to URL
   useEffect(() => {
@@ -234,8 +254,12 @@ export function SearchClient() {
             </div>
           ) : data?.data && data.data.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-              {data.data.map((listing) => (
-                <ListingCard key={listing.id} listing={listing} />
+              {data.data.map((listing, index) => (
+                <ListingCard 
+                  key={listing.id} 
+                  listing={listing} 
+                  onClick={() => onResultClicked(listing.id, index)} 
+                />
               ))}
             </div>
           ) : (

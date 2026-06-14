@@ -2,6 +2,9 @@ import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import { ElasticsearchService } from './elasticsearch.service';
 import Redis from 'ioredis';
 import * as crypto from 'crypto';
+import { RankingService } from '../ranking/ranking.service';
+import { SearchQueryDto } from './dto/search-query.dto';
+import { TrackClickDto } from './dto/track-click.dto';
 
 @Injectable()
 export class SearchService {
@@ -9,7 +12,10 @@ export class SearchService {
   private readonly redisClient: Redis;
   private readonly indexName = 'marad_listings';
 
-  constructor(private readonly esService: ElasticsearchService) {
+  constructor(
+    private readonly esService: ElasticsearchService,
+    private readonly rankingService: RankingService
+  ) {
     this.redisClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
   }
 
@@ -30,14 +36,19 @@ export class SearchService {
     } while (cursor !== '0');
   }
 
-  async search(query?: string, category?: string, minPrice?: number, maxPrice?: number, lat?: number, lon?: number, radius?: string) {
-    const params = { query, category, minPrice, maxPrice, lat, lon, radius };
-    const cacheKey = this.generateCacheKey('search', params);
+  async search(dto: SearchQueryDto, userId?: string) {
+    const { q: query, category, minPrice, maxPrice, lat, lon, radius, session_id } = dto;
+    const params = { query, category, minPrice, maxPrice, lat, lon, radius, session_id, userId };
+    const cacheKey = this.generateCacheKey('search_v2', params);
 
     const cachedResult = await this.redisClient.get(cacheKey);
     if (cachedResult) {
-      return JSON.parse(cachedResult);
+      const parsed = JSON.parse(cachedResult);
+      await this.redisClient.incr(`search:ab:${parsed.variant}:total`);
+      return parsed;
     }
+
+    const variant = dto.ab_variant || await this.rankingService.getABVariant(userId, session_id);
 
     const must: any[] = [];
     const filter: any[] = [];
@@ -73,16 +84,45 @@ export class SearchService {
     }
 
     try {
-      const body: any = { query: { bool: {} } };
-      if (must.length > 0) body.query.bool.must = must;
-      if (filter.length > 0) body.query.bool.filter = filter;
+      const baseQuery: any = { bool: {} };
+      if (must.length > 0) baseQuery.bool.must = must;
+      if (filter.length > 0) baseQuery.bool.filter = filter;
       if (must.length === 0 && filter.length === 0) {
-        body.query.bool.must = { match_all: {} };
+        baseQuery.bool.must = { match_all: {} };
+      }
+
+      // First pass: get IDs for engagement scores
+      const initialResponse = await this.esService.client.search({
+        index: this.indexName,
+        body: { query: baseQuery },
+        size: 200,
+        _source: false
+      });
+
+      const listingIds = initialResponse.hits.hits.map((hit: any) => hit._id);
+      const engagementScores = await this.rankingService.getEngagementScores(listingIds);
+
+      // Build function score
+      const rankingObj = this.rankingService.buildFunctionScore({ query, lat, lon }, engagementScores, variant);
+
+      const finalBody: any = { query: {} };
+      if (rankingObj.function_score) {
+        finalBody.query = {
+          function_score: {
+            query: baseQuery,
+            ...rankingObj.function_score
+          }
+        };
+      } else {
+        finalBody.query = baseQuery;
+        if (rankingObj.sort) {
+          finalBody.sort = rankingObj.sort;
+        }
       }
 
       const response = await this.esService.client.search({
         index: this.indexName,
-        body
+        body: finalBody
       });
 
       const hits = response.hits.hits.map((hit: any) => ({
@@ -90,8 +130,10 @@ export class SearchService {
         ...hit._source
       }));
 
-      const result = { total: response.hits.total, hits };
+      const result = { data: hits, total: response.hits.total, variant };
       await this.redisClient.set(cacheKey, JSON.stringify(result), 'EX', 300);
+      
+      await this.redisClient.incr(`search:ab:${variant}:total`);
 
       return result;
     } catch (error) {
@@ -302,6 +344,9 @@ export class SearchService {
           tags: listing.tags || [],
           createdAt: listing.createdAt,
           updatedAt: listing.updatedAt,
+          images_count: listing.images_count || 0,
+          description_length: listing.description_length || 0,
+          seller_average_rating: listing.seller_average_rating || 0,
         };
 
         if (action === 'create') {
@@ -341,6 +386,104 @@ export class SearchService {
       };
     } catch (e) {
       return { status: 'error', message: e.message };
+    }
+  }
+
+  async trackClick(body: TrackClickDto) {
+    try {
+      const { Client } = require('pg');
+      const pgClient = new Client({
+        connectionString: process.env.DATABASE_URL || 'postgres://postgres:postgres@localhost:5432/marad_db',
+      });
+      await pgClient.connect();
+
+      await pgClient.query(
+        `INSERT INTO ab_test_results (variant, session_id, query, clicked_listing_id, click_position, results_count) VALUES ($1, $2, $3, $4, $5, $6)`,
+        [body.variant, body.session_id, body.query, body.listing_id || null, body.position || null, body.listing_id ? 1 : 0]
+      );
+      await pgClient.end();
+
+      if (body.listing_id) {
+        await this.redisClient.incr(`listing:views:${body.listing_id}`);
+      }
+      return { tracked: true };
+    } catch (error) {
+      this.logger.error(`Failed to track click: ${error.message}`);
+      throw new HttpException('Tracking failed', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  async getRankingStats() {
+    try {
+      const { Client } = require('pg');
+      const pgClient = new Client({
+        connectionString: process.env.DATABASE_URL || 'postgres://postgres:postgres@localhost:5432/marad_db',
+      });
+      await pgClient.connect();
+
+      const [totalA, totalB] = await Promise.all([
+        this.redisClient.get('search:ab:A:total'),
+        this.redisClient.get('search:ab:B:total'),
+      ]);
+
+      const searchesA = parseInt(totalA || '0', 10);
+      const searchesB = parseInt(totalB || '0', 10);
+
+      const clickResult = await pgClient.query(`
+        SELECT variant, COUNT(clicked_listing_id) as clicks
+        FROM ab_test_results
+        GROUP BY variant
+      `);
+      
+      let clicksA = 0;
+      let clicksB = 0;
+      for (const row of clickResult.rows) {
+        if (row.variant === 'A') clicksA = parseInt(row.clicks, 10);
+        if (row.variant === 'B') clicksB = parseInt(row.clicks, 10);
+      }
+
+      const zeroResults = await pgClient.query(`
+        SELECT query FROM ab_test_results
+        WHERE results_count = 0
+        ORDER BY created_at DESC LIMIT 10
+      `);
+
+      const topRanked = await pgClient.query(`
+        SELECT clicked_listing_id as id, COUNT(*) as clicks
+        FROM ab_test_results
+        WHERE clicked_listing_id IS NOT NULL
+        GROUP BY clicked_listing_id
+        ORDER BY clicks DESC
+        LIMIT 10
+      `);
+
+      const avgRes = await pgClient.query(`
+        SELECT AVG(results_count) as avg
+        FROM ab_test_results
+      `);
+
+      await pgClient.end();
+
+      return {
+        ab_test: {
+          variant_a: {
+            total_searches: searchesA,
+            total_clicks: clicksA,
+            ctr: searchesA > 0 ? (clicksA / searchesA) : 0
+          },
+          variant_b: {
+            total_searches: searchesB,
+            total_clicks: clicksB,
+            ctr: searchesB > 0 ? (clicksB / searchesB) : 0
+          }
+        },
+        top_ranked_listings: topRanked.rows,
+        avg_results_per_search: parseFloat(avgRes.rows[0]?.avg || '0'),
+        zero_results_queries: zeroResults.rows.map((r: any) => r.query)
+      };
+    } catch (error) {
+      this.logger.error(`Failed to get stats: ${error.message}`);
+      throw new HttpException('Stats failed', HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 }

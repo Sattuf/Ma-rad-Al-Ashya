@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
 import '../../data/repositories/search_repository.dart';
 
 final searchRepositoryProvider = Provider<SearchRepository>((ref) {
@@ -12,6 +13,8 @@ class SearchFilters {
   final double? minPrice;
   final double? maxPrice;
   final String? condition;
+  final String variant;
+  final String? sessionId;
 
   SearchFilters({
     this.query = '',
@@ -20,6 +23,8 @@ class SearchFilters {
     this.minPrice,
     this.maxPrice,
     this.condition,
+    this.variant = '',
+    this.sessionId,
   });
 
   SearchFilters copyWith({
@@ -32,6 +37,8 @@ class SearchFilters {
     bool clearCategory = false,
     bool clearSort = false,
     bool clearCondition = false,
+    String? variant,
+    String? sessionId,
   }) {
     return SearchFilters(
       query: query ?? this.query,
@@ -40,12 +47,43 @@ class SearchFilters {
       minPrice: minPrice ?? this.minPrice,
       maxPrice: maxPrice ?? this.maxPrice,
       condition: clearCondition ? null : (condition ?? this.condition),
+      variant: variant ?? this.variant,
+      sessionId: sessionId ?? this.sessionId,
     );
   }
 }
 
 class SearchFiltersNotifier extends StateNotifier<SearchFilters> {
-  SearchFiltersNotifier() : super(SearchFilters());
+  final SearchRepository _repository;
+  SearchFiltersNotifier(this._repository) : super(SearchFilters());
+
+  final _uuid = const Uuid();
+
+  String getOrCreateSessionId() {
+    if (state.sessionId == null) {
+      final newSessionId = _uuid.v4();
+      state = state.copyWith(sessionId: newSessionId);
+      return newSessionId;
+    }
+    return state.sessionId!;
+  }
+
+  void setVariant(String variant) {
+    if (state.variant != variant) {
+      state = state.copyWith(variant: variant);
+    }
+  }
+
+  void onResultClicked(String listingId, int position) {
+    final currentSessionId = state.sessionId ?? getOrCreateSessionId();
+    _repository.trackClick(
+      query: state.query,
+      listingId: listingId,
+      position: position,
+      variant: state.variant,
+      sessionId: currentSessionId,
+    );
+  }
 
   void setQuery(String query) {
     state = state.copyWith(query: query);
@@ -73,7 +111,8 @@ class SearchFiltersNotifier extends StateNotifier<SearchFilters> {
 }
 
 final searchFiltersProvider = StateNotifierProvider<SearchFiltersNotifier, SearchFilters>((ref) {
-  return SearchFiltersNotifier();
+  final repository = ref.read(searchRepositoryProvider);
+  return SearchFiltersNotifier(repository);
 });
 
 final searchSuggestionsProvider = FutureProvider.family<List<String>, String>((ref, query) async {

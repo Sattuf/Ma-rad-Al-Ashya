@@ -37,10 +37,13 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
     _pagingController = PagingController<int, Listing>(
       fetchPage: (pageKey) async {
+        final filtersNotifier = ref.read(searchFiltersProvider.notifier);
         final filters = ref.read(searchFiltersProvider);
         final repository = ref.read(searchRepositoryProvider);
         
-        return await repository.searchListings(
+        final sessionId = filters.sessionId ?? filtersNotifier.getOrCreateSessionId();
+
+        final response = await repository.searchListings(
           query: filters.query,
           page: pageKey,
           limit: _pageSize,
@@ -49,7 +52,11 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           minPrice: filters.minPrice,
           maxPrice: filters.maxPrice,
           condition: filters.condition,
+          sessionId: sessionId,
         );
+
+        filtersNotifier.setVariant(response.variant);
+        return response.listings;
       },
       getNextPageKey: (state) {
         final lastPage = state.pages?.last;
@@ -162,6 +169,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                       return ListingCard(
                         listing: listing,
                         onTap: () {
+                          ref.read(searchFiltersProvider.notifier).onResultClicked(listing.id, index);
                           context.push('/listings/${listing.id}');
                         },
                       );

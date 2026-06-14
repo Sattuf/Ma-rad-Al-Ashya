@@ -1,0 +1,9 @@
+export const RANKING_WEIGHTS = {
+  RECENCY: 0.25,
+  DISTANCE: 0.20,
+  QUALITY: 0.20,
+  ENGAGEMENT: 0.15,
+  SELLER_RATING: 0.15,
+  PRICE_COMPETITIVENESS: 0.05,
+};
+export const AB_VARIANT_TTL = 7 * 24 * 60 * 60; // 7 days

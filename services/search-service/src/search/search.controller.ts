@@ -1,9 +1,12 @@
-import { Controller, Get, Post, Body, Query, Headers, UnauthorizedException, HttpException, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, Headers, UnauthorizedException, HttpException, HttpStatus, UseGuards } from '@nestjs/common';
 import { SearchService } from './search.service';
 import { ApiTags, ApiOperation, ApiQuery, ApiHeader } from '@nestjs/swagger';
 import { MapSearchDto } from './dto/map-search.dto';
 import { RelatedSearchDto } from './dto/related-search.dto';
 import { SuggestionsSearchDto } from './dto/suggestions-search.dto';
+import { SearchQueryDto } from './dto/search-query.dto';
+import { TrackClickDto } from './dto/track-click.dto';
+import { AdminGuard } from '../guards/admin.guard';
 
 @ApiTags('Search')
 @Controller('search')
@@ -51,31 +54,8 @@ export class SearchController {
 
   @Get()
   @ApiOperation({ summary: 'Search listings' })
-  @ApiQuery({ name: 'q', required: false, type: String })
-  @ApiQuery({ name: 'category', required: false, type: String })
-  @ApiQuery({ name: 'minPrice', required: false, type: Number })
-  @ApiQuery({ name: 'maxPrice', required: false, type: Number })
-  @ApiQuery({ name: 'lat', required: false, type: Number })
-  @ApiQuery({ name: 'lon', required: false, type: Number })
-  @ApiQuery({ name: 'radius', required: false, type: String })
-  async search(
-    @Query('q') q?: string,
-    @Query('category') category?: string,
-    @Query('minPrice') minPrice?: string,
-    @Query('maxPrice') maxPrice?: string,
-    @Query('lat') lat?: string,
-    @Query('lon') lon?: string,
-    @Query('radius') radius?: string,
-  ) {
-    return this.searchService.search(
-      q,
-      category,
-      minPrice ? parseFloat(minPrice) : undefined,
-      maxPrice ? parseFloat(maxPrice) : undefined,
-      lat ? parseFloat(lat) : undefined,
-      lon ? parseFloat(lon) : undefined,
-      radius
-    );
+  async search(@Query() query: SearchQueryDto, @Headers('x-user-id') userId?: string) {
+    return this.searchService.search(query, userId);
   }
 
   @Get('autocomplete')
@@ -86,6 +66,22 @@ export class SearchController {
       throw new HttpException('Query is required', HttpStatus.BAD_REQUEST);
     }
     return this.searchService.autocomplete(q);
+  }
+
+  @Post('track-click')
+  @ApiOperation({ summary: 'Track user click for A/B testing' })
+  async trackClick(@Body() body: TrackClickDto) {
+    if (!body.query || !body.variant) {
+      throw new HttpException('Missing required fields', HttpStatus.BAD_REQUEST);
+    }
+    return this.searchService.trackClick(body);
+  }
+
+  @Get('ranking/stats')
+  @UseGuards(AdminGuard)
+  @ApiOperation({ summary: 'Get A/B test ranking stats' })
+  async getRankingStats() {
+    return this.searchService.getRankingStats();
   }
 
   @Post('index')

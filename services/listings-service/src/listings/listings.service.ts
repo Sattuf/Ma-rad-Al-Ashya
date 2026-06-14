@@ -35,10 +35,40 @@ export class ListingsService {
       const searchServiceUrl = process.env.SEARCH_SERVICE_URL || 'http://localhost:3003';
       const secret = process.env.INTERNAL_SECRET || 'secret123';
       
+      let enrichedListing = { ...listing };
+      
+      if (action !== 'delete') {
+        let sellerRating = 0;
+        try {
+          const transactionsUrl = process.env.TRANSACTIONS_SERVICE_URL || 'http://localhost:3006';
+          const ratingRes = await firstValueFrom(
+            this.httpService.get(`${transactionsUrl}/users/${listing.userId}/reviews`, {
+              headers: { 'x-internal-secret': secret }
+            })
+          );
+          if (ratingRes.data && ratingRes.data.summary) {
+            sellerRating = Number(ratingRes.data.summary.average_rating) || 0;
+          }
+        } catch (e) {
+          // ignore if not found or errors
+        }
+        
+        let imagesCount = 0;
+        if (listing.images && Array.isArray(listing.images)) {
+          imagesCount = listing.images.length;
+        } else if (listing.id) {
+          imagesCount = await this.listingImagesRepository.count({ where: { listingId: listing.id } });
+        }
+
+        enrichedListing.images_count = imagesCount;
+        enrichedListing.description_length = listing.description ? listing.description.length : 0;
+        enrichedListing.seller_average_rating = sellerRating;
+      }
+      
       await firstValueFrom(
         this.httpService.post(`${searchServiceUrl}/search/index`, {
           action,
-          listing,
+          listing: enrichedListing,
         }, {
           headers: { 'x-internal-secret': secret }
         })
