@@ -14,6 +14,7 @@ import '../../features/listings/presentation/screens/listings_screen.dart';
 import '../../features/listings/presentation/screens/create_listing_screen.dart';
 import '../../features/listings/presentation/screens/my_listings_screen.dart';
 import '../../features/listings/presentation/screens/listing_details_screen.dart';
+import '../../features/search/presentation/screens/search_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authProvider);
@@ -86,6 +87,13 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           final id = state.pathParameters['id']!;
           return ListingDetailsScreen(listingId: id);
+        },
+      ),
+      GoRoute(
+        path: '/search',
+        builder: (context, state) {
+          final initialQuery = state.uri.queryParameters['q'];
+          return SearchScreen(initialQuery: initialQuery);
         },
       ),
     ],

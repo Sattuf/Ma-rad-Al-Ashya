@@ -1,0 +1,202 @@
+import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
+import { ElasticsearchService } from './elasticsearch.service';
+import Redis from 'ioredis';
+import * as crypto from 'crypto';
+
+@Injectable()
+export class SearchService {
+  private readonly logger = new Logger(SearchService.name);
+  private readonly redisClient: Redis;
+  private readonly indexName = 'marad_listings';
+
+  constructor(private readonly esService: ElasticsearchService) {
+    this.redisClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+  }
+
+  private generateCacheKey(prefix: string, params: any): string {
+    const hash = crypto.createHash('md5').update(JSON.stringify(params)).digest('hex');
+    return `${prefix}:${hash}`;
+  }
+
+  private async invalidateCache(pattern: string) {
+    let cursor = '0';
+    do {
+      const result = await this.redisClient.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
+      cursor = result[0];
+      const keys = result[1];
+      if (keys.length > 0) {
+        await this.redisClient.del(...keys);
+      }
+    } while (cursor !== '0');
+  }
+
+  async search(query?: string, category?: string, minPrice?: number, maxPrice?: number, lat?: number, lon?: number, radius?: string) {
+    const params = { query, category, minPrice, maxPrice, lat, lon, radius };
+    const cacheKey = this.generateCacheKey('search', params);
+
+    const cachedResult = await this.redisClient.get(cacheKey);
+    if (cachedResult) {
+      return JSON.parse(cachedResult);
+    }
+
+    const must: any[] = [];
+    const filter: any[] = [];
+
+    if (query) {
+      must.push({
+        multi_match: {
+          query,
+          fields: ['title^3', 'description', 'category', 'tags'],
+          fuzziness: 'AUTO'
+        }
+      });
+    }
+
+    if (category) {
+      filter.push({ term: { category } });
+    }
+
+    if (minPrice !== undefined || maxPrice !== undefined) {
+      const range: any = {};
+      if (minPrice !== undefined) range.gte = minPrice;
+      if (maxPrice !== undefined) range.lte = maxPrice;
+      filter.push({ range: { price: range } });
+    }
+
+    if (lat !== undefined && lon !== undefined && radius) {
+      filter.push({
+        geo_distance: {
+          distance: radius,
+          location: { lat, lon }
+        }
+      });
+    }
+
+    try {
+      const body: any = { query: { bool: {} } };
+      if (must.length > 0) body.query.bool.must = must;
+      if (filter.length > 0) body.query.bool.filter = filter;
+      if (must.length === 0 && filter.length === 0) {
+        body.query.bool.must = { match_all: {} };
+      }
+
+      const response = await this.esService.client.search({
+        index: this.indexName,
+        body
+      });
+
+      const hits = response.hits.hits.map((hit: any) => ({
+        id: hit._id,
+        ...hit._source
+      }));
+
+      const result = { total: response.hits.total, hits };
+      await this.redisClient.set(cacheKey, JSON.stringify(result), 'EX', 300);
+
+      return result;
+    } catch (error) {
+      this.logger.error(`Search failed: ${error.message}`);
+      throw new HttpException('Search failed', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  async autocomplete(query: string) {
+    if (!query || query.length < 2) return [];
+
+    const cacheKey = this.generateCacheKey('autocomplete', { query });
+    const cachedResult = await this.redisClient.get(cacheKey);
+    if (cachedResult) return JSON.parse(cachedResult);
+
+    try {
+      const response = await this.esService.client.search({
+        index: this.indexName,
+        body: {
+          query: {
+            multi_match: {
+              query,
+              type: 'bool_prefix',
+              fields: [
+                'title',
+                'title._2gram',
+                'title._3gram'
+              ]
+            }
+          },
+          size: 5
+        }
+      });
+
+      const suggestions = response.hits.hits.map((hit: any) => hit._source.title);
+      const uniqueSuggestions = [...new Set(suggestions)];
+      
+      await this.redisClient.set(cacheKey, JSON.stringify(uniqueSuggestions), 'EX', 600);
+
+      return uniqueSuggestions;
+    } catch (error) {
+      this.logger.error(`Autocomplete failed: ${error.message}`);
+      return [];
+    }
+  }
+
+  async indexListing(action: 'create' | 'update' | 'delete', listing: any) {
+    try {
+      if (action === 'delete') {
+        await this.esService.client.delete({
+          index: this.indexName,
+          id: listing.id.toString(),
+        });
+      } else {
+        const document = {
+          id: listing.id,
+          title: listing.title,
+          description: listing.description,
+          price: listing.price,
+          location: (listing.location && listing.location.lat !== undefined && listing.location.lng !== undefined) 
+            ? { lat: listing.location.lat, lon: listing.location.lng } 
+            : undefined,
+          category: listing.category,
+          tags: listing.tags || [],
+          createdAt: listing.createdAt,
+          updatedAt: listing.updatedAt,
+        };
+
+        if (action === 'create') {
+          await this.esService.client.index({
+            index: this.indexName,
+            id: listing.id.toString(),
+            document,
+          });
+        } else {
+          await this.esService.client.update({
+            index: this.indexName,
+            id: listing.id.toString(),
+            doc: document,
+            doc_as_upsert: true,
+          });
+        }
+      }
+
+      await this.invalidateCache('search:*');
+      await this.invalidateCache('autocomplete:*');
+
+      return { success: true };
+    } catch (error) {
+      this.logger.error(`Failed to index listing ${listing.id}: ${error.message}`);
+      throw new HttpException('Indexing failed', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  async getHealth() {
+    try {
+      const esHealth = await this.esService.client.cluster.health();
+      const redisPing = await this.redisClient.ping();
+      return {
+        status: 'ok',
+        elasticsearch: esHealth.status,
+        redis: redisPing === 'PONG' ? 'ok' : 'error'
+      };
+    } catch (e) {
+      return { status: 'error', message: e.message };
+    }
+  }
+}

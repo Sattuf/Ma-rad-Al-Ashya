@@ -1,0 +1,96 @@
+import { Test, TestingModule } from '@nestjs/testing';
+import { SearchService } from './search.service';
+import { ElasticsearchService } from './elasticsearch.service';
+
+jest.mock('ioredis', () => {
+  const mRedis = jest.fn().mockImplementation(() => {
+    return {
+      get: jest.fn(),
+      set: jest.fn(),
+      del: jest.fn(),
+      scan: jest.fn().mockResolvedValue(['0', []]),
+      ping: jest.fn().mockResolvedValue('PONG'),
+    };
+  });
+  return { __esModule: true, default: mRedis };
+});
+
+describe('SearchService', () => {
+  let service: SearchService;
+  let esService: ElasticsearchService;
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        SearchService,
+        {
+          provide: ElasticsearchService,
+          useValue: {
+            client: {
+              search: jest.fn(),
+              index: jest.fn(),
+              update: jest.fn(),
+              delete: jest.fn(),
+              cluster: { health: jest.fn().mockResolvedValue({ status: 'green' }) },
+            },
+          },
+        },
+      ],
+    }).compile();
+
+    service = module.get<SearchService>(SearchService);
+    esService = module.get<ElasticsearchService>(ElasticsearchService);
+  });
+
+  it('should be defined', () => {
+    expect(service).toBeDefined();
+  });
+
+  it('should return cached search results if available', async () => {
+    const cachedResult = { total: 1, hits: [{ id: '1', title: 'Test' }] };
+    jest.spyOn(service['redisClient'], 'get').mockResolvedValue(JSON.stringify(cachedResult));
+    
+    const result = await service.search('Test');
+    expect(result).toEqual(cachedResult);
+    expect(esService.client.search).not.toHaveBeenCalled();
+  });
+
+  it('should perform ES search and cache result if not cached', async () => {
+    jest.spyOn(service['redisClient'], 'get').mockResolvedValue(null);
+    const esResponse = {
+      hits: {
+        total: 1,
+        hits: [{ _id: '1', _source: { title: 'Test' } }]
+      }
+    };
+    (esService.client.search as jest.Mock).mockResolvedValue(esResponse);
+
+    const result = await service.search('Test');
+    expect(result).toEqual({ total: 1, hits: [{ id: '1', title: 'Test' }] });
+    expect(esService.client.search).toHaveBeenCalled();
+    expect(service['redisClient'].set).toHaveBeenCalled();
+  });
+
+  it('should delete listing from ES and invalidate cache on delete action', async () => {
+    (esService.client.delete as jest.Mock).mockResolvedValue({});
+    jest.spyOn(service as any, 'invalidateCache').mockResolvedValue(undefined);
+
+    await service.indexListing('delete', { id: '123' });
+    
+    expect(esService.client.delete).toHaveBeenCalledWith({
+      index: 'marad_listings',
+      id: '123'
+    });
+    expect(service['invalidateCache']).toHaveBeenCalledWith('search:*');
+    expect(service['invalidateCache']).toHaveBeenCalledWith('autocomplete:*');
+  });
+
+  it('should return health status correctly', async () => {
+    const result = await service.getHealth();
+    expect(result).toEqual({
+      status: 'ok',
+      elasticsearch: 'green',
+      redis: 'ok'
+    });
+  });
+});

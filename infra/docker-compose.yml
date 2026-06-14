@@ -111,6 +111,7 @@ services:
       - IDENTITY_SERVICE_URL=http://identity-service:3006
       - USERS_SERVICE_URL=http://users-service:3007
       - LISTINGS_SERVICE_URL=http://listings-service:3002
+      - SEARCH_SERVICE_URL=http://search-service:3003
       - FRAUD_SERVICE_URL=http://fraud-service:8001
       - PERSONALIZATION_SERVICE_URL=http://personalization-service:8002
       - REDIS_HOST=redis
@@ -330,6 +331,8 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - JWT_ACCESS_SECRET=dev-jwt-secret-change-in-production
+      - SEARCH_SERVICE_URL=http://search-service:3003
+      - INTERNAL_SECRET=marad-internal-secret-for-webhooks
     ports:
       - "3002:3002"
     volumes:
@@ -339,6 +342,55 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    networks:
+      - marad-network
+
+  search-service:
+    build:
+      context: ../services/search-service
+      dockerfile: Dockerfile
+      target: builder
+    container_name: marad-search-service
+    restart: unless-stopped
+    command: npm run start:dev
+    environment:
+      - PORT=3003
+      - NODE_ENV=development
+      - ELASTICSEARCH_NODE=http://elasticsearch:9200
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - JWT_ACCESS_SECRET=dev-jwt-secret-change-in-production
+      - INTERNAL_SECRET=marad-internal-secret-for-webhooks
+    ports:
+      - "3003:3003"
+    volumes:
+      - ../services/search-service/src:/app/src:delegated
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - marad-network
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.0
+    container_name: marad-elasticsearch
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200 >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - marad-network
 
@@ -412,3 +464,5 @@ volumes:
     name: marad-redis-data
   es_data:
     name: marad-es-data
+
+  esdata:
