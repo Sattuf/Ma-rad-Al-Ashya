@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../providers/auth_provider.dart';
 
 class HomeScreen extends ConsumerWidget {
@@ -32,10 +33,20 @@ class HomeScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: const Center(
-        child: Text(
-          'مرحباً بك في معرض الأشياء!',
-          style: TextStyle(fontSize: 24),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text(
+              'مرحباً بك في معرض الأشياء!',
+              style: TextStyle(fontSize: 24),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: () => context.push('/listings'),
+              child: const Text('تصفح الإعلانات'),
+            ),
+          ],
         ),
       ),
     );

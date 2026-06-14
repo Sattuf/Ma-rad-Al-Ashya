@@ -10,6 +10,10 @@ import '../../features/auth/presentation/screens/home_screen.dart';
 import '../../features/profile/presentation/screens/profile_screen.dart';
 import '../../features/profile/presentation/screens/edit_profile_screen.dart';
 import '../../features/profile/presentation/screens/notifications_screen.dart';
+import '../../features/listings/presentation/screens/listings_screen.dart';
+import '../../features/listings/presentation/screens/create_listing_screen.dart';
+import '../../features/listings/presentation/screens/my_listings_screen.dart';
+import '../../features/listings/presentation/screens/listing_details_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authProvider);
@@ -64,6 +68,25 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/profile/notifications',
         builder: (context, state) => const NotificationsScreen(),
+      ),
+      GoRoute(
+        path: '/listings',
+        builder: (context, state) => const ListingsScreen(),
+      ),
+      GoRoute(
+        path: '/listings/create',
+        builder: (context, state) => const CreateListingScreen(),
+      ),
+      GoRoute(
+        path: '/listings/my',
+        builder: (context, state) => const MyListingsScreen(),
+      ),
+      GoRoute(
+        path: '/listings/:id',
+        builder: (context, state) {
+          final id = state.pathParameters['id']!;
+          return ListingDetailsScreen(listingId: id);
+        },
       ),
     ],
   );
