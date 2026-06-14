@@ -30,6 +30,11 @@ class MainShellScreen extends StatelessWidget {
             label: 'استكشاف',
           ),
           NavigationDestination(
+            icon: Icon(Icons.favorite_outline),
+            selectedIcon: Icon(Icons.favorite),
+            label: 'المفضلة',
+          ),
+          NavigationDestination(
             icon: Icon(Icons.map_outlined),
             selectedIcon: Icon(Icons.map),
             label: 'الخريطة',

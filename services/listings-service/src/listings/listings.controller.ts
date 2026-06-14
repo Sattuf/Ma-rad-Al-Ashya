@@ -112,6 +112,20 @@ export class ListingsController {
     return this.listingsService.updateStatusInternal(id, status);
   }
 
+  @Post('batch')
+  @ApiOperation({ summary: 'Internal: Get multiple listings by IDs' })
+  @ApiBody({ schema: { properties: { ids: { type: 'array', items: { type: 'string' } } } } })
+  async findBatch(@Request() req, @Body('ids') ids: string[]) {
+    const internalSecret = req.headers['x-internal-secret'];
+    if (internalSecret !== (process.env.INTERNAL_SECRET || 'marad-internal-secret-for-webhooks')) {
+      throw new import('@nestjs/common').UnauthorizedException('Invalid internal secret');
+    }
+    if (!ids || !Array.isArray(ids) || ids.length > 50) {
+      throw new import('@nestjs/common').BadRequestException('Invalid or too many IDs (max 50)');
+    }
+    return this.listingsService.findBatch(ids);
+  }
+
   @Get('user/:userId')
   @ApiOperation({ summary: 'Get listings by user ID' })
   findByUser(@Param('userId') userId: string) {

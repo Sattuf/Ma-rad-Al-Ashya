@@ -24,6 +24,9 @@ import '../../features/messaging/presentation/screens/image_viewer_screen.dart';
 import '../../features/transactions/presentation/screens/transactions_screen.dart';
 import '../../features/transactions/presentation/screens/transaction_detail_screen.dart';
 import '../../features/transactions/presentation/screens/review_screen.dart';
+import '../../features/favorites/presentation/screens/favorites_screen.dart';
+import '../../features/moderation/presentation/screens/report_screen.dart';
+
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authProvider);
 
@@ -80,6 +83,15 @@ final routerProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: '/explore',
                 builder: (context, state) => const ExploreScreen(),
+              ),
+            ],
+          ),
+
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/favorites',
+                builder: (context, state) => const FavoritesScreen(),
               ),
             ],
           ),
@@ -173,6 +185,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/transactions/:id/review',
         builder: (context, state) => ReviewScreen(transactionId: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: '/report',
+        builder: (context, state) {
+          final type = state.uri.queryParameters['type'] ?? 'listing';
+          final id = state.uri.queryParameters['id'] ?? '';
+          return ReportScreen(targetType: type, targetId: id);
+        },
       ),
     ],
   );

@@ -110,8 +110,7 @@ services:
       - TRANSACTIONS_SERVICE_URL=http://transactions-service:3005
       - IDENTITY_SERVICE_URL=http://identity-service:3006
       - USERS_SERVICE_URL=http://users-service:3007
-      - LISTINGS_SERVICE_URL=http://listings-service:3002
-      - SEARCH_SERVICE_URL=http://search-service:3003
+      - MODERATION_SERVICE_URL=http://moderation-service:3008
       - FRAUD_SERVICE_URL=http://fraud-service:8001
       - PERSONALIZATION_SERVICE_URL=http://personalization-service:8002
       - REDIS_HOST=redis
@@ -470,3 +469,25 @@ volumes:
     name: marad-es-data
 
   esdata:
+  moderation-service:
+    build:
+      context: ../services/moderation-service
+      dockerfile: Dockerfile
+    ports:
+      - "3008:3008"
+    environment:
+      - PORT=3008
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=marad_user
+      - DB_PASSWORD=marad_dev_password
+      - DB_NAME=marad_db
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - LISTINGS_SERVICE_URL=http://listings-service:3002
+      - USERS_SERVICE_URL=http://users-service:3007
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - marad-network

@@ -5,20 +5,74 @@ import 'package:carousel_slider/carousel_slider.dart';
 import '../providers/listing_provider.dart';
 import 'package:marad_mobile/features/auth/presentation/providers/auth_provider.dart';
 import 'package:marad_mobile/features/transactions/presentation/providers/transactions_provider.dart';
+import 'package:marad_mobile/features/favorites/presentation/providers/favorites_provider.dart';
 import 'package:go_router/go_router.dart';
 
-class ListingDetailsScreen extends ConsumerWidget {
+class ListingDetailsScreen extends ConsumerStatefulWidget {
   final String listingId;
 
   const ListingDetailsScreen({super.key, required this.listingId});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final listingAsync = ref.watch(listingDetailsProvider(listingId));
+  ConsumerState<ListingDetailsScreen> createState() => _ListingDetailsScreenState();
+}
+
+class _ListingDetailsScreenState extends ConsumerState<ListingDetailsScreen> {
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(() => 
+      ref.read(favoritesProvider.notifier).checkFavorite(widget.listingId)
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final listingAsync = ref.watch(listingDetailsProvider(widget.listingId));
+    final isFavorite = ref.watch(favoritesProvider)[widget.listingId] ?? false;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('تفاصيل الإعلان'),
+        actions: [
+          IconButton(
+            icon: AnimatedScale(
+              scale: isFavorite ? 1.2 : 1.0,
+              duration: const Duration(milliseconds: 200),
+              child: Icon(
+                isFavorite ? Icons.favorite : Icons.favorite_border,
+                color: isFavorite ? Colors.red : null,
+              ),
+            ),
+            onPressed: () async {
+              final success = await ref.read(favoritesProvider.notifier).toggleFavorite(widget.listingId);
+              if (!success && context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('حدث خطأ أثناء تحديث المفضلة')),
+                );
+              }
+            },
+          ),
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              if (value == 'report') {
+                context.push('/report?type=listing&id=${widget.listingId}');
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'report',
+                child: Row(
+                  children: [
+                    Icon(Icons.flag, color: Colors.red, size: 20),
+                    SizedBox(width: 8),
+                    Text('الإبلاغ عن الإعلان'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
       body: listingAsync.when(
         data: (listing) => SingleChildScrollView(

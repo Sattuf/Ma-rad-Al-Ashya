@@ -83,6 +83,24 @@ export class ListingsService {
     return listing;
   }
 
+  async findBatch(ids: string[]): Promise<(Listing | null)[]> {
+    if (!ids || ids.length === 0) return [];
+    
+    const listings = await this.listingsRepository.find({
+      where: { id: In(ids) },
+    });
+    
+    const listingsMap = new Map(listings.map(l => [l.id, l]));
+    
+    return ids.map(id => {
+      const listing = listingsMap.get(id);
+      if (!listing || listing.status === ListingStatus.DELETED) {
+        return null;
+      }
+      return listing;
+    });
+  }
+
   async incrementView(id: string): Promise<void> {
     await this.redis.incr(`listing:views:${id}`);
   }

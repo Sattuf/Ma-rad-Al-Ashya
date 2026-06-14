@@ -10,7 +10,8 @@ import { useState } from 'react';
 
 import { useAuthStore } from '@/lib/store/auth-store';
 import { transactionsApi } from '@/lib/api/transactions';
-import { ShoppingCart } from 'lucide-react';
+import { ShoppingCart, Flag } from 'lucide-react';
+import { ReportDialog } from '@/components/moderation/ReportDialog';
 
 export default function ListingDetailPage() {
   const params = useParams();
@@ -19,6 +20,7 @@ export default function ListingDetailPage() {
   const { listing, isLoading, error } = useListingDetail(id);
   const { user, isAuthenticated } = useAuthStore();
   const [isBuying, setIsBuying] = useState(false);
+  const [isReportOpen, setIsReportOpen] = useState(false);
 
   if (isLoading) {
     return (
@@ -208,12 +210,31 @@ export default function ListingDetailPage() {
                 إرسال رسالة
               </button>
             </div>
+
+            {/* Report Button */}
+            <div className="mt-6 pt-6 border-t border-gray-100">
+              <button 
+                onClick={() => setIsReportOpen(true)}
+                className="w-full text-red-500 hover:bg-red-50 hover:text-red-600 font-medium py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
+              >
+                <Flag size={18} />
+                <span>الإبلاغ عن الإعلان</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
       {/* Related Listings */}
       <RelatedListings currentListingId={id} categoryId={listing.category || 'real-estate'} />
+
+      {isReportOpen && (
+        <ReportDialog 
+          targetType="listing" 
+          targetId={id} 
+          onClose={() => setIsReportOpen(false)} 
+        />
+      )}
     </div>
   );
 }

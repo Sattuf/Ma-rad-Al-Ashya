@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../data/models/listing.dart';
+import '../../../../features/favorites/presentation/providers/favorites_provider.dart';
 
-class ListingCard extends StatelessWidget {
+class ListingCard extends ConsumerWidget {
   final Listing listing;
   final VoidCallback onTap;
 
@@ -13,7 +15,9 @@ class ListingCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isFavorite = ref.watch(favoritesProvider)[listing.id] ?? false;
+
     return Card(
       elevation: 2,
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -21,33 +25,35 @@ class ListingCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Stack(
           children: [
-            if (listing.images.isNotEmpty)
-              CachedNetworkImage(
-                imageUrl: listing.images.first,
-                height: 150,
-                width: double.infinity,
-                fit: BoxFit.cover,
-                placeholder: (context, url) => Container(
-                  height: 150,
-                  color: Colors.grey[300],
-                  child: const Center(child: CircularProgressIndicator()),
-                ),
-                errorWidget: (context, url, error) => Container(
-                  height: 150,
-                  color: Colors.grey[200],
-                  child: const Icon(Icons.image_not_supported, size: 50, color: Colors.grey),
-                ),
-              )
-            else
-              Container(
-                height: 150,
-                width: double.infinity,
-                color: Colors.grey[200],
-                child: const Icon(Icons.image, size: 50, color: Colors.grey),
-              ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (listing.images.isNotEmpty)
+                  CachedNetworkImage(
+                    imageUrl: listing.images.first,
+                    height: 150,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => Container(
+                      height: 150,
+                      color: Colors.grey[300],
+                      child: const Center(child: CircularProgressIndicator()),
+                    ),
+                    errorWidget: (context, url, error) => Container(
+                      height: 150,
+                      color: Colors.grey[200],
+                      child: const Icon(Icons.image_not_supported, size: 50, color: Colors.grey),
+                    ),
+                  )
+                else
+                  Container(
+                    height: 150,
+                    width: double.infinity,
+                    color: Colors.grey[200],
+                    child: const Icon(Icons.image, size: 50, color: Colors.grey),
+                  ),
             Padding(
               padding: const EdgeInsets.all(12.0),
               child: Column(
@@ -98,6 +104,38 @@ class ListingCard extends StatelessWidget {
                     ],
                   ),
                 ],
+              ),
+            ),
+                  ),
+                ],
+              ),
+            ),
+            Positioned(
+              top: 8,
+              left: 8,
+              child: Container(
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white70,
+                ),
+                child: IconButton(
+                  icon: AnimatedScale(
+                    scale: isFavorite ? 1.2 : 1.0,
+                    duration: const Duration(milliseconds: 200),
+                    child: Icon(
+                      isFavorite ? Icons.favorite : Icons.favorite_border,
+                      color: isFavorite ? Colors.red : Colors.grey,
+                    ),
+                  ),
+                  onPressed: () async {
+                    final success = await ref.read(favoritesProvider.notifier).toggleFavorite(listing.id);
+                    if (!success && context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('حدث خطأ أثناء تحديث المفضلة')),
+                      );
+                    }
+                  },
+                ),
               ),
             ),
           ],

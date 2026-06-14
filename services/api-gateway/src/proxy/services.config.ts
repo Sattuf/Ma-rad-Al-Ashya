@@ -88,4 +88,16 @@ export const SERVICES_CONFIG: ServiceConfig[] = [
     prefix: 'categories',
     description: 'Categories Management (routes to listings-service)',
   },
+  {
+    name: 'moderation-service',
+    url: process.env.MODERATION_SERVICE_URL || 'http://localhost:3008',
+    prefix: 'reports',
+    description: 'Moderation and Reports',
+  },
+  {
+    name: 'moderation-service-admin',
+    url: process.env.MODERATION_SERVICE_URL || 'http://localhost:3008',
+    prefix: 'admin',
+    description: 'Moderation Admin',
+  },
 ];

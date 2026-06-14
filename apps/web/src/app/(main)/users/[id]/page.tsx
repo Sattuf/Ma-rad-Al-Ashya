@@ -4,15 +4,17 @@ import { use, useState, useEffect } from 'react';
 import { useUserReviews } from '@/hooks/useUserReviews';
 import { useListings } from '@/hooks/useListings';
 import { userApi } from '@/lib/api/users';
-import { Star, User, Calendar, MapPin } from 'lucide-react';
+import { Star, User, Calendar, MapPin, Flag } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import Link from 'next/link';
+import { ReportDialog } from '@/components/moderation/ReportDialog';
 
 export default function UserProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
   const [user, setUser] = useState<any>(null);
   const [loadingUser, setLoadingUser] = useState(true);
+  const [isReportOpen, setIsReportOpen] = useState(false);
 
   const { reviews, pagination, isLoading: loadingReviews } = useUserReviews(resolvedParams.id, 1, 10);
   const { listings, isLoading: loadingListings } = useListings({ userId: resolvedParams.id });
@@ -67,6 +69,15 @@ export default function UserProfilePage({ params }: { params: Promise<{ id: stri
               <span>انضم {user.createdAt ? formatDistanceToNow(new Date(user.createdAt), { addSuffix: true, locale: ar }) : 'مؤخراً'}</span>
             </div>
           </div>
+        </div>
+        <div className="sm:self-start">
+          <button 
+            onClick={() => setIsReportOpen(true)}
+            className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+          >
+            <Flag size={16} />
+            <span>الإبلاغ عن المستخدم</span>
+          </button>
         </div>
       </div>
 
@@ -172,6 +183,14 @@ export default function UserProfilePage({ params }: { params: Promise<{ id: stri
           </div>
         </div>
       </div>
+
+      {isReportOpen && (
+        <ReportDialog 
+          targetType="user" 
+          targetId={resolvedParams.id} 
+          onClose={() => setIsReportOpen(false)} 
+        />
+      )}
     </div>
   );
 }
