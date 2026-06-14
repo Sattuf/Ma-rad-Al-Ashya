@@ -1,10 +1,350 @@
-# معرض الأشياء — Docker Compose (Development)
-# سيتم تكوين هذا الملف بالكامل في Sprint 0 / الأسبوع 2
-
-version: '3.8'
+# معرض الأشياء — Docker Compose (Development Environment)
+# Sprint 0 / الأسبوع 2 — بيئة التطوير المحلية الكاملة
 
 services:
-  # TODO: Week 2 - Add PostgreSQL, MongoDB, Redis, Elasticsearch
-  # TODO: Week 2 - Add all microservices
-  placeholder:
-    image: hello-world
+
+  # ============================================================================
+  # مخازن البيانات — Data Stores
+  # ============================================================================
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: marad-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: marad_user
+      POSTGRES_PASSWORD: marad_dev_password
+      POSTGRES_DB: marad_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../services/listings-service/migrations:/docker-entrypoint-initdb.d:ro
+    networks:
+      - marad-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U marad_user -d marad_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mongodb:
+    image: mongo:7
+    container_name: marad-mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: marad_user
+      MONGO_INITDB_ROOT_PASSWORD: marad_dev_password
+      MONGO_INITDB_DATABASE: marad_messaging
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - marad-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: marad-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - marad-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.0
+    container_name: marad-elasticsearch
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - xpack.security.http.ssl.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - cluster.name=marad-search
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    networks:
+      - marad-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  # ============================================================================
+  # خدمات NestJS المصغرة — NestJS Microservices
+  # ============================================================================
+
+  api-gateway:
+    build:
+      context: ../services/api-gateway
+      dockerfile: Dockerfile
+      target: builder
+    container_name: marad-api-gateway
+    restart: unless-stopped
+    command: npm run start:dev
+    environment:
+      - PORT=3000
+      - NODE_ENV=development
+      - AUTH_SERVICE_URL=http://auth-service:3001
+      - LISTINGS_SERVICE_URL=http://listings-service:3002
+      - SEARCH_SERVICE_URL=http://search-service:3003
+      - MESSAGING_SERVICE_URL=http://messaging-service:3004
+      - TRANSACTIONS_SERVICE_URL=http://transactions-service:3005
+      - IDENTITY_SERVICE_URL=http://identity-service:3006
+      - FRAUD_SERVICE_URL=http://fraud-service:8001
+      - PERSONALIZATION_SERVICE_URL=http://personalization-service:8002
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../services/api-gateway/src:/app/src:delegated
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - marad-network
+
+  auth-service:
+    build:
+      context: ../services/auth-service
+      dockerfile: Dockerfile
+      target: builder
+    container_name: marad-auth-service
+    restart: unless-stopped
+    command: npm run start:dev
+    environment:
+      - PORT=3001
+      - NODE_ENV=development
+      - DATABASE_URL=postgresql://marad_user:marad_dev_password@postgres:5432/marad_db
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - JWT_SECRET=dev-jwt-secret-change-in-production
+      - JWT_EXPIRATION=7d
+    volumes:
+      - ../services/auth-service/src:/app/src:delegated
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - marad-network
+
+  listings-service:
+    build:
+      context: ../services/listings-service
+      dockerfile: Dockerfile
+      target: builder
+    container_name: marad-listings-service
+    restart: unless-stopped
+    command: npm run start:dev
+    environment:
+      - PORT=3002
+      - NODE_ENV=development
+      - DATABASE_URL=postgresql://marad_user:marad_dev_password@postgres:5432/marad_db
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - ELASTICSEARCH_NODE=http://elasticsearch:9200
+      - S3_BUCKET=marad-listings-images
+      - S3_REGION=me-south-1
+    volumes:
+      - ../services/listings-service/src:/app/src:delegated
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - marad-network
+
+  search-service:
+    build:
+      context: ../services/search-service
+      dockerfile: Dockerfile
+      target: builder
+    container_name: marad-search-service
+    restart: unless-stopped
+    command: npm run start:dev
+    environment:
+      - PORT=3003
+      - NODE_ENV=development
+      - ELASTICSEARCH_NODE=http://elasticsearch:9200
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    volumes:
+      - ../services/search-service/src:/app/src:delegated
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - marad-network
+
+  messaging-service:
+    build:
+      context: ../services/messaging-service
+      dockerfile: Dockerfile
+      target: builder
+    container_name: marad-messaging-service
+    restart: unless-stopped
+    command: npm run start:dev
+    environment:
+      - PORT=3004
+      - NODE_ENV=development
+      - MONGODB_URI=mongodb://marad_user:marad_dev_password@mongodb:27017/marad_messaging?authSource=admin
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    volumes:
+      - ../services/messaging-service/src:/app/src:delegated
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - marad-network
+
+  transactions-service:
+    build:
+      context: ../services/transactions-service
+      dockerfile: Dockerfile
+      target: builder
+    container_name: marad-transactions-service
+    restart: unless-stopped
+    command: npm run start:dev
+    environment:
+      - PORT=3005
+      - NODE_ENV=development
+      - DATABASE_URL=postgresql://marad_user:marad_dev_password@postgres:5432/marad_db
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    volumes:
+      - ../services/transactions-service/src:/app/src:delegated
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - marad-network
+
+  identity-service:
+    build:
+      context: ../services/identity-service
+      dockerfile: Dockerfile
+      target: builder
+    container_name: marad-identity-service
+    restart: unless-stopped
+    command: npm run start:dev
+    environment:
+      - PORT=3006
+      - NODE_ENV=development
+      - DATABASE_URL=postgresql://marad_user:marad_dev_password@postgres:5432/marad_db
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - DIDIT_API_KEY=dev-didit-api-key
+      - DIDIT_API_URL=https://api.didit.me
+    volumes:
+      - ../services/identity-service/src:/app/src:delegated
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - marad-network
+
+  # ============================================================================
+  # خدمات Python — Python Services
+  # ============================================================================
+
+  fraud-service:
+    build:
+      context: ../services/fraud-service
+      dockerfile: Dockerfile
+    container_name: marad-fraud-service
+    restart: unless-stopped
+    environment:
+      - PORT=8001
+      - ENV=development
+      - DATABASE_URL=postgresql://marad_user:marad_dev_password@postgres:5432/marad_db
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    ports:
+      - "8001:8001"
+    volumes:
+      - ../services/fraud-service/app:/app/app:delegated
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - marad-network
+
+  personalization-service:
+    build:
+      context: ../services/personalization-service
+      dockerfile: Dockerfile
+    container_name: marad-personalization-service
+    restart: unless-stopped
+    environment:
+      - PORT=8002
+      - ENV=development
+      - DATABASE_URL=postgresql://marad_user:marad_dev_password@postgres:5432/marad_db
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    ports:
+      - "8002:8002"
+    volumes:
+      - ../services/personalization-service/app:/app/app:delegated
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - marad-network
+
+# ============================================================================
+# الشبكة والتخزين — Networks & Volumes
+# ============================================================================
+
+networks:
+  marad-network:
+    driver: bridge
+    name: marad-network
+
+volumes:
+  postgres_data:
+    name: marad-postgres-data
+  mongodb_data:
+    name: marad-mongodb-data
+  redis_data:
+    name: marad-redis-data
+  es_data:
+    name: marad-es-data

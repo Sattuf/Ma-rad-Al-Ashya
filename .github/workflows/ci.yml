@@ -1,0 +1,145 @@
+# معرض الأشياء — CI Pipeline
+# يعمل عند كل Push و Pull Request على الفروع الرئيسية
+
+name: "معرض الأشياء — CI"
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  # ─────────────────────────────────────────────
+  # Job 1: فحص واختبار خدمات Node.js
+  # ─────────────────────────────────────────────
+  lint-and-test-node:
+    name: "Node.js — ${{ matrix.service }}"
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service:
+          - api-gateway
+          - auth-service
+          - listings-service
+          - search-service
+          - messaging-service
+          - transactions-service
+          - identity-service
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: services/${{ matrix.service }}
+
+      - name: Run linter (ESLint)
+        run: npm run lint
+        working-directory: services/${{ matrix.service }}
+        continue-on-error: true # قد لا يكون إعداد ESLint مكتملاً بعد
+
+      - name: Run tests
+        run: npm test
+        working-directory: services/${{ matrix.service }}
+
+  # ─────────────────────────────────────────────
+  # Job 2: فحص واختبار خدمات Python
+  # ─────────────────────────────────────────────
+  lint-and-test-python:
+    name: "Python — ${{ matrix.service }}"
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service:
+          - fraud-service
+          - personalization-service
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+        working-directory: services/${{ matrix.service }}
+
+      - name: Run linter (Ruff)
+        run: |
+          pip install ruff
+          ruff check .
+        working-directory: services/${{ matrix.service }}
+        continue-on-error: true # قد لا يكون إعداد Ruff مكتملاً بعد
+
+      - name: Run tests (pytest)
+        run: pytest
+        working-directory: services/${{ matrix.service }}
+
+  # ─────────────────────────────────────────────
+  # Job 3: تحليل واختبار تطبيق Flutter
+  # ─────────────────────────────────────────────
+  flutter-analyze:
+    name: "Flutter — Mobile App"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter 3.29.3
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.29.3"
+          channel: stable
+
+      - name: Install dependencies
+        run: flutter pub get
+        working-directory: apps/mobile
+
+      - name: Analyze code
+        run: flutter analyze
+        working-directory: apps/mobile
+        continue-on-error: true # قد تظهر تحذيرات في المرحلة المبكرة
+
+      - name: Run tests
+        run: flutter test
+        working-directory: apps/mobile
+
+  # ─────────────────────────────────────────────
+  # Job 4: بناء تطبيق Next.js
+  # ─────────────────────────────────────────────
+  nextjs-build:
+    name: "Next.js — Web App"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: apps/web
+
+      - name: Run linter
+        run: npm run lint
+        working-directory: apps/web
+        continue-on-error: true # قد لا يكون إعداد ESLint مكتملاً بعد
+
+      - name: Build application
+        run: npm run build
+        working-directory: apps/web
