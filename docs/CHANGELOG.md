@@ -2,6 +2,33 @@
 
 جميع التغييرات الملحوظة في المشروع موثقة هنا.
 
+## [0.1.0] - 2026-06-14
+
+### Sprint 1 — الأسبوعان 3+4: خدمة المصادقة الكاملة (Auth Service)
+
+#### أُضيف
+- خدمة المصادقة (`auth-service`) متكاملة مع 11 endpoint:
+  - التسجيل والدخول والتحقق والخروج والجلسة الحالية (`register`, `login`, `refresh`, `logout`, `me`).
+  - تسجيل الدخول الاجتماعي عبر Google OAuth و Facebook OAuth.
+  - تسجيل الدخول برمز OTP مؤقت (بديل لكلمة المرور) عبر Twilio Verify.
+- آلية الحماية الثنائية للرموز (Dual-Token JWT) مع تدوير الرموز (Rotation):
+  - Access Token صالح لمدة 15 دقيقة.
+  - Refresh Token صالح لمدة 7 أيام مع حفظه في Redis وحمايته ضد إعادة الاستخدام (Rotation reuse detection).
+- نظام حماية OTP ضد الاختراق (Brute-force):
+  - قفل الرقم مؤقتاً لمدة 15 دقيقة بعد 5 محاولات تحقق خاطئة.
+  - تحديد معدل إرسال الرموز (Rate-limiting) بحد أقصى رسالة كل 60 ثانية.
+- تعديلات قاعدة البيانات عبر Migration SQL:
+  - `V002__alter_users_auth.sql`: إضافة `role` و `status` و `is_email_verified` وجعل الهاتف وكلمة المرور nullable.
+  - `V003__add_oauth_fields.sql`: إضافة حقول `google_id` و `facebook_id` ونوع المزود `auth_provider`.
+- اختبارات وحدة شاملة (10 اختبارات):
+  - 5 اختبارات لـ `AuthService` (التسجيل، التعارض، الدخول، فشل الدخول، التجديد والتدوير).
+  - 5 اختبارات لـ `OtpService` (الإرسال، حد المعدل، التحقق، الفشل، القفل المؤقت).
+
+#### تعديلات
+- تحديث `services/auth-service/package.json` لتنزيل مكتبات TypeORM, PG, Redis, Passport, Twilio.
+- تحديث `services/auth-service/src/app.module.ts` لربط جميع وحدات الخدمة.
+- تحديث `services/auth-service/src/main.ts` لتفعيل الـ ValidationPipe والـ CORS ومستندات Swagger مع Bearer Auth.
+
 ## [0.0.2] - 2026-06-14
 
 ### Sprint 0 — الأسبوع 2: بيئة التطوير المحلية + API Gateway + CI
