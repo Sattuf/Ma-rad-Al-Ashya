@@ -35,6 +35,12 @@ export const SERVICES_CONFIG: ServiceConfig[] = [
     description: 'خدمة المحادثات الفورية — Real-time Messaging',
   },
   {
+    name: 'messaging-service-conversations',
+    url: process.env.MESSAGING_SERVICE_URL || 'http://localhost:3004',
+    prefix: 'conversations',
+    description: 'خدمة المحادثات الفورية — Real-time Messaging (Conversations)',
+  },
+  {
     name: 'transactions-service',
     url: process.env.TRANSACTIONS_SERVICE_URL || 'http://localhost:3005',
     prefix: 'transactions',

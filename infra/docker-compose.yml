@@ -221,6 +221,8 @@ services:
       - MONGODB_URI=mongodb://marad_user:marad_dev_password@mongodb:27017/marad_messaging?authSource=admin
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+    ports:
+      - "3004:3004"
     volumes:
       - ../services/messaging-service/src:/app/src:delegated
     depends_on:

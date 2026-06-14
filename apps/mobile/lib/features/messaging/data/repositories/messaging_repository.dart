@@ -1,0 +1,48 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:marad_mobile/core/network/api_client.dart';
+import '../models/conversation_model.dart';
+import '../models/message_model.dart';
+
+final messagingRepositoryProvider = Provider<MessagingRepository>((ref) {
+  return MessagingRepository(apiClient: ApiClient());
+});
+
+class MessagingRepository {
+  final ApiClient apiClient;
+
+  MessagingRepository({required this.apiClient});
+
+  Future<List<Conversation>> getConversations() async {
+    try {
+      // In a real scenario, make a request to the messaging service via Gateway or direct.
+      // Gateway normally handles this if routed, assuming Gateway routes /api/v1/messaging to messaging service.
+      final response = await apiClient.dio.get('/messaging/conversations');
+      if (response.statusCode == 200) {
+        final List data = response.data['data'] ?? [];
+        return data.map((json) => Conversation.fromJson(json)).toList();
+      }
+      return [];
+    } catch (e) {
+      print('Error getting conversations: $e');
+      return [];
+    }
+  }
+
+  Future<List<Message>> getMessages(String conversationId, {String? cursor, int limit = 20}) async {
+    try {
+      final query = {
+        'limit': limit,
+        if (cursor != null) 'cursor': cursor,
+      };
+      final response = await apiClient.dio.get('/messaging/conversations/$conversationId/messages', queryParameters: query);
+      if (response.statusCode == 200) {
+        final List data = response.data['data'] ?? [];
+        return data.map((json) => Message.fromJson(json)).toList();
+      }
+      return [];
+    } catch (e) {
+      print('Error getting messages: $e');
+      return [];
+    }
+  }
+}

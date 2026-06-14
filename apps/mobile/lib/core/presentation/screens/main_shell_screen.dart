@@ -35,6 +35,11 @@ class MainShellScreen extends StatelessWidget {
             label: 'الخريطة',
           ),
           NavigationDestination(
+            icon: Icon(Icons.chat_bubble_outline),
+            selectedIcon: Icon(Icons.chat_bubble),
+            label: 'الرسائل',
+          ),
+          NavigationDestination(
             icon: Icon(Icons.person_outline),
             selectedIcon: Icon(Icons.person),
             label: 'حسابي',

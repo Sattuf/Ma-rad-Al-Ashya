@@ -18,6 +18,8 @@ import '../../features/search/presentation/screens/search_screen.dart';
 import '../../features/search/presentation/screens/explore_screen.dart';
 import '../../features/search/presentation/screens/map_screen.dart';
 import '../presentation/screens/main_shell_screen.dart';
+import '../../features/messaging/presentation/screens/conversations_screen.dart';
+import '../../features/messaging/presentation/screens/chat_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authProvider);
@@ -89,12 +91,28 @@ final routerProvider = Provider<GoRouter>((ref) {
           StatefulShellBranch(
             routes: [
               GoRoute(
+                path: '/messages',
+                builder: (context, state) => const ConversationsScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
                 path: '/profile',
                 builder: (context, state) => const ProfileScreen(),
               ),
             ],
           ),
         ],
+      ),
+      GoRoute(
+        path: '/messages/:id',
+        builder: (context, state) {
+          final id = state.pathParameters['id']!;
+          final otherUserName = state.extra as String? ?? 'مستخدم';
+          return ChatScreen(conversationId: id, otherUserName: otherUserName);
+        },
       ),
       GoRoute(
         path: '/profile/edit',

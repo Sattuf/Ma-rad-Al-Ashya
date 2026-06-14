@@ -19,6 +19,9 @@
     "@nestjs/platform-socket.io": "^10.4.0",
     "@nestjs/swagger": "^8.0.0",
     "@nestjs/websockets": "^10.4.0",
+    "@nestjs/mongoose": "^10.0.0",
+    "ioredis": "^5.3.0",
+    "mongoose": "^8.0.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "socket.io": "^4.8.0"
