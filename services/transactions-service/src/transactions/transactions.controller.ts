@@ -6,7 +6,7 @@ import { Request } from 'express';
 
 // Simple mock for JWT payload since auth logic varies. Assuming JWT sets user in req.user
 function getUserId(req: Request): string {
-  const user = req['user'];
+  const user = req['user'] as any;
   if (user && user.sub) return user.sub;
   if (user && user.userId) return user.userId;
   // Fallback for testing without actual auth guard if none provided in this specific microservice scope.

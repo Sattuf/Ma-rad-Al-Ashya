@@ -7,11 +7,15 @@ import '../../../../features/favorites/presentation/providers/favorites_provider
 class ListingCard extends ConsumerWidget {
   final Listing listing;
   final VoidCallback onTap;
+  final Widget? badge;
+  final Widget? bottomAction;
 
   const ListingCard({
     super.key,
     required this.listing,
     required this.onTap,
+    this.badge,
+    this.bottomAction,
   });
 
   @override
@@ -54,61 +58,66 @@ class ListingCard extends ConsumerWidget {
                     color: Colors.grey[200],
                     child: const Icon(Icons.image, size: 50, color: Colors.grey),
                   ),
-            Padding(
-              padding: const EdgeInsets.all(12.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    listing.title,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${listing.price} ريال',
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Theme.of(context).primaryColor,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
+                Padding(
+                  padding: const EdgeInsets.all(12.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.location_on, size: 16, color: Colors.grey),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          listing.location ?? 'غير محدد',
-                          style: const TextStyle(color: Colors.grey, fontSize: 12),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                      Text(
+                        listing.title,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${listing.price} ريال',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Theme.of(context).primaryColor,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.grey[200],
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          listing.condition,
-                          style: const TextStyle(fontSize: 12),
-                        ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          const Icon(Icons.location_on, size: 16, color: Colors.grey),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              listing.location ?? 'غير محدد',
+                              style: const TextStyle(color: Colors.grey, fontSize: 12),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.grey[200],
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              listing.condition,
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                ],
-              ),
-            ),
+                ),
+                if (bottomAction != null) ...[
+                  const Divider(height: 1, thickness: 1),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 12.0, right: 12.0, bottom: 12.0),
+                    child: bottomAction!,
                   ),
                 ],
-              ),
+              ],
             ),
             Positioned(
               top: 8,
@@ -138,6 +147,12 @@ class ListingCard extends ConsumerWidget {
                 ),
               ),
             ),
+            if (badge != null)
+              Positioned(
+                top: 8,
+                right: 8,
+                child: badge!,
+              ),
           ],
         ),
       ),

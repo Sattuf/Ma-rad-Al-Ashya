@@ -37,4 +37,10 @@ export class User {
 
   @Column({ nullable: true })
   fcm_token: string;
+
+  @Column({ default: false })
+  is_identity_verified: boolean;
+
+  @Column({ type: 'timestamp', nullable: true })
+  identity_verified_at: Date;
 }

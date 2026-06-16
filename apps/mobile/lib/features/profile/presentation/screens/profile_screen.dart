@@ -57,7 +57,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         physics: const AlwaysScrollableScrollPhysics(),
                         padding: const EdgeInsets.all(24.0),
                         child: Column(
-                          crossAxisAlignment: crossAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
                             const SizedBox(height: 20),
                             Stack(
@@ -102,9 +102,20 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                               ],
                             ),
                             const SizedBox(height: 24),
-                            Text(
-                              user.fullName,
-                              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF1F2937)),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  user.fullName,
+                                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF1F2937)),
+                                ),
+                                if (user.isVerified) ...[
+                                  const SizedBox(width: 8),
+                                  const Icon(Icons.verified, color: Colors.blue, size: 24),
+                                  const SizedBox(width: 4),
+                                  const Text('موثّق', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold, fontSize: 16)),
+                                ],
+                              ],
                             ),
                             if (user.city != null && user.city!.isNotEmpty) ...[
                               const SizedBox(height: 8),
@@ -115,6 +126,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                   const SizedBox(width: 4),
                                   Text(user.city!, style: const TextStyle(color: Colors.grey, fontSize: 16)),
                                 ],
+                              ),
+                            ],
+                            if (!user.isVerified) ...[
+                              const SizedBox(height: 16),
+                              OutlinedButton.icon(
+                                onPressed: () => context.push('/kyc'),
+                                icon: const Icon(Icons.verified_user_outlined),
+                                label: const Text('Verify Identity / توثيق الهوية'),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: const Color(0xFF0D9488),
+                                  side: const BorderSide(color: Color(0xFF0D9488)),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                ),
                               ),
                             ],
                             const SizedBox(height: 24),

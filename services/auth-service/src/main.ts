@@ -1,10 +1,19 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { ValidationPipe } from '@nestjs/common';
+import { ValidationPipe, Logger } from '@nestjs/common';
+
+import * as Sentry from '@sentry/node';
+import { SentryExceptionFilter } from './filters/sentry-exception.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    tracesSampleRate: 0.1,
+  });
+  app.useGlobalFilters(new SentryExceptionFilter());
 
   // Enable CORS
   app.enableCors({
@@ -42,7 +51,8 @@ async function bootstrap() {
 
   const port = process.env.PORT ?? 3001;
   await app.listen(port);
-  console.log(`🚀 Auth Service is running on http://localhost:${port}`);
-  console.log(`📚 Swagger Docs: http://localhost:${port}/api/docs`);
+  const logger = new Logger('AuthService');
+  logger.log(`🚀 Auth Service is running on http://localhost:${port}`);
+  logger.log(`📚 Swagger Docs: http://localhost:${port}/api/docs`);
 }
 bootstrap();

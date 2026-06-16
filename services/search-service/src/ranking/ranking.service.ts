@@ -156,6 +156,14 @@ export class RankingService {
       weight: RANKING_WEIGHTS.PRICE_COMPETITIVENESS
     });
 
+    functions.push({
+      field_value_factor: {
+        field: 'boost_multiplier',
+        modifier: 'none',
+        missing: 1.0
+      }
+    });
+
     return {
       function_score: {
         score_mode: 'sum',

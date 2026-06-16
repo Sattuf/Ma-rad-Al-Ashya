@@ -18,8 +18,15 @@ export interface Listing {
   images: string[];
   status: 'active' | 'pending' | 'sold' | 'rented';
   userId: string;
+  categoryId?: string;
+  category?: string;
   createdAt: string;
   updatedAt: string;
+  seller?: {
+    name: string;
+    is_identity_verified?: boolean;
+    createdAt?: string;
+  };
 }
 
 export interface ListingsQuery {

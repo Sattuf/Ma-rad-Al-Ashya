@@ -127,7 +127,30 @@ export class TransactionsService {
       }
     }
 
-    return this.transactionRepo.save(tx);
+    const saved = await this.transactionRepo.save(tx);
+
+    if (saved.status === TransactionStatus.COMPLETED) {
+      // Fire-and-forget fraud analysis
+      setImmediate(() => {
+        fetch('http://fraud-service:8001/fraud/transaction/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            transaction_id: saved.id,
+            buyer_id: saved.buyer_id,
+            seller_id: saved.seller_id,
+            price: 0, // Mock or fetch from listing if needed
+            buyer_account_age_days: 30, // Mock or calculate if user info available
+            seller_account_age_days: 30, // Mock
+            buyer_completed_transactions: 1, // Mock
+          }),
+        }).catch(err => {
+          this.logger.error(`Failed to send transaction fraud analysis: ${err.message}`);
+        });
+      });
+    }
+
+    return saved;
   }
 
   async cancel(id: string, userId: string, dto: CancelTransactionDto): Promise<Transaction> {
@@ -141,7 +164,7 @@ export class TransactionsService {
 
     tx.status = nextStatus!;
     tx.cancelled_by = userId;
-    tx.cancel_reason = dto.reason;
+    tx.cancel_reason = dto.reason ?? '';
 
     const otherParty = role === ActorRole.SELLER ? tx.buyer_id : tx.seller_id;
     await this.notificationsService.sendPushNotification(

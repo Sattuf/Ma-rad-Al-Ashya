@@ -11,8 +11,11 @@ import { Report } from './reports/entities/report.entity';
 import { ReportCount } from './reports/entities/report-count.entity';
 import { AutoReviewProcessor } from './queues/auto-review.processor';
 
+import { PrometheusModule } from '@willsoto/nestjs-prometheus';
+
 @Module({
   imports: [
+    PrometheusModule.register(),
     ConfigModule.forRoot({
       isGlobal: true,
     }),

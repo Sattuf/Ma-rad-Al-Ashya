@@ -11,12 +11,14 @@ class AuthRepository {
     String? phone,
     required String fullName,
     required String password,
+    String? fingerprintHash,
   }) async {
     final response = await _dio.post('/auth/register', data: {
       if (email != null) 'email': email,
       if (phone != null) 'phone': phone,
       'fullName': fullName,
       'password': password,
+      if (fingerprintHash != null) 'fingerprint_hash': fingerprintHash,
     });
     final data = response.data;
     await _storage.saveTokens(

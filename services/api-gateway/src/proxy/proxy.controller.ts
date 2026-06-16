@@ -106,7 +106,7 @@ export class ProxyController {
       // تمرير headers الرد
       const responseHeaders = response.headers;
       if (responseHeaders['content-type']) {
-        res.setHeader('content-type', responseHeaders['content-type']);
+        res.setHeader('content-type', responseHeaders['content-type'] as any);
       }
 
       return res.status(response.status).json(response.data);

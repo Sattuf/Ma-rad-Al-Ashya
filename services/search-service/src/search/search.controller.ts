@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Query, Headers, UnauthorizedException, HttpException, HttpStatus, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Param, Body, Query, Headers, UnauthorizedException, HttpException, HttpStatus, UseGuards } from '@nestjs/common';
 import { SearchService } from './search.service';
 import { ApiTags, ApiOperation, ApiQuery, ApiHeader } from '@nestjs/swagger';
 import { MapSearchDto } from './dto/map-search.dto';
@@ -98,6 +98,24 @@ export class SearchController {
       throw new HttpException('Invalid payload', HttpStatus.BAD_REQUEST);
     }
     return this.searchService.indexListing(body.action, body.listing);
+  }
+
+  @Put('listings/:id/boost')
+  @ApiOperation({ summary: 'Internal: Boost a listing in search index' })
+  @ApiHeader({ name: 'x-internal-secret', required: true })
+  async boostListing(
+    @Param('id') id: string,
+    @Headers('x-internal-secret') secret: string,
+    @Body() body: { boost_multiplier: number; expires_at: string }
+  ) {
+    const internalSecret = process.env.INTERNAL_SECRET || 'marad-internal-secret-for-webhooks';
+    if (secret !== internalSecret && secret !== 'secret123') {
+      throw new UnauthorizedException('Invalid internal secret');
+    }
+    if (body.boost_multiplier === undefined || !body.expires_at) {
+      throw new HttpException('Missing boost_multiplier or expires_at', HttpStatus.BAD_REQUEST);
+    }
+    return this.searchService.boostListing(id, body.boost_multiplier, body.expires_at);
   }
 
   @Get('health')

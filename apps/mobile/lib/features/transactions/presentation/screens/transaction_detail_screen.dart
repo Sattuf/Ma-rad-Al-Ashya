@@ -109,7 +109,7 @@ class _TransactionDetailScreenState extends ConsumerState<TransactionDetailScree
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(transactionDetailProvider(widget.id));
-    final currentUserId = ref.watch(authProvider).user?.id ?? '';
+    final currentUserId = ref.watch(authProvider).user?['id'] ?? '';
 
     return Scaffold(
       appBar: AppBar(

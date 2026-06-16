@@ -2,10 +2,26 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { Logger, ValidationPipe } from '@nestjs/common';
+import * as express from 'express';
+
+import * as Sentry from '@sentry/node';
+import { SentryExceptionFilter } from './filters/sentry-exception.filter';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { bodyParser: false });
+  
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    tracesSampleRate: 0.1,
+  });
+  app.useGlobalFilters(new SentryExceptionFilter());
+
   const logger = new Logger('APIGateway');
+
+  app.use('/api/v1/promotions/webhook', express.raw({ type: 'application/json' }));
+  app.use('/api/v1/identity/kyc/webhook', express.raw({ type: 'application/json' }));
+  app.use(express.json());
+  app.use(express.urlencoded({ extended: true }));
 
   // تفعيل CORS للتطبيقات العميلة
   app.enableCors({

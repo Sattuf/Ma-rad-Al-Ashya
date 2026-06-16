@@ -1,11 +1,23 @@
-import { Suspense } from 'react';
+'use client';
+
+import { Suspense, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { SearchClient } from '@/components/search/SearchClient';
 import { Loader2 } from 'lucide-react';
+import { trackEvent } from '@/lib/analytics';
 
-export const metadata = {
-  title: 'البحث | معرض الأشياء',
-  description: 'ابحث عن العقارات والسيارات وغيرها في معرض الأشياء',
-};
+function SearchPageContent() {
+  const searchParams = useSearchParams();
+  const q = searchParams.get('q') || '';
+
+  useEffect(() => {
+    if (q) {
+      trackEvent('search', { searchQuery: q });
+    }
+  }, [q]);
+
+  return <SearchClient />;
+}
 
 export default function SearchPage() {
   return (
@@ -14,7 +26,8 @@ export default function SearchPage() {
         <Loader2 className="animate-spin w-12 h-12" />
       </div>
     }>
-      <SearchClient />
+      <SearchPageContent />
     </Suspense>
   );
 }
+

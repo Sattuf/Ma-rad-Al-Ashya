@@ -37,7 +37,7 @@ const listingSchema = z.object({
   area: z.coerce.number().min(1, 'المساحة مطلوبة'),
 });
 
-type FormData = z.infer<typeof listingSchema>;
+type ListingFormData = z.infer<typeof listingSchema>;
 
 const STEPS = [
   { id: 1, title: 'المعلومات الأساسية' },
@@ -77,7 +77,7 @@ export default function CreateListingPage() {
   const [location, setLocation] = useState({ lat: 24.7136, lng: 46.6753, address: '', city: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { register, handleSubmit, formState: { errors }, trigger } = useForm<FormData>({
+  const { register, handleSubmit, formState: { errors }, trigger, watch } = useForm<any>({
     resolver: zodResolver(listingSchema),
     defaultValues: { type: 'sale', propertyType: 'apartment' },
   });
@@ -127,7 +127,7 @@ export default function CreateListingPage() {
     if (isValid) setCurrentStep(prev => prev + 1);
   };
 
-  const onSubmit = async (data: FormData) => {
+  const onSubmit = async (data: any) => {
     if (images.length === 0) return;
     if (!location.address || !location.city) return alert('الرجاء إدخال المدينة والحي');
 
@@ -186,12 +186,14 @@ export default function CreateListingPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">نوع الإعلان</label>
                 <div className="flex gap-4">
                   <label className={`flex-1 p-4 rounded-lg border-2 cursor-pointer text-center transition-colors ${
-                    register('type').value === 'sale' ? 'border-primary bg-primary/5 text-primary' : 'border-gray-200 hover:border-primary/50'
+                    watch('type') === 'sale' ? 'border-primary bg-primary/5 text-primary' : 'border-gray-200 hover:border-primary/50'
                   }`}>
                     <input type="radio" value="sale" {...register('type')} className="sr-only" />
                     <span className="font-medium">للبيع</span>
                   </label>
-                  <label className="flex-1 p-4 rounded-lg border-2 border-gray-200 cursor-pointer text-center hover:border-primary/50 transition-colors">
+                  <label className={`flex-1 p-4 rounded-lg border-2 cursor-pointer text-center transition-colors ${
+                    watch('type') === 'rent' ? 'border-primary bg-primary/5 text-primary' : 'border-gray-200 hover:border-primary/50'
+                  }`}>
                     <input type="radio" value="rent" {...register('type')} className="sr-only" />
                     <span className="font-medium">للإيجار</span>
                   </label>
@@ -205,7 +207,7 @@ export default function CreateListingPage() {
                   className="w-full rounded-lg border-gray-300 border p-3 focus:ring-primary focus:border-primary"
                   placeholder="مثال: فيلا فاخرة للبيع في حي الياسمين"
                 />
-                {errors.title && <p className="text-red-500 text-sm mt-1">{errors.title.message}</p>}
+                {errors.title && <p className="text-red-500 text-sm mt-1">{errors.title.message as string}</p>}
               </div>
 
               <div>
@@ -215,7 +217,7 @@ export default function CreateListingPage() {
                   {...register('price')}
                   className="w-full rounded-lg border-gray-300 border p-3 focus:ring-primary focus:border-primary"
                 />
-                {errors.price && <p className="text-red-500 text-sm mt-1">{errors.price.message}</p>}
+                {errors.price && <p className="text-red-500 text-sm mt-1">{errors.price.message as string}</p>}
               </div>
 
               <div>
@@ -226,7 +228,7 @@ export default function CreateListingPage() {
                   className="w-full rounded-lg border-gray-300 border p-3 focus:ring-primary focus:border-primary"
                   placeholder="اكتب تفاصيل العقار ومميزاته..."
                 />
-                {errors.description && <p className="text-red-500 text-sm mt-1">{errors.description.message}</p>}
+                {errors.description && <p className="text-red-500 text-sm mt-1">{errors.description.message as string}</p>}
               </div>
             </div>
           )}
@@ -255,7 +257,7 @@ export default function CreateListingPage() {
                     {...register('area')}
                     className="w-full rounded-lg border-gray-300 border p-3 focus:ring-primary focus:border-primary"
                   />
-                  {errors.area && <p className="text-red-500 text-sm mt-1">{errors.area.message}</p>}
+                  {errors.area && <p className="text-red-500 text-sm mt-1">{errors.area.message as string}</p>}
                 </div>
               </div>
 
@@ -344,7 +346,7 @@ export default function CreateListingPage() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">حدد الموقع على الخريطة</label>
-                <Map position={location} onPositionChange={setLocation} />
+                <Map position={location} onPositionChange={(pos) => setLocation(prev => ({ ...prev, ...pos }))} />
                 <p className="text-sm text-gray-500 mt-2 flex items-center">
                   <MapPin size={16} className="ml-1" />
                   انقر على الخريطة لتحديد موقع العقار بدقة

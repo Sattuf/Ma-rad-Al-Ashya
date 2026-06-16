@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/messaging_provider.dart';
 import '../widgets/chat_bubble.dart';
-import '../../auth/presentation/providers/auth_provider.dart';
+import '../../../auth/presentation/providers/auth_provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:async';
@@ -47,7 +47,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   void _onTextChanged(String text) {
-    final userId = ref.read(authProvider).user?.id ?? '';
+    final userId = ref.read(authProvider).user?['id'] ?? '';
     final notifier = ref.read(chatProvider(widget.conversationId).notifier);
 
     notifier.sendTyping(true, userId);
@@ -62,7 +62,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final text = _messageController.text.trim();
     if (text.isEmpty) return;
 
-    final userId = ref.read(authProvider).user?.id ?? '';
+    final userId = ref.read(authProvider).user?['id'] ?? '';
     ref.read(chatProvider(widget.conversationId).notifier).sendMessage(text, userId);
 
     _messageController.clear();
@@ -77,7 +77,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: ImageSource.gallery);
     if (pickedFile != null) {
-      final userId = ref.read(authProvider).user?.id ?? '';
+      final userId = ref.read(authProvider).user?['id'] ?? '';
       ref.read(chatProvider(widget.conversationId).notifier).sendImage(pickedFile.path, userId);
     }
   }
@@ -108,7 +108,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   @override
   Widget build(BuildContext context) {
     final chatState = ref.watch(chatProvider(widget.conversationId));
-    final currentUserId = ref.watch(authProvider).user?.id ?? '';
+    final currentUserId = ref.watch(authProvider).user?['id'] ?? '';
 
     return Scaffold(
       appBar: AppBar(

@@ -7,6 +7,7 @@ import 'package:easy_debounce/easy_debounce.dart';
 import '../providers/search_provider.dart';
 import '../../../listings/data/models/listing.dart';
 import '../../../listings/presentation/widgets/listing_card.dart';
+import 'package:marad_mobile/core/services/analytics_service.dart';
 
 class SearchScreen extends ConsumerStatefulWidget {
   final String? initialQuery;
@@ -25,6 +26,12 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   late final PagingController<int, Listing> _pagingController;
 
+  void _trackSearch(String query) {
+    if (query.isNotEmpty) {
+      ref.read(analyticsServiceProvider).trackEvent('search', searchQuery: query);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -32,6 +39,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       _searchController.text = widget.initialQuery!;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         ref.read(searchFiltersProvider.notifier).setQuery(widget.initialQuery!);
+        _trackSearch(widget.initialQuery!);
       });
     }
 
@@ -81,6 +89,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       () {
         ref.read(searchFiltersProvider.notifier).setQuery(query);
         _pagingController.refresh();
+        _trackSearch(query);
       },
     );
   }

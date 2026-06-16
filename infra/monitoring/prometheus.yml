@@ -1,0 +1,52 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'api-gateway'
+    static_configs:
+      - targets: ['api-gateway:3000']
+
+  - job_name: 'auth-service'
+    static_configs:
+      - targets: ['auth-service:3001']
+
+  - job_name: 'listings-service'
+    static_configs:
+      - targets: ['listings-service:3002']
+
+  - job_name: 'search-service'
+    static_configs:
+      - targets: ['search-service:3003']
+
+  - job_name: 'messaging-service'
+    static_configs:
+      - targets: ['messaging-service:3004']
+
+  - job_name: 'transactions-service'
+    static_configs:
+      - targets: ['transactions-service:3005']
+
+  - job_name: 'identity-service'
+    static_configs:
+      - targets: ['identity-service:3006']
+
+  - job_name: 'users-service'
+    static_configs:
+      - targets: ['users-service:3007']
+
+  - job_name: 'moderation-service'
+    static_configs:
+      - targets: ['moderation-service:3008']
+
+  - job_name: 'fraud-service'
+    static_configs:
+      - targets: ['fraud-service:8001']
+
+  - job_name: 'personalization-service'
+    static_configs:
+      - targets: ['personalization-service:8002']

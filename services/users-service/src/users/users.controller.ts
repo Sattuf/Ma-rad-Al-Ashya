@@ -87,4 +87,13 @@ export class UsersInternalController {
     await this.usersService.updateStatus(id, body.status);
     return { success: true };
   }
+
+  @Put('users/:id/verify')
+  @ApiOperation({ summary: 'Internal: Verify user identity' })
+  @ApiParam({ name: 'id', type: 'string' })
+  async verifyUser(@Param('id') id: string) {
+    // In real app we might also check for internal secret here
+    await this.usersService.verifyUser(id);
+    return { success: true };
+  }
 }

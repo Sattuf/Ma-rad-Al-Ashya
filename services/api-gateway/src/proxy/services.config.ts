@@ -71,6 +71,18 @@ export const SERVICES_CONFIG: ServiceConfig[] = [
     description: 'خدمة التخصيص والتوصيات — Personalization & Recommendations',
   },
   {
+    name: 'personalization-events',
+    url: process.env.PERSONALIZATION_SERVICE_URL || 'http://localhost:8002',
+    prefix: 'events',
+    description: 'Personalization Events',
+  },
+  {
+    name: 'promotions-service',
+    url: process.env.LISTINGS_SERVICE_URL || 'http://localhost:3002',
+    prefix: 'promotions',
+    description: 'Promotions and Boosting Management',
+  },
+  {
     name: 'users-service',
     url: process.env.USERS_SERVICE_URL || 'http://localhost:3007',
     prefix: 'users',

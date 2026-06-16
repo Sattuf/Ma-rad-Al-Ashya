@@ -8,6 +8,8 @@ import 'package:marad_mobile/features/transactions/presentation/providers/transa
 import 'package:marad_mobile/features/favorites/presentation/providers/favorites_provider.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:marad_mobile/core/services/analytics_service.dart';
+
 class ListingDetailsScreen extends ConsumerStatefulWidget {
   final String listingId;
 
@@ -18,12 +20,27 @@ class ListingDetailsScreen extends ConsumerStatefulWidget {
 }
 
 class _ListingDetailsScreenState extends ConsumerState<ListingDetailsScreen> {
+  bool _hasTrackedView = false;
+
   @override
   void initState() {
     super.initState();
     Future.microtask(() => 
       ref.read(favoritesProvider.notifier).checkFavorite(widget.listingId)
     );
+  }
+
+  void _trackView(Listing listing) {
+    if (!_hasTrackedView) {
+      _hasTrackedView = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.read(analyticsServiceProvider).trackEvent(
+          'view',
+          listingId: listing.id,
+          categoryId: listing.category?.id,
+        );
+      });
+    }
   }
 
   @override
@@ -75,8 +92,10 @@ class _ListingDetailsScreenState extends ConsumerState<ListingDetailsScreen> {
         ],
       ),
       body: listingAsync.when(
-        data: (listing) => SingleChildScrollView(
-          child: Column(
+        data: (listing) {
+          _trackView(listing);
+          return SingleChildScrollView(
+            child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (listing.images.isNotEmpty)
@@ -154,6 +173,16 @@ class _ListingDetailsScreenState extends ConsumerState<ListingDetailsScreen> {
                         Text('الحالة: ${listing.condition}', style: const TextStyle(fontSize: 16)),
                       ],
                     ),
+                    if (listing.isSellerVerified) ...[
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          const Icon(Icons.verified, color: Colors.blue),
+                          const SizedBox(width: 8),
+                          const Text('بائع موثّق ✓', style: TextStyle(fontSize: 16, color: Colors.blue, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                    ],
                     const Divider(height: 32),
                     const Text(
                       'الوصف',
@@ -233,15 +262,15 @@ class _ListingDetailsScreenState extends ConsumerState<ListingDetailsScreen> {
                 ),
               ),
             ],
-          ),
-        ),
+          );
+        },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, stack) => Center(child: Text('خطأ: $err')),
+        error: (error, stack) => Center(child: Text('حدث خطأ: $error')),
       ),
       bottomNavigationBar: listingAsync.whenOrNull(
         data: (listing) {
           final authState = ref.watch(authProvider);
-          final currentUserId = authState.user?.id;
+          final currentUserId = authState.user?['id'];
           final isSeller = currentUserId == listing.userId;
           final isActive = listing.status == 'active';
 

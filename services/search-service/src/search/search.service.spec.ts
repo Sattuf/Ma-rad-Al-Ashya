@@ -9,6 +9,7 @@ jest.mock('ioredis', () => {
       get: jest.fn(),
       set: jest.fn(),
       del: jest.fn(),
+      incr: jest.fn().mockResolvedValue('1'),
       scan: jest.fn().mockResolvedValue(['0', []]),
       ping: jest.fn().mockResolvedValue('PONG'),
     };

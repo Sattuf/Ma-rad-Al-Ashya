@@ -32,8 +32,8 @@ export class AuthService {
     this.jwtRefreshSecret = this.configService.get<string>('JWT_REFRESH_SECRET', 'refresh_secret_key_67890');
   }
 
-  async register(registerDto: RegisterDto): Promise<AuthResponseDto> {
-    const { email, phone, fullName, password } = registerDto;
+  async register(registerDto: RegisterDto, ipAddress: string = ''): Promise<AuthResponseDto> {
+    const { email, phone, fullName, password, fingerprint_hash } = registerDto;
 
     if (!email && !phone) {
       throw new BadRequestException('يجب توفير البريد الإلكتروني أو رقم الهاتف للتسجيل');
@@ -66,6 +66,23 @@ export class AuthService {
     });
 
     const tokens = await this.generateTokensForUser(user);
+
+    // Fire-and-forget fraud check
+    setImmediate(() => {
+      fetch('http://fraud-service:8001/fraud/device/check', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          fingerprint_hash: fingerprint_hash || null,
+          ip_address: ipAddress,
+          user_id: user.id,
+        }),
+      }).catch(err => {
+        console.error('Failed to send fraud device check', err.message);
+      });
+    });
 
     return this.buildAuthResponse(user, tokens);
   }

@@ -5,7 +5,7 @@ import { adminApi, Report } from '@/lib/api/admin';
 import Link from 'next/link';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
-import { ArrowRight, AlertTriangle, User, FileText, CheckCircle } from 'lucide-react';
+import { ArrowRight, AlertTriangle, User, FileText, CheckCircle, Eye } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 export default function AdminReportDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -17,7 +17,7 @@ export default function AdminReportDetailPage({ params }: { params: Promise<{ id
   
   // Review form state
   const [status, setStatus] = useState<Report['status']>('pending');
-  const [actionTaken, setActionTaken] = useState<Report['actionTaken']>('none');
+  const [actionTaken, setActionTaken] = useState<NonNullable<Report['actionTaken']>>('none');
   const [adminNote, setAdminNote] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');

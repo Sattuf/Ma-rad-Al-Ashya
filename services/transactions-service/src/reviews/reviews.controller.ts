@@ -5,7 +5,7 @@ import { CreateReviewDto } from './dto/review.dto';
 import { Request } from 'express';
 
 function getUserId(req: Request): string {
-  const user = req['user'];
+  const user = req['user'] as any;
   if (user && user.sub) return user.sub;
   if (user && user.userId) return user.userId;
   const auth = req.headers.authorization;

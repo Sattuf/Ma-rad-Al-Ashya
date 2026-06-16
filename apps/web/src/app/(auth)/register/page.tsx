@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { authApi } from '@/lib/api/auth';
 import { useAuthStore } from '@/lib/store/auth-store';
 import Cookies from 'js-cookie';
+import { getFingerprint } from '@/lib/fingerprint';
 
 const registerSchema = z.object({
   fullName: z.string().min(2, 'الاسم يجب أن يكون حرفين على الأقل'),
@@ -34,6 +35,13 @@ export default function RegisterPage() {
   const router = useRouter();
   const setAuth = useAuthStore((state) => state.setAuth);
   const [error, setError] = useState<string | null>(null);
+  const [fingerprintHash, setFingerprintHash] = useState<string | undefined>();
+
+  React.useEffect(() => {
+    getFingerprint()
+      .then(hash => setFingerprintHash(hash))
+      .catch(err => console.error('Failed to get fingerprint', err));
+  }, []);
 
   const {
     register,
@@ -52,6 +60,7 @@ export default function RegisterPage() {
         email: data.email || undefined,
         phone: data.phone || undefined,
         password: data.password,
+        fingerprint_hash: fingerprintHash,
       };
 
       const res = await authApi.register(payload);

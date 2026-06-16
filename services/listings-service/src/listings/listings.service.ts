@@ -231,4 +231,26 @@ export class ListingsService {
       }
     }
   }
+
+  sendViewEvent(listingId: string, categoryId: string, authHeader?: string) {
+    setImmediate(async () => {
+      try {
+        const personalizationUrl = process.env.PERSONALIZATION_SERVICE_URL || 'http://personalization-service:8002';
+        const headers: any = {};
+        if (authHeader) {
+          headers['authorization'] = authHeader;
+        }
+        await firstValueFrom(
+          this.httpService.post(`${personalizationUrl}/events`, {
+            event_type: 'view',
+            listing_id: listingId,
+            category_id: categoryId,
+          }, { headers })
+        );
+      } catch (error) {
+        this.logger.error(`Failed to send view event for listing ${listingId}: ${error.message}`);
+      }
+    });
+  }
 }
+

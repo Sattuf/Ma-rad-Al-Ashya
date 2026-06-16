@@ -1,3 +1,5 @@
+'use client';
+
 import dynamic from 'next/dynamic';
 import { Suspense } from 'react';
 
@@ -13,11 +15,6 @@ const InteractiveMap = dynamic(
     )
   }
 );
-
-export const metadata = {
-  title: 'الخريطة - مراد',
-  description: 'استكشف الإعلانات على الخريطة',
-};
 
 // Dummy data for map listings
 const dummyMapListings = [

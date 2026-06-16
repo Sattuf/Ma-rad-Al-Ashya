@@ -363,6 +363,46 @@ helm install elasticsearch elastic/elasticsearch \
   --set volumeClaimTemplate.resources.requests.storage=30Gi
 ```
 
+#### 5. AWS Load Balancer Controller — إدارة موازن التحميل (ALB/NLB)
+
+```bash
+helm repo add eks https://aws.github.io/eks-charts
+helm repo update
+
+helm install aws-load-balancer-controller eks/aws-load-balancer-controller \
+  -n kube-system \
+  --set clusterName=marad-cluster-production \
+  --set serviceAccount.create=false \
+  --set serviceAccount.name=aws-load-balancer-controller
+```
+> يسمح لـ Kubernetes بإدارة AWS Application Load Balancer بشكل آلي لتوجيه حركة المرور وتوفير حماية إضافية عن طريق ربطه مع AWS WAF.
+
+### Horizontal Pod Autoscaler (HPA)
+
+يعتمد تمدد الخدمات المصغرة على مستوى الاستهلاك الفعلي للموارد:
+
+```yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: api-gateway-hpa
+  namespace: marad-prod
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: api-gateway
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+```
+
 ---
 
 ## 3. قاعدة البيانات المُدارة — RDS

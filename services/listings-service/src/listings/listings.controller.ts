@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Patch, Body, Param, Query, UseGuards, Request, UseInterceptors, UploadedFile, ParseFilePipe, MaxFileSizeValidator, FileTypeValidator } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Patch, Body, Param, Query, UseGuards, Request, UseInterceptors, UploadedFile, ParseFilePipe, MaxFileSizeValidator, FileTypeValidator, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { ListingsService } from './listings.service';
 import { CreateListingDto } from './dto/create-listing.dto';
@@ -20,9 +20,10 @@ export class ListingsController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Get a listing by id' })
-  async findOne(@Param('id') id: string) {
+  async findOne(@Param('id') id: string, @Request() req) {
     const listing = await this.listingsService.findOne(id);
     await this.listingsService.incrementView(id);
+    this.listingsService.sendViewEvent(listing.id, listing.categoryId, req.headers['authorization']);
     return listing;
   }
 
@@ -106,7 +107,7 @@ export class ListingsController {
   async updateStatusInternal(@Param('id') id: string, @Request() req, @Body('status') status: ListingStatus) {
     const internalSecret = req.headers['x-internal-secret'];
     if (internalSecret !== (process.env.INTERNAL_SECRET || 'marad-internal-secret-for-webhooks')) {
-      throw new import('@nestjs/common').UnauthorizedException('Invalid internal secret');
+      throw new UnauthorizedException('Invalid internal secret');
     }
     // Update status internally, bypassing owner check
     return this.listingsService.updateStatusInternal(id, status);
@@ -118,10 +119,10 @@ export class ListingsController {
   async findBatch(@Request() req, @Body('ids') ids: string[]) {
     const internalSecret = req.headers['x-internal-secret'];
     if (internalSecret !== (process.env.INTERNAL_SECRET || 'marad-internal-secret-for-webhooks')) {
-      throw new import('@nestjs/common').UnauthorizedException('Invalid internal secret');
+      throw new UnauthorizedException('Invalid internal secret');
     }
     if (!ids || !Array.isArray(ids) || ids.length > 50) {
-      throw new import('@nestjs/common').BadRequestException('Invalid or too many IDs (max 50)');
+      throw new BadRequestException('Invalid or too many IDs (max 50)');
     }
     return this.listingsService.findBatch(ids);
   }

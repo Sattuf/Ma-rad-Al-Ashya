@@ -4,11 +4,26 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_stripe/flutter_stripe.dart';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'core/services/fcm_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  try {
+    await dotenv.load(fileName: '.env');
+    final stripeKey = dotenv.env['STRIPE_PUBLISHABLE_KEY'];
+    if (stripeKey != null && stripeKey.isNotEmpty) {
+      Stripe.publishableKey = stripeKey;
+      await Stripe.instance.applySettings();
+    }
+  } catch (e) {
+    print('Error loading environment / Stripe configuration: $e');
+  }
+
   try {
     await Firebase.initializeApp();
     await FCMService().initialize();

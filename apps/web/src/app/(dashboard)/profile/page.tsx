@@ -17,6 +17,7 @@ interface UserProfile {
   createdAt: string;
   rating?: number;
   ratingCount?: number;
+  is_identity_verified?: boolean;
 }
 
 export default function ProfilePage() {
@@ -92,6 +93,16 @@ export default function ProfilePage() {
           <div className="flex items-center gap-2 text-gray-500 text-sm mb-3">
             <ShieldCheck className="w-4 h-4 text-green-500" />
             <span>{profile.role === 'admin' ? 'مدير النظام' : 'مستخدم'}</span>
+            {profile.is_identity_verified ? (
+              <span className="inline-flex items-center gap-1 bg-green-50 text-green-700 px-2 py-0.5 rounded-full text-xs font-bold border border-green-200">
+                <ShieldCheck className="w-3 h-3" />
+                موثّق ✓
+              </span>
+            ) : (
+              <Link href="/profile/verify" className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 hover:bg-amber-100 px-2 py-0.5 rounded-full text-xs font-medium border border-amber-200 transition-colors">
+                وثّق حسابك
+              </Link>
+            )}
           </div>
           {/* Rating Summary Section */}
           <div className="flex items-center gap-2 bg-gray-50 inline-flex px-3 py-1.5 rounded-lg border border-gray-100">

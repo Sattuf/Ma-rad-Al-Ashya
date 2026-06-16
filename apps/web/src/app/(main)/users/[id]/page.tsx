@@ -62,7 +62,14 @@ export default function UserProfilePage({ params }: { params: Promise<{ id: stri
           )}
         </div>
         <div className="flex-1 text-center sm:text-right">
-          <h1 className="text-2xl font-bold text-gray-900">{user.fullName || user.name}</h1>
+          <div className="flex items-center gap-2 flex-wrap justify-center sm:justify-start">
+            <h1 className="text-2xl font-bold text-gray-900">{user.fullName || user.name}</h1>
+            {user.is_identity_verified && (
+              <span className="inline-flex items-center gap-1 bg-green-50 text-green-700 px-2 py-0.5 rounded-full text-xs font-bold border border-green-200">
+                بائع موثّق ✓
+              </span>
+            )}
+          </div>
           <div className="mt-2 flex flex-col sm:flex-row gap-4 justify-center sm:justify-start text-sm text-gray-500">
             <div className="flex items-center gap-1 justify-center">
               <Calendar className="w-4 h-4" />

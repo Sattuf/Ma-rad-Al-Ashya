@@ -7,6 +7,7 @@ interface User {
   fullName: string;
   role: string;
   status: string;
+  avatar?: string;
 }
 
 interface AuthState {

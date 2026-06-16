@@ -6,7 +6,8 @@ import Map from '@/components/Map';
 import { MapPin, BedDouble, Bath, Square, Calendar, Share2, Heart, Phone } from 'lucide-react';
 import Image from 'next/image';
 import RelatedListings from '@/components/listings/RelatedListings';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { trackEvent } from '@/lib/analytics';
 
 import { useAuthStore } from '@/lib/store/auth-store';
 import { transactionsApi } from '@/lib/api/transactions';
@@ -21,6 +22,15 @@ export default function ListingDetailPage() {
   const { user, isAuthenticated } = useAuthStore();
   const [isBuying, setIsBuying] = useState(false);
   const [isReportOpen, setIsReportOpen] = useState(false);
+
+  useEffect(() => {
+    if (listing) {
+      trackEvent('view', {
+        listingId: listing.id,
+        categoryId: (listing as any).categoryId,
+      });
+    }
+  }, [listing]);
 
   if (isLoading) {
     return (
@@ -172,11 +182,18 @@ export default function ListingDetailPage() {
             <h3 className="text-lg font-bold text-gray-900 mb-4">تواصل مع المعلن</h3>
             <div className="flex items-center gap-4 mb-6">
               <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center text-xl font-bold text-gray-400">
-                A
+                {listing.seller?.name ? listing.seller.name.charAt(0) : 'A'}
               </div>
               <div>
-                <p className="font-semibold text-gray-900">أحمد محمد</p>
-                <p className="text-sm text-gray-500">عضو منذ 2023</p>
+                <div className="flex items-center gap-1">
+                  <p className="font-semibold text-gray-900">{listing.seller?.name || 'أحمد محمد'}</p>
+                  {listing.seller?.is_identity_verified && (
+                    <span className="inline-flex items-center gap-0.5 bg-green-50 text-green-700 px-1.5 py-0.5 rounded-full text-[10px] font-bold border border-green-200">
+                      بائع موثّق ✓
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm text-gray-500">عضو منذ {listing.seller?.createdAt ? new Date(listing.seller.createdAt).getFullYear() : '2023'}</p>
               </div>
             </div>
             

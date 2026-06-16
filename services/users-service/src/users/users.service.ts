@@ -65,6 +65,13 @@ export class UsersService {
     return this.usersRepository.save(user);
   }
 
+  async verifyUser(userId: string): Promise<User> {
+    const user = await this.getProfile(userId);
+    user.is_identity_verified = true;
+    user.identity_verified_at = new Date();
+    return this.usersRepository.save(user);
+  }
+
   async addFavorite(userId: string, listingId: string): Promise<{ favorited: boolean, count: number }> {
     await this.redis.sadd(`favorites:${userId}`, listingId);
     const count = await this.redis.scard(`favorites:${userId}`);

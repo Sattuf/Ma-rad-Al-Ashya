@@ -13,6 +13,7 @@ class UserProfile {
   final bool notificationMessages;
   final bool notificationListings;
   final bool notificationTransactions;
+  final bool isVerified;
 
   UserProfile({
     required this.id,
@@ -25,6 +26,7 @@ class UserProfile {
     this.notificationMessages = true,
     this.notificationListings = true,
     this.notificationTransactions = true,
+    this.isVerified = false,
   });
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
@@ -39,6 +41,7 @@ class UserProfile {
       notificationMessages: json['notification_messages'] ?? true,
       notificationListings: json['notification_listings'] ?? true,
       notificationTransactions: json['notification_transactions'] ?? true,
+      isVerified: json['is_verified'] ?? false,
     );
   }
 }

@@ -7,8 +7,11 @@ import { TransactionsModule } from './transactions/transactions.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { NotificationsModule } from './notifications/notifications.module';
 
+import { PrometheusModule } from '@willsoto/nestjs-prometheus';
+
 @Module({
   imports: [
+    PrometheusModule.register(),
     TypeOrmModule.forRoot({
       type: 'postgres',
       host: process.env.DB_HOST || 'postgres',

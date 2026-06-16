@@ -88,6 +88,20 @@ services:
       timeout: 10s
       retries: 5
 
+  localstack:
+    image: localstack/localstack:latest
+    container_name: marad-localstack
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=kms
+      - DEFAULT_REGION=me-south-1
+      - DOCKER_HOST=unix:///var/run/docker.sock
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    networks:
+      - marad-network
+
   # ============================================================================
   # خدمات NestJS المصغرة — NestJS Microservices
   # ============================================================================
@@ -170,6 +184,8 @@ services:
       - ELASTICSEARCH_NODE=http://elasticsearch:9200
       - S3_BUCKET=marad-listings-images
       - S3_REGION=me-south-1
+      - STRIPE_SECRET_KEY=sk_test_mock_secret_key
+      - STRIPE_WEBHOOK_SECRET=whsec_mock_webhook_secret
     volumes:
       - ../services/listings-service/src:/app/src:delegated
     depends_on:
@@ -274,6 +290,10 @@ services:
       - REDIS_PORT=6379
       - DIDIT_API_KEY=dev-didit-api-key
       - DIDIT_API_URL=https://api.didit.me
+      - AWS_REGION=me-south-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - KMS_ENDPOINT=http://localstack:4566
     volumes:
       - ../services/identity-service/src:/app/src:delegated
     depends_on:
@@ -281,6 +301,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      localstack:
+        condition: service_started
     networks:
       - marad-network
 
@@ -315,17 +337,15 @@ services:
     networks:
       - marad-network
 
-  listings-service:
+  moderation-service:
     build:
-      context: ../services/listings-service
+      context: ../services/moderation-service
       dockerfile: Dockerfile
-      target: builder
-    container_name: marad-listings-service
-    restart: unless-stopped
-    command: npm run start:dev
+    container_name: marad-moderation-service
+    ports:
+      - "3008:3008"
     environment:
-      - PORT=3002
-      - NODE_ENV=development
+      - PORT=3008
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_USER=marad_user
@@ -333,67 +353,11 @@ services:
       - DB_NAME=marad_db
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - JWT_ACCESS_SECRET=dev-jwt-secret-change-in-production
-      - SEARCH_SERVICE_URL=http://search-service:3003
-      - INTERNAL_SECRET=marad-internal-secret-for-webhooks
-    ports:
-      - "3002:3002"
-    volumes:
-      - ../services/listings-service/src:/app/src:delegated
+      - LISTINGS_SERVICE_URL=http://listings-service:3002
+      - USERS_SERVICE_URL=http://users-service:3007
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - marad-network
-
-  search-service:
-    build:
-      context: ../services/search-service
-      dockerfile: Dockerfile
-      target: builder
-    container_name: marad-search-service
-    restart: unless-stopped
-    command: npm run start:dev
-    environment:
-      - PORT=3003
-      - NODE_ENV=development
-      - ELASTICSEARCH_NODE=http://elasticsearch:9200
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - JWT_ACCESS_SECRET=dev-jwt-secret-change-in-production
-      - INTERNAL_SECRET=marad-internal-secret-for-webhooks
-    ports:
-      - "3003:3003"
-    volumes:
-      - ../services/search-service/src:/app/src:delegated
-    depends_on:
-      elasticsearch:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - marad-network
-
-  elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.0
-    container_name: marad-elasticsearch
-    restart: unless-stopped
-    environment:
-      - discovery.type=single-node
-      - xpack.security.enabled=false
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
-    ports:
-      - "9200:9200"
-      - "9300:9300"
-    volumes:
-      - esdata:/usr/share/elasticsearch/data
-    healthcheck:
-      test: ["CMD-SHELL", "curl -s http://localhost:9200 >/dev/null || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      - postgres
+      - redis
     networks:
       - marad-network
 
@@ -437,6 +401,9 @@ services:
       - DATABASE_URL=postgresql://marad_user:marad_dev_password@postgres:5432/marad_db
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - MONGODB_URI=mongodb://marad_user:marad_dev_password@mongodb:27017/marad_db?authSource=admin
+      - ELASTICSEARCH_NODE=http://elasticsearch:9200
+      - JWT_ACCESS_SECRET=dev-jwt-secret-change-in-production
     ports:
       - "8002:8002"
     volumes:
@@ -446,6 +413,47 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      mongodb:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - marad-network
+
+  # ============================================================================
+  # Monitoring & Observability
+  # ============================================================================
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: marad-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    networks:
+      - marad-network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: marad-grafana
+    restart: unless-stopped
+    ports:
+      - "3100:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+    depends_on:
+      - prometheus
     networks:
       - marad-network
 
@@ -467,27 +475,7 @@ volumes:
     name: marad-redis-data
   es_data:
     name: marad-es-data
-
-  esdata:
-  moderation-service:
-    build:
-      context: ../services/moderation-service
-      dockerfile: Dockerfile
-    ports:
-      - "3008:3008"
-    environment:
-      - PORT=3008
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_USER=marad_user
-      - DB_PASSWORD=marad_dev_password
-      - DB_NAME=marad_db
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - LISTINGS_SERVICE_URL=http://listings-service:3002
-      - USERS_SERVICE_URL=http://users-service:3007
-    depends_on:
-      - postgres
-      - redis
-    networks:
-      - marad-network
+  prometheus_data:
+    name: marad-prometheus-data
+  grafana_data:
+    name: marad-grafana-data

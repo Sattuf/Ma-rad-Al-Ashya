@@ -1,8 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../data/repositories/messaging_repository.dart';
-import '../data/models/conversation_model.dart';
-import '../data/models/message_model.dart';
-import '../services/socket_service.dart';
+import '../../data/repositories/messaging_repository.dart';
+import '../../data/models/conversation_model.dart';
+import '../../data/models/message_model.dart';
+import '../../services/socket_service.dart';
 
 final conversationsProvider = StateNotifierProvider<ConversationsNotifier, AsyncValue<List<Conversation>>>((ref) {
   final repo = ref.watch(messagingRepositoryProvider);

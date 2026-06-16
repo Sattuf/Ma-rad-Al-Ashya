@@ -13,6 +13,7 @@ import '../../features/profile/presentation/screens/notifications_screen.dart';
 import '../../features/listings/presentation/screens/listings_screen.dart';
 import '../../features/listings/presentation/screens/create_listing_screen.dart';
 import '../../features/listings/presentation/screens/my_listings_screen.dart';
+import '../../features/listings/presentation/screens/promote_listing_screen.dart';
 import '../../features/listings/presentation/screens/listing_details_screen.dart';
 import '../../features/search/presentation/screens/search_screen.dart';
 import '../../features/search/presentation/screens/explore_screen.dart';
@@ -26,6 +27,7 @@ import '../../features/transactions/presentation/screens/transaction_detail_scre
 import '../../features/transactions/presentation/screens/review_screen.dart';
 import '../../features/favorites/presentation/screens/favorites_screen.dart';
 import '../../features/moderation/presentation/screens/report_screen.dart';
+import '../../features/kyc/presentation/screens/kyc_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authProvider);
@@ -172,6 +174,13 @@ final routerProvider = Provider<GoRouter>((ref) {
         },
       ),
       GoRoute(
+        path: '/listings/:id/promote',
+        builder: (context, state) {
+          final id = state.pathParameters['id']!;
+          return PromoteListingScreen(listingId: id);
+        },
+      ),
+      GoRoute(
         path: '/search',
         builder: (context, state) {
           final initialQuery = state.uri.queryParameters['q'];
@@ -193,6 +202,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           final id = state.uri.queryParameters['id'] ?? '';
           return ReportScreen(targetType: type, targetId: id);
         },
+      ),
+      GoRoute(
+        path: '/kyc',
+        builder: (context, state) => const KycScreen(),
       ),
     ],
   );

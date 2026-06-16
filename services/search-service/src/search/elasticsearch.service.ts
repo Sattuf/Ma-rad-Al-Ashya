@@ -10,6 +10,8 @@ export class ElasticsearchService implements OnModuleInit {
   constructor() {
     this.client = new Client({
       node: process.env.ELASTICSEARCH_NODE || 'http://localhost:9200',
+      maxRetries: 3,
+      requestTimeout: 5000,
     });
   }
 
@@ -60,7 +62,9 @@ export class ElasticsearchService implements OnModuleInit {
                 category: { type: 'keyword' },
                 tags: { type: 'keyword' },
                 createdAt: { type: 'date' },
-                updatedAt: { type: 'date' }
+                updatedAt: { type: 'date' },
+                boost_multiplier: { type: 'float' },
+                expires_at: { type: 'date' }
               },
             },
           },

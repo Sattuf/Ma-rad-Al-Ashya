@@ -2,11 +2,26 @@
 
 import { useMyListings } from '@/hooks/useListings';
 import Link from 'next/link';
-import { Plus, Edit2, Trash2, Eye } from 'lucide-react';
+import { Plus, Edit2, Trash2, Eye, Sparkles } from 'lucide-react';
 import { listingsApi } from '@/lib/api/listings';
+import { useState, useEffect } from 'react';
+import { promotionsApi, Promotion } from '@/lib/api/promotions';
 
 export default function MyListingsPage() {
   const { listings, isLoading, mutate } = useMyListings();
+  const [promotions, setPromotions] = useState<Promotion[]>([]);
+
+  useEffect(() => {
+    async function loadPromotions() {
+      try {
+        const data = await promotionsApi.getMyPromotions();
+        setPromotions(data);
+      } catch (err) {
+        console.error('Error fetching promotions:', err);
+      }
+    }
+    loadPromotions();
+  }, [listings]);
 
   const handleDelete = async (id: string) => {
     if (confirm('هل أنت متأكد من حذف هذا العقار؟')) {
@@ -20,8 +35,8 @@ export default function MyListingsPage() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="flex justify-between items-center mb-8">
+    <div className="container mx-auto px-4 py-8" dir="rtl">
+      <div className="flex justify-between items-center mb-8 text-right">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">عقاراتي</h1>
           <p className="text-gray-500">إدارة العقارات الخاصة بك</p>
@@ -58,8 +73,8 @@ export default function MyListingsPage() {
         </div>
       ) : (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-right">
+          <div className="overflow-x-auto font-sans text-right">
+            <table className="w-full text-right" dir="rtl">
               <thead className="bg-gray-50 border-b border-gray-200 text-gray-500 text-sm">
                 <tr>
                   <th className="px-6 py-4 font-medium">العقار</th>
@@ -70,63 +85,87 @@ export default function MyListingsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {listings.map(listing => (
-                  <tr key={listing.id} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-4">
-                        <img 
-                          src={listing.images[0] || 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=200&q=80'} 
-                          alt="" 
-                          className="w-16 h-16 rounded-lg object-cover"
-                        />
-                        <div>
-                          <p className="font-semibold text-gray-900 mb-1">{listing.title}</p>
-                          <p className="text-sm text-gray-500">{listing.location.city}</p>
+                {listings.map(listing => {
+                  const isPromoted = promotions.some(
+                    promo => promo.listingId === listing.id && promo.status === 'active'
+                  );
+
+                  return (
+                    <tr key={listing.id} className="hover:bg-gray-50/50 transition-colors">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-4">
+                          <img 
+                            src={listing.images[0] || 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=200&q=80'} 
+                            alt="" 
+                            className="w-16 h-16 rounded-lg object-cover"
+                          />
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              <p className="font-semibold text-gray-900">{listing.title}</p>
+                              {isPromoted && (
+                                <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-800 text-xs px-2 py-0.5 rounded-full font-bold">
+                                  <span>مروّج 🚀</span>
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-sm text-gray-500">{listing.location.city}</p>
+                          </div>
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-gray-600">
-                      {listing.type === 'sale' ? 'للبيع' : 'للإيجار'} - {listing.propertyType}
-                    </td>
-                    <td className="px-6 py-4 font-semibold text-primary">
-                      {listing.price.toLocaleString()} ر.س
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        listing.status === 'active' ? 'bg-green-100 text-green-800' :
-                        listing.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                        'bg-gray-100 text-gray-800'
-                      }`}>
-                        {listing.status === 'active' ? 'نشط' : listing.status === 'pending' ? 'قيد المراجعة' : listing.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center justify-end gap-2">
-                        <Link 
-                          href={`/listings/${listing.id}`}
-                          className="p-2 text-gray-400 hover:text-primary hover:bg-primary/5 rounded-lg transition-colors"
-                          title="عرض"
-                        >
-                          <Eye size={18} />
-                        </Link>
-                        <Link 
-                          href={`/listings/${listing.id}/edit`}
-                          className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
-                          title="تعديل"
-                        >
-                          <Edit2 size={18} />
-                        </Link>
-                        <button 
-                          onClick={() => handleDelete(listing.id)}
-                          className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                          title="حذف"
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="px-6 py-4 text-gray-600">
+                        {listing.type === 'sale' ? 'للبيع' : 'للإيجار'} - {listing.propertyType}
+                      </td>
+                      <td className="px-6 py-4 font-semibold text-primary">
+                        {listing.price.toLocaleString()} ر.س
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col gap-1.5 items-start">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            listing.status === 'active' ? 'bg-green-100 text-green-800' :
+                            listing.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                            'bg-gray-100 text-gray-800'
+                          }`}>
+                            {listing.status === 'active' ? 'نشط' : listing.status === 'pending' ? 'قيد المراجعة' : listing.status}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center justify-end gap-2">
+                          {listing.status === 'active' && !isPromoted && (
+                            <Link
+                              href={`/listings/${listing.id}/promote`}
+                              className="inline-flex items-center gap-1 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white text-xs px-3 py-1.5 rounded-lg transition-all font-bold shadow-sm"
+                            >
+                              <Sparkles size={12} />
+                              <span>ترويج</span>
+                            </Link>
+                          )}
+                          <Link 
+                            href={`/listings/${listing.id}`}
+                            className="p-2 text-gray-400 hover:text-primary hover:bg-primary/5 rounded-lg transition-colors"
+                            title="عرض"
+                          >
+                            <Eye size={18} />
+                          </Link>
+                          <Link 
+                            href={`/listings/${listing.id}/edit`}
+                            className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
+                            title="تعديل"
+                          >
+                            <Edit2 size={18} />
+                          </Link>
+                          <button 
+                            onClick={() => handleDelete(listing.id)}
+                            className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                            title="حذف"
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

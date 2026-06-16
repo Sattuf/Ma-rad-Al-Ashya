@@ -110,7 +110,7 @@ export default function EditListingPage() {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">تحديث الموقع</label>
-          <Map position={location} onPositionChange={setLocation} />
+          <Map position={location} onPositionChange={(pos) => setLocation(prev => ({ ...prev, ...pos }))} />
         </div>
 
         <div className="flex justify-end gap-4 pt-4 border-t">

@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 import 'package:marad_mobile/features/auth/data/repositories/auth_repository.dart';
+import 'package:marad_mobile/core/services/device_fingerprint_service.dart';
 
 // Auth State
 enum AuthStatus { idle, loading, success, error }
@@ -44,11 +45,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }) async {
     state = state.copyWith(status: AuthStatus.loading, errorMessage: null);
     try {
+      final fingerprintHash = await DeviceFingerprintService.getFingerprintHash();
       final data = await _repository.register(
         email: email,
         phone: phone,
         fullName: fullName,
         password: password,
+        fingerprintHash: fingerprintHash,
       );
       state = state.copyWith(status: AuthStatus.success, user: data['user']);
     } catch (e) {

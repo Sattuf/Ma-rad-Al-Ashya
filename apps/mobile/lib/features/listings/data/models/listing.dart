@@ -11,6 +11,7 @@ class Listing {
   final Category? category;
   final String? location;
   final String userId;
+  final bool isSellerVerified;
   final DateTime createdAt;
 
   Listing({
@@ -24,6 +25,7 @@ class Listing {
     this.category,
     this.location,
     required this.userId,
+    this.isSellerVerified = false,
     required this.createdAt,
   });
 
@@ -39,6 +41,7 @@ class Listing {
       category: json['category'] != null ? Category.fromJson(json['category']) : null,
       location: json['location'] as String?,
       userId: json['user_id'] as String? ?? '',
+      isSellerVerified: json['user']?['is_verified'] ?? json['is_seller_verified'] ?? false,
       createdAt: json['created_at'] != null ? DateTime.parse(json['created_at']) : DateTime.now(),
     );
   }

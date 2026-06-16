@@ -131,7 +131,7 @@ export class SearchService {
       }));
 
       const result = { data: hits, total: response.hits.total, variant };
-      await this.redisClient.set(cacheKey, JSON.stringify(result), 'EX', 300);
+      await this.redisClient.set(cacheKey, JSON.stringify(result), 'EX', 180);
       
       await this.redisClient.incr(`search:ab:${variant}:total`);
 
@@ -347,6 +347,8 @@ export class SearchService {
           images_count: listing.images_count || 0,
           description_length: listing.description_length || 0,
           seller_average_rating: listing.seller_average_rating || 0,
+          boost_multiplier: listing.boost_multiplier !== undefined ? listing.boost_multiplier : 1.0,
+          expires_at: listing.expires_at || null,
         };
 
         if (action === 'create') {
@@ -372,6 +374,30 @@ export class SearchService {
     } catch (error) {
       this.logger.error(`Failed to index listing ${listing.id}: ${error.message}`);
       throw new HttpException('Indexing failed', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  async boostListing(id: string, boostMultiplier: number, expiresAt: string) {
+    try {
+      await this.esService.client.update({
+        index: this.indexName,
+        id: id.toString(),
+        body: {
+          doc: {
+            boost_multiplier: boostMultiplier,
+            expires_at: expiresAt,
+          },
+        },
+      });
+      this.logger.log(`Updated boost multiplier to ${boostMultiplier} and expires_at to ${expiresAt} for document ${id}`);
+      
+      await this.invalidateCache('search:*');
+      await this.invalidateCache('autocomplete:*');
+      
+      return { success: true };
+    } catch (error) {
+      this.logger.error(`Failed to boost listing ${id}: ${error.message}`);
+      throw new HttpException('Failed to update boost in Elasticsearch', HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 

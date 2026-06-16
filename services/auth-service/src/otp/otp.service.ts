@@ -89,7 +89,7 @@ export class OtpService {
     
     // Store in redis for 5 minutes (300 seconds)
     await this.redisService.set(codeKey, mockCode, 300);
-    console.log(`[MOCK OTP] Sent code "${mockCode}" to phone "${phone}"`);
+    this.logger.log(`[MOCK OTP] Sent code "${mockCode}" to phone "${phone}"`);
     
     return {
       message: 'تم إرسال رمز تحقق افتراضي (بيئة تطوير)',
