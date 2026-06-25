@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "768245012291",
+    "project_id": "marad-1bb73",
+    "storage_bucket": "marad-1bb73.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:768245012291:android:fae243e9c03a1b1f1c01f6",
+        "android_client_info": {
+          "package_name": "com.marad.marad_mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCdBWDpJbFyhBnRks5V5MtQ509B4toG8g8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

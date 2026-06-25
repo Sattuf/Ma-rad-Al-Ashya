@@ -13,18 +13,20 @@
     "lint": "eslint \"{src,test}/**/*.ts\""
   },
   "dependencies": {
-    "@willsoto/nestjs-prometheus": "^6.0.0",
-    "@sentry/node": "^8.0.0",
-    "prom-client": "^15.0.0",
     "@elastic/elasticsearch": "^8.15.0",
     "@nestjs/axios": "^4.0.1",
     "@nestjs/common": "^10.4.0",
     "@nestjs/core": "^10.4.0",
     "@nestjs/elasticsearch": "^10.0.1",
+    "@nestjs/jwt": "^11.0.2",
     "@nestjs/platform-express": "^10.4.0",
     "@nestjs/swagger": "^8.0.0",
+    "@sentry/node": "^8.0.0",
+    "@willsoto/nestjs-prometheus": "^6.0.0",
+    "chalk": "^4.1.2",
     "ioredis": "^5.11.1",
     "jsonwebtoken": "^9.0.3",
+    "prom-client": "^15.0.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1"
   },

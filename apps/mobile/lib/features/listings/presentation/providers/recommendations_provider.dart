@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/repositories/recommendations_repository.dart';
 import '../../data/models/listing.dart';
-import '../../../../auth/presentation/providers/auth_provider.dart';
+import 'package:marad_mobile/features/auth/presentation/providers/auth_provider.dart';
 
 final recommendationsRepositoryProvider = Provider<RecommendationsRepository>((ref) {
   return RecommendationsRepository();

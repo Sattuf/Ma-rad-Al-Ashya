@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../providers/auth_provider.dart';
-import '../../listings/data/models/listing.dart';
-import '../../listings/presentation/providers/recommendations_provider.dart';
+import 'package:marad_mobile/features/listings/data/models/listing.dart';
+import 'package:marad_mobile/features/listings/presentation/providers/recommendations_provider.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -90,7 +90,7 @@ class HomeScreen extends ConsumerWidget {
                   const SizedBox(height: 8),
                   const Text(
                     'اكتشف آلاف السلع المميزة المعروضة للبيع بالقرب منك.',
-                    style: TextStyle(fontSize: 14, color: Colors.white87),
+                    style: TextStyle(fontSize: 14, color: Color(0xDEFFFFFF)),
                   ),
                   const SizedBox(height: 16),
                   ElevatedButton(

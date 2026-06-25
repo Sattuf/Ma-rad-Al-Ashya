@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 import '../providers/listing_provider.dart';
+import '../../data/models/listing.dart';
 import 'package:marad_mobile/features/auth/presentation/providers/auth_provider.dart';
 import 'package:marad_mobile/features/transactions/presentation/providers/transactions_provider.dart';
 import 'package:marad_mobile/features/favorites/presentation/providers/favorites_provider.dart';
@@ -262,6 +263,7 @@ class _ListingDetailsScreenState extends ConsumerState<ListingDetailsScreen> {
                 ),
               ),
             ],
+            ),
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),

@@ -61,7 +61,7 @@ export class UsersService {
 
   async updateStatus(userId: string, status: string): Promise<User> {
     const user = await this.getProfile(userId);
-    user.status = status as any;
+    (user as any).status = status as any;
     return this.usersRepository.save(user);
   }
 

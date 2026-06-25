@@ -1,4 +1,4 @@
-import { Injectable, HttpException, HttpStatus, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, HttpException, HttpStatus, Inject, forwardRef, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { RedisService } from '../redis/redis.service';
 import { UsersService } from '../users/users.service';
@@ -9,6 +9,7 @@ import * as twilio from 'twilio';
 export class OtpService {
   private twilioClient: twilio.Twilio | null = null;
   private verifyServiceSid: string | null = null;
+  private readonly logger = new Logger(OtpService.name);
 
   constructor(
     private configService: ConfigService,

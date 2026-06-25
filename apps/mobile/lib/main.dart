@@ -6,6 +6,7 @@ import 'core/theme/app_theme.dart';
 
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
+import 'package:flutter/foundation.dart';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'core/services/fcm_service.dart';
@@ -17,16 +18,20 @@ void main() async {
     await dotenv.load(fileName: '.env');
     final stripeKey = dotenv.env['STRIPE_PUBLISHABLE_KEY'];
     if (stripeKey != null && stripeKey.isNotEmpty) {
-      Stripe.publishableKey = stripeKey;
-      await Stripe.instance.applySettings();
+      if (!kIsWeb) {
+        Stripe.publishableKey = stripeKey;
+        await Stripe.instance.applySettings();
+      }
     }
   } catch (e) {
     print('Error loading environment / Stripe configuration: $e');
   }
 
   try {
-    await Firebase.initializeApp();
-    await FCMService().initialize();
+    if (!kIsWeb) {
+      await Firebase.initializeApp();
+      await FCMService().initialize();
+    }
   } catch (e) {
     print('Firebase initialization failed: $e');
   }

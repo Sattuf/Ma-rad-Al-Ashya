@@ -24,8 +24,14 @@
     "dev:web": "npm run dev --workspace=apps/web",
     "test:all": "npm run test --workspaces --if-present",
     "lint:all": "npm run lint --workspaces --if-present",
-    "docker:up": "docker-compose -f infra/docker-compose.yml up -d",
-    "docker:down": "docker-compose -f infra/docker-compose.yml down"
+    "docker:core": "docker compose -f infra/docker-compose.yml up -d",
+    "docker:search": "docker compose -f infra/docker-compose.yml --profile search up -d",
+    "docker:monitoring": "docker compose -f infra/docker-compose.yml --profile monitoring up -d",
+    "docker:identity": "docker compose -f infra/docker-compose.yml --profile identity up -d",
+    "docker:ai": "docker compose -f infra/docker-compose.yml --profile ai up -d",
+    "docker:up": "docker compose -f infra/docker-compose.yml --profile all up -d",
+    "docker:down": "docker compose -f infra/docker-compose.yml --profile all down",
+    "docker:prune": "docker system prune -af --volumes"
   },
   "engines": {
     "node": ">=20.0.0",

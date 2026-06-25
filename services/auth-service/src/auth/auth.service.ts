@@ -224,25 +224,39 @@ export class AuthService {
     return this.loginWithoutPassword(user);
   }
 
-  async verifyGoogleToken(idToken: string): Promise<AuthResponseDto> {
+  async verifyGoogleToken(idToken?: string, accessToken?: string): Promise<AuthResponseDto> {
     try {
-      const clientId = this.configService.get<string>('GOOGLE_CLIENT_ID');
-      const client = new OAuth2Client(clientId);
-      const ticket = await client.verifyIdToken({
-        idToken,
-        audience: clientId,
-      });
-      const payload = ticket.getPayload();
-      if (!payload) {
-        throw new BadRequestException('Invalid Google token');
+      let profile;
+      if (idToken) {
+        const clientId = this.configService.get<string>('GOOGLE_CLIENT_ID');
+        const client = new OAuth2Client(clientId);
+        const ticket = await client.verifyIdToken({
+          idToken,
+          audience: clientId,
+        });
+        const payload = ticket.getPayload();
+        if (!payload) throw new BadRequestException('Invalid Google token');
+        
+        profile = {
+          id: payload.sub,
+          email: payload.email,
+          displayName: payload.name,
+          picture: payload.picture,
+        };
+      } else if (accessToken) {
+        const response = await fetch(`https://www.googleapis.com/oauth2/v3/userinfo?access_token=${accessToken}`);
+        if (!response.ok) throw new BadRequestException('Invalid Google access token');
+        const payload = await response.json();
+        
+        profile = {
+          id: payload.sub,
+          email: payload.email,
+          displayName: payload.name,
+          picture: payload.picture,
+        };
+      } else {
+        throw new BadRequestException('idToken or accessToken is required');
       }
-
-      const profile = {
-        id: payload.sub,
-        email: payload.email,
-        displayName: payload.name,
-        picture: payload.picture,
-      };
 
       return this.handleOAuth(profile, AuthProvider.GOOGLE);
     } catch (error) {

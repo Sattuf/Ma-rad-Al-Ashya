@@ -1,7 +1,8 @@
 import 'dart:convert';
-import 'dart:io';
+import 'dart:io' show Platform;
 import 'package:crypto/crypto.dart';
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class DeviceFingerprintService {
   static Future<String> getFingerprintHash() async {
@@ -11,7 +12,12 @@ class DeviceFingerprintService {
       String model = '';
       String deviceId = '';
 
-      if (Platform.isAndroid) {
+      if (kIsWeb) {
+        final webBrowserInfo = await deviceInfo.webBrowserInfo;
+        osVersion = webBrowserInfo.appVersion ?? '';
+        model = webBrowserInfo.userAgent ?? '';
+        deviceId = webBrowserInfo.vendor ?? '';
+      } else if (Platform.isAndroid) {
         final androidInfo = await deviceInfo.androidInfo;
         osVersion = androidInfo.version.release;
         model = androidInfo.model;

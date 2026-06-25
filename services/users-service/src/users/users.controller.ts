@@ -1,4 +1,4 @@
-import { Controller, Get, Put, Post, Delete, Body, UseGuards, Request, UploadedFile, UseInterceptors, Param, Query } from '@nestjs/common';
+import { Controller, Get, Put, Post, Delete, Body, UseGuards, Request, UploadedFile, UseInterceptors, Param, Query, UnauthorizedException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody, ApiParam } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UsersService } from './users.service';
@@ -82,7 +82,7 @@ export class UsersInternalController {
   async updateStatus(@Param('id') id: string, @Request() req, @Body() body: { status: string }) {
     const internalSecret = req.headers['x-internal-secret'];
     if (internalSecret !== (process.env.INTERNAL_SECRET || 'marad-internal-secret-for-webhooks')) {
-      throw new import('@nestjs/common').UnauthorizedException('Invalid internal secret');
+      throw new UnauthorizedException('Invalid internal secret');
     }
     await this.usersService.updateStatus(id, body.status);
     return { success: true };

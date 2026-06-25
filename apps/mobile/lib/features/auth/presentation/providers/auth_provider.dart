@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
@@ -113,20 +114,26 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> signInWithGoogle() async {
     state = state.copyWith(status: AuthStatus.loading, errorMessage: null);
     try {
-      final googleUser = await GoogleSignIn(scopes: ['email', 'profile']).signIn();
+      final googleUser = await GoogleSignIn(
+        clientId: kIsWeb ? '953831067334-kjrr8ovi28d132b5uat7qm77fjtdibcg.apps.googleusercontent.com' : null,
+        scopes: ['email', 'profile'],
+      ).signIn();
       if (googleUser == null) {
         state = state.copyWith(status: AuthStatus.idle);
         return;
       }
       final auth = await googleUser.authentication;
-      if (auth.idToken == null) {
+      if (auth.idToken == null && auth.accessToken == null) {
         state = state.copyWith(
           status: AuthStatus.error,
-          errorMessage: 'فشل الحصول على رمز Google',
+          errorMessage: 'فشل الحصول على بيانات الدخول من Google',
         );
         return;
       }
-      final data = await _repository.googleSignIn(idToken: auth.idToken!);
+      final data = await _repository.googleSignIn(
+        idToken: auth.idToken,
+        accessToken: auth.accessToken,
+      );
       state = state.copyWith(status: AuthStatus.success, user: data['user']);
     } catch (e) {
       state = state.copyWith(
@@ -166,6 +173,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   String _extractError(dynamic e) {
+    print('Auth Error: $e');
     if (e is Exception) {
       final str = e.toString();
       // Try to extract DioException message

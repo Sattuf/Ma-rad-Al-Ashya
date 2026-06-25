@@ -1,8 +1,9 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:marad_mobile/core/storage/secure_storage.dart';
 
 class ApiClient {
-  static const String baseUrl = 'http://10.0.2.2:3000/api/v1';
+  static const String baseUrl = kIsWeb ? 'http://127.0.0.1:3000/api/v1' : 'http://10.0.2.2:3000/api/v1';
 
   late final Dio dio;
   final SecureStorage _storage = SecureStorage();

@@ -119,11 +119,14 @@ export class AuthController {
   @Post('google/token')
   @ApiOperation({ summary: 'الدخول عبر جوجل من تطبيقات الجوال — Login via Google Token' })
   @ApiResponse({ status: 200, type: AuthResponseDto })
-  async googleTokenLogin(@Body('id_token') idToken: string) {
-    if (!idToken) {
-      throw new BadRequestException('id_token is required');
+  async googleTokenLogin(
+    @Body('id_token') idToken?: string,
+    @Body('access_token') accessToken?: string,
+  ) {
+    if (!idToken && !accessToken) {
+      throw new BadRequestException('id_token or access_token is required');
     }
-    return this.authService.verifyGoogleToken(idToken);
+    return this.authService.verifyGoogleToken(idToken, accessToken);
   }
 
   @Post('facebook/token')

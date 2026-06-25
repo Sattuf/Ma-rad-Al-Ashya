@@ -28,6 +28,7 @@ async function bootstrap() {
     origin: [
       'http://localhost:3100', // Next.js dev
       'http://localhost:8080', // Flutter web dev
+      'http://localhost:5000', // Flutter Web with fixed port
     ],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID'],

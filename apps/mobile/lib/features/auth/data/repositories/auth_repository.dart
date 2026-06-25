@@ -68,10 +68,12 @@ class AuthRepository {
   }
 
   Future<Map<String, dynamic>> googleSignIn({
-    required String idToken,
+    String? idToken,
+    String? accessToken,
   }) async {
     final response = await _dio.post('/auth/google/token', data: {
-      'id_token': idToken,
+      if (idToken != null) 'id_token': idToken,
+      if (accessToken != null) 'access_token': accessToken,
     });
     final data = response.data;
     await _storage.saveTokens(
