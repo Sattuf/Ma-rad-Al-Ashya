@@ -50,7 +50,10 @@ marad/
 ### التشغيل
 
 ```bash
-# تشغيل جميع الخدمات عبر Docker
+# 1) الأسرار (إلزامية — الخدمات ترفض الإقلاع بدونها)
+cp infra/.env.example infra/.env   # ثم املأ القيم: openssl rand -base64 48
+
+# 2) تشغيل جميع الخدمات عبر Docker
 npm run docker:up
 
 # تشغيل خدمة محددة للتطوير
@@ -66,6 +69,7 @@ cd apps/mobile && flutter run
 - [مخطط قاعدة البيانات](docs/database-schema.md)
 - [البنية المعمارية](docs/architecture.md)
 - [سجل التغييرات](docs/CHANGELOG.md)
+- [خطة التحسين وإعادة البناء](docs/REBUILD_PLAN.md)
 
 ## 📄 الترخيص
 
