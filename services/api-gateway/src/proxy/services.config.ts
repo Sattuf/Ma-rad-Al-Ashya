@@ -15,6 +15,11 @@ export interface ServiceConfig {
   stripPrefix?: boolean;
   /** Short TTL cache for anonymous GETs (seconds). Omit to disable. */
   cacheTtlSeconds?: number;
+  /**
+   * Which forwarded paths may be cached. Detail pages (e.g. /listings/:id) are excluded
+   * because the service counts a view on every request.
+   */
+  cacheableRoutes?: RegExp;
 }
 
 /**
@@ -45,6 +50,7 @@ export const SERVICES_CONFIG: ServiceConfig[] = [
     description: 'خدمة إدارة الإعلانات — Listings Management',
     stripPrefix: false,
     cacheTtlSeconds: 30,
+    cacheableRoutes: /^\/listings(\/(user|category)\/[^/]+)?\/?$/,
   },
   {
     name: 'categories-service',
@@ -68,6 +74,7 @@ export const SERVICES_CONFIG: ServiceConfig[] = [
     description: 'خدمة البحث — Search Service',
     stripPrefix: false,
     cacheTtlSeconds: 30,
+    cacheableRoutes: /^\/search(\/(suggestions|autocomplete|map|related|categories\/stats))?\/?$/,
   },
   {
     name: 'messaging-service',

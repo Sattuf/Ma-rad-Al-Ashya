@@ -40,8 +40,8 @@ export class AuthController {
   @ApiOperation({ summary: 'تسجيل الدخول — User login' })
   @ApiResponse({ status: 200, type: AuthResponseDto, description: 'تم تسجيل الدخول بنجاح' })
   @ApiResponse({ status: 401, description: 'بيانات الدخول غير صحيحة' })
-  async login(@Body() loginDto: LoginDto) {
-    return this.authService.login(loginDto);
+  async login(@Body() loginDto: LoginDto, @Ip() ipAddress: string) {
+    return this.authService.login(loginDto, ipAddress);
   }
 
   @Post('refresh')

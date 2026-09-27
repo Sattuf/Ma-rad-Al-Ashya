@@ -20,12 +20,21 @@ export class ListingsController {
   }
 
   // Declared before ':id' so these paths are not treated as ids.
-  @Get(['my', 'my-listings'])
+  @Get('my')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: "Get the current user's listings" })
+  @ApiOperation({ summary: "Get the current user's listings (paginated)" })
   findMine(@Request() req, @Query() query: Record<string, any>) {
     return this.listingsService.findMine(req.user.userId, query);
+  }
+
+  // The web dashboard expects a plain array here (apps/web/src/lib/api/listings.ts).
+  @Get('my-listings')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Get the current user's listings (array, first page)" })
+  async findMineArray(@Request() req, @Query() query: Record<string, any>) {
+    return (await this.listingsService.findMine(req.user.userId, query)).data;
   }
 
   @Get(':id')

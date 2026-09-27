@@ -53,6 +53,11 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     return this.client.ttl(key);
   }
 
+  /** Atomically reads and removes a key (single-use tokens). */
+  async getAndDelete(key: string): Promise<string | null> {
+    return this.client.getdel(key);
+  }
+
   /** Atomic "set if absent". Returns true when the key was created. */
   async setIfAbsent(key: string, value: string, ttlSeconds: number): Promise<boolean> {
     const result = await this.client.set(key, value, 'EX', ttlSeconds, 'NX');

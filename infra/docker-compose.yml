@@ -172,6 +172,7 @@ services:
       - REDIS_PORT=6379
       - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:?set JWT_REFRESH_SECRET in infra/.env}
       - OTP_MOCK_ENABLED=true
+      - TRUST_PROXY_HOPS=1
       - FRAUD_SERVICE_URL=http://fraud-service:8001
     volumes:
       - ../services/auth-service/src:/app/src:delegated

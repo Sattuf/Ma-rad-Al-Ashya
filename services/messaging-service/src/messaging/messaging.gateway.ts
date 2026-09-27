@@ -5,6 +5,7 @@ import {
   ConnectedSocket,
   OnGatewayConnection,
   OnGatewayDisconnect,
+  OnGatewayInit,
   WebSocketServer,
   WsException,
 } from '@nestjs/websockets';
@@ -21,7 +22,7 @@ type ConversationRef = string | { conversationId?: string };
 const roomFor = (conversationId: string) => `conversation_${conversationId}`;
 
 @WebSocketGateway({ cors: { origin: corsOrigins() } })
-export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
 
@@ -34,30 +35,43 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
   ) {}
 
   /**
+   * Authenticates in the handshake middleware. A rejection here reaches the client as
+   * `connect_error`, after which socket.io keeps retrying (with a refreshed token when the
+   * client passes `auth` as a callback). Disconnecting from handleConnection instead would
+   * stop the client's automatic reconnection for good.
+   *
    * The user id comes only from a verified access token — never from the client's
    * query string or payload (web sends `auth.token`, mobile an Authorization header).
    */
-  async handleConnection(client: Socket) {
-    const token =
-      (typeof client.handshake.auth?.token === 'string' ? client.handshake.auth.token : null) ??
-      extractBearerToken(client.handshake.headers?.authorization);
+  afterInit(server: Server) {
+    server.use((socket, next) => {
+      const token =
+        (typeof socket.handshake.auth?.token === 'string' ? socket.handshake.auth.token : null) ??
+        extractBearerToken(socket.handshake.headers?.authorization);
+      try {
+        if (!token) throw new Error('missing token');
+        socket.data.userId = verifyAccessToken(token).userId;
+        socket.data.conversations = new Set<string>();
+        next();
+      } catch {
+        next(new Error('unauthorized'));
+      }
+    });
+  }
 
-    try {
-      if (!token) throw new Error('missing token');
-      const user = verifyAccessToken(token);
-      client.data.userId = user.userId;
-      client.data.conversations = new Set<string>();
-      await this.redisService.setUserPresence(user.userId, 'online');
-    } catch {
-      client.emit('error', { message: 'Unauthorized' });
+  async handleConnection(client: Socket) {
+    if (!client.data.userId) {
       client.disconnect(true);
+      return;
     }
+    await this.redisService.addConnection(client.data.userId, client.id);
   }
 
   async handleDisconnect(client: Socket) {
     const userId: string | undefined = client.data.userId;
     if (!userId) return;
-    await this.redisService.setUserPresence(userId, 'offline');
+    const stillOnline = await this.redisService.removeConnection(userId, client.id);
+    if (stillOnline) return; // another tab/device is still connected
     // Presence goes only to the conversations this user had open, not to every connected client.
     for (const conversationId of client.data.conversations ?? []) {
       this.server.to(roomFor(conversationId)).emit('presence_update', { userId, status: 'offline' });
@@ -67,6 +81,8 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
   private requireUser(client: Socket): string {
     const userId = client.data.userId;
     if (!userId) throw new WsException('Unauthorized');
+    // Any activity counts as a heartbeat for the presence TTL.
+    void this.redisService.refreshPresence(userId).catch(() => undefined);
     return userId;
   }
 

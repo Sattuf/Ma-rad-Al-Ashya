@@ -10,6 +10,9 @@ import { assertRequiredSecrets, corsOrigins, isProduction } from './common/secur
 async function bootstrap() {
   assertRequiredSecrets('JWT_ACCESS_SECRET', 'JWT_REFRESH_SECRET', 'INTERNAL_SECRET');
   const app = await NestFactory.create(AppModule);
+  // Only reachable through the gateway, which sets X-Forwarded-For: trust that one hop
+  // (TRUST_PROXY_HOPS=1 in docker-compose) so lockouts are keyed by the real client IP.
+  app.getHttpAdapter().getInstance().set('trust proxy', parseInt(process.env.TRUST_PROXY_HOPS || '0', 10));
   
   Sentry.init({
     dsn: process.env.SENTRY_DSN,

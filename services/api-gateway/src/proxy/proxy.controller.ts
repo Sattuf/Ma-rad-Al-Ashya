@@ -38,23 +38,26 @@ const FORWARDED_REQUEST_HEADERS = [
 const FORWARDED_RESPONSE_HEADERS = ['content-type', 'cache-control', 'etag', 'location', 'content-disposition'];
 
 /**
- * Normalizes the downstream path and rejects dot segments / encoded slashes, which could
- * otherwise walk past the route blocklist (e.g. /listings/../users/1/status).
+ * Decodes the raw (still percent-encoded) downstream path into segments and rejects anything
+ * that could change its meaning once re-parsed upstream: dot segments, encoded slashes and
+ * encoded '?' or '#' (e.g. /listings/../users/1/status or /listings/batch%23).
+ * Returns the decoded segments, or null when the path is unsafe.
  */
-export function sanitizePath(path: string): string | null {
-  const segments = path.split('/').filter((s) => s.length > 0);
-  for (const segment of segments) {
+export function sanitizePath(rawPath: string): string[] | null {
+  const decodedSegments: string[] = [];
+  for (const segment of rawPath.split('/').filter((s) => s.length > 0)) {
     let decoded: string;
     try {
       decoded = decodeURIComponent(segment);
     } catch {
       return null;
     }
-    if (decoded === '.' || decoded === '..' || decoded.includes('/') || decoded.includes('\\')) {
+    if (decoded === '.' || decoded === '..' || /[\/\\?#]/.test(decoded)) {
       return null;
     }
+    decodedSegments.push(decoded);
   }
-  return segments.join('/');
+  return decodedSegments;
 }
 
 function toBuffer(data: unknown): Buffer {
@@ -101,13 +104,13 @@ export class ProxyController {
   // Express 4 wildcard: the remainder of the path is exposed as params[0].
   @All(':servicePrefix/*')
   @ApiOperation({ summary: 'توجيه الطلبات للخدمات المصغرة — Proxy to microservice (with path)' })
-  async proxyWithPath(
-    @Param('servicePrefix') servicePrefix: string,
-    @Param('0') path: string,
-    @Req() req: Request,
-    @Res() res: Response,
-  ) {
-    return this.proxyRequest(servicePrefix, path, req, res);
+  async proxyWithPath(@Param('servicePrefix') servicePrefix: string, @Req() req: Request, @Res() res: Response) {
+    // Express has already percent-decoded route params; work from the raw URL instead.
+    const rawPathname = req.originalUrl.split('?')[0];
+    const prefixMarker = `/api/v1/${servicePrefix}/`;
+    const start = rawPathname.indexOf(prefixMarker);
+    const rawPath = start >= 0 ? rawPathname.substring(start + prefixMarker.length) : '';
+    return this.proxyRequest(servicePrefix, rawPath, req, res);
   }
 
   private async proxyRequest(servicePrefix: string, rawPath: string, req: Request, res: Response) {
@@ -116,23 +119,31 @@ export class ProxyController {
       throw new HttpException({ statusCode: HttpStatus.NOT_FOUND, message: 'المسار غير موجود — Not found' }, HttpStatus.NOT_FOUND);
     }
 
-    const path = sanitizePath(rawPath ?? '');
-    if (path === null) {
+    const segments = sanitizePath(rawPath ?? '');
+    if (segments === null) {
       throw new HttpException({ statusCode: HttpStatus.BAD_REQUEST, message: 'مسار غير صالح — Invalid path' }, HttpStatus.BAD_REQUEST);
     }
 
-    const forwardedPath = '/' + [service.stripPrefix === false ? service.prefix : '', path].filter(Boolean).join('/');
+    if (service.stripPrefix === false) segments.unshift(service.prefix);
+    // Decoded form is what the upstream router will see, so the blocklist checks that;
+    // the URL we send re-encodes every segment so nothing is decoded twice.
+    const forwardedPath = '/' + segments.join('/');
+    const encodedPath = '/' + segments.map(encodeURIComponent).join('/');
     if (isBlockedRoute(service.name, req.method, forwardedPath)) {
       throw new HttpException({ statusCode: HttpStatus.NOT_FOUND, message: 'المسار غير موجود — Not found' }, HttpStatus.NOT_FOUND);
     }
 
     const queryIndex = req.originalUrl.indexOf('?');
     const queryString = queryIndex >= 0 ? req.originalUrl.substring(queryIndex) : '';
-    const fullUrl = `${service.url}${forwardedPath}${queryString}`;
+    const fullUrl = `${service.url}${encodedPath}${queryString}`;
 
     const cacheable =
-      req.method === 'GET' && !req.headers.authorization && !!service.cacheTtlSeconds && !!this.cache;
-    const cacheKey = `gw:cache:${service.name}:${forwardedPath}${queryString}`;
+      req.method === 'GET' &&
+      !req.headers.authorization &&
+      !!service.cacheTtlSeconds &&
+      !!this.cache &&
+      (!service.cacheableRoutes || service.cacheableRoutes.test(forwardedPath));
+    const cacheKey = `gw:cache:${service.name}:${encodedPath}${queryString}`;
     if (cacheable) {
       const hit = await this.cache!.get(cacheKey);
       if (hit) {

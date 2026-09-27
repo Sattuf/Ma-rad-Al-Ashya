@@ -22,9 +22,14 @@ import { v4 as uuidv4 } from 'uuid';
 import { OAuth2Client } from 'google-auth-library';
 import { internalHeaders, requireSecret } from '../common/security';
 
-const LOGIN_MAX_FAILURES = 5;
+// Per identifier+IP: stops a single attacker quickly without letting anyone lock out a victim.
+const LOGIN_MAX_FAILURES_PER_IP = 5;
+// Per identifier across all IPs: a high ceiling against distributed guessing.
+const LOGIN_MAX_FAILURES_PER_ACCOUNT = 50;
 const LOGIN_LOCK_SECONDS = 15 * 60;
 const REFRESH_TTL_SECONDS = 7 * 24 * 3600;
+// A second refresh with the same token this soon is a benign race, not theft.
+const REFRESH_REUSE_GRACE_MS = 30_000;
 // Compared against when the user does not exist, so response time does not reveal registered accounts.
 const DUMMY_PASSWORD_HASH = '$2b$12$/FCkfeR4ULkbczjMnwGeveFjV9SRhiegeH7gn7L8RvJ0v2MREQzoi';
 
@@ -110,13 +115,20 @@ export class AuthService {
     return this.buildAuthResponse(user, tokens);
   }
 
-  async login(loginDto: LoginDto): Promise<AuthResponseDto> {
+  async login(loginDto: LoginDto, ipAddress = 'unknown'): Promise<AuthResponseDto> {
     const { identifier, password } = loginDto;
     const normalizedIdentifier = identifier.trim().toLowerCase();
-    const failuresKey = `login_failures:${normalizedIdentifier}`;
+    const accountKey = `login_failures:${normalizedIdentifier}`;
+    const ipKey = `login_failures:${normalizedIdentifier}:${ipAddress}`;
 
-    const failures = parseInt((await this.redisService.get(failuresKey)) ?? '0', 10);
-    if (failures >= LOGIN_MAX_FAILURES) {
+    const [accountFailures, ipFailures] = await Promise.all([
+      this.redisService.get(accountKey),
+      this.redisService.get(ipKey),
+    ]);
+    if (
+      parseInt(ipFailures ?? '0', 10) >= LOGIN_MAX_FAILURES_PER_IP ||
+      parseInt(accountFailures ?? '0', 10) >= LOGIN_MAX_FAILURES_PER_ACCOUNT
+    ) {
       throw new HttpException(
         'تم إيقاف تسجيل الدخول مؤقتاً بسبب محاولات خاطئة متكررة. حاول بعد 15 دقيقة',
         HttpStatus.TOO_MANY_REQUESTS,
@@ -134,11 +146,14 @@ export class AuthService {
     // and return the same message as a wrong password.
     const isPasswordValid = await bcrypt.compare(password, user?.passwordHash ?? DUMMY_PASSWORD_HASH);
     if (!user || !user.passwordHash || !isPasswordValid) {
-      await this.redisService.incrWithTtl(failuresKey, LOGIN_LOCK_SECONDS);
+      await Promise.all([
+        this.redisService.incrWithTtl(ipKey, LOGIN_LOCK_SECONDS),
+        this.redisService.incrWithTtl(accountKey, LOGIN_LOCK_SECONDS),
+      ]);
       throw new UnauthorizedException('بيانات الدخول غير صحيحة');
     }
 
-    await this.redisService.del(failuresKey);
+    await this.redisService.del(ipKey);
 
     if (isBlockedStatus(user.status)) {
       throw new UnauthorizedException('هذا الحساب موقوف حالياً');
@@ -164,20 +179,26 @@ export class AuthService {
     const tokenId = payload.jti;
 
     const redisKey = `refresh:${userId}:${tokenId}`;
-    const tokenExists = await this.redisService.get(redisKey);
+    const usedKey = `refresh_used:${userId}:${tokenId}`;
+
+    // GETDEL: check and consume in one step, so two concurrent requests can never
+    // both mint new tokens from the same refresh token.
+    const tokenExists = await this.redisService.getAndDelete(redisKey);
 
     if (!tokenExists) {
-      // Security Alert: Refresh Token Reuse Detected!
-      // Delete all refresh tokens for this user from Redis for safety
-      // A rotated (already used) refresh token was presented: assume it was stolen
-      // and revoke every session of this user.
-      this.logger.warn(`Refresh token reuse detected for user ${userId}; revoking all sessions`);
-      await this.redisService.deleteByPattern(`refresh:${userId}:*`);
-      throw new UnauthorizedException('تم الكشف عن محاولة استخدام غير مصرح بها. يرجى تسجيل الدخول مجدداً');
+      const usedAt = parseInt((await this.redisService.get(usedKey)) ?? '', 10);
+      if (Number.isFinite(usedAt) && Date.now() - usedAt > REFRESH_REUSE_GRACE_MS) {
+        // A token rotated a while ago is being replayed: assume it was stolen and
+        // revoke every session of this user.
+        this.logger.warn(`Refresh token reuse detected for user ${userId}; revoking all sessions`);
+        await this.redisService.deleteByPattern(`refresh:${userId}:*`);
+        throw new UnauthorizedException('تم الكشف عن محاولة استخدام غير مصرح بها. يرجى تسجيل الدخول مجدداً');
+      }
+      // Within the grace window (parallel tabs / client retry) or after logout: just reject.
+      throw new UnauthorizedException('رمز تجديد غير صالح أو منتهي الصلاحية');
     }
 
-    // Delete the used refresh token from Redis
-    await this.redisService.del(redisKey);
+    await this.redisService.set(usedKey, String(Date.now()), REFRESH_TTL_SECONDS);
 
     const user = await this.usersService.findOneById(userId);
     if (!user || isBlockedStatus(user.status)) {
@@ -314,7 +335,8 @@ export class AuthService {
         profile = {
           id: info.sub,
           email: info.email,
-          emailVerified: info.email_verified === true,
+          // tokeninfo returns this flag as the string "true", not a boolean.
+          emailVerified: String(info.email_verified) === 'true',
           displayName: userInfo.name,
           picture: userInfo.picture,
         };

@@ -9,6 +9,8 @@ import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { internalHeaders } from '../common/security';
 
+const FINAL_STATUSES = ['Approved', 'Declined'];
+
 @Injectable()
 export class KycService {
   private readonly logger = new Logger(KycService.name);
@@ -69,6 +71,13 @@ export class KycService {
     const verification = await this.kycVerificationRepo.findOne({ where: { session_id: sessionId } });
     if (!verification) {
       this.logger.warn(`Webhook received for unknown session: ${sessionId}`);
+      return;
+    }
+
+    // Replay protection: the signature covers only the body, so a captured delivery could be
+    // re-sent later. Final decisions are immutable and repeats of the same status are no-ops.
+    if (FINAL_STATUSES.includes(verification.status) || verification.status === status) {
+      this.logger.warn(`Ignoring webhook for session ${sessionId}: already '${verification.status}'`);
       return;
     }
 

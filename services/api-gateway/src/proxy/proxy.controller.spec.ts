@@ -147,7 +147,7 @@ describe('ProxyController', () => {
         setHeader: jest.fn(),
       } as any;
 
-      await controller.proxyWithPath('listings', 'recent', mockReq, mockRes);
+      await controller.proxyWithPath('listings', mockReq, mockRes);
 
       expect(mockHttpService.request).toHaveBeenCalledWith(
         expect.objectContaining({

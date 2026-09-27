@@ -1,6 +1,8 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { Redis } from 'ioredis';
 
+const PRESENCE_TTL_SECONDS = 10 * 60;
+
 @Injectable()
 export class RedisService implements OnModuleInit, OnModuleDestroy {
   private redisClient: Redis;
@@ -17,13 +19,31 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     this.redisClient.quit();
   }
 
-  async setUserPresence(userId: string, status: 'online' | 'offline'): Promise<void> {
-    if (status === 'online') {
-      // TTL so a crashed instance cannot leave users 'online' forever.
-      await this.redisClient.set(`presence:${userId}`, 'online', 'EX', 3600);
-    } else {
-      await this.redisClient.del(`presence:${userId}`);
-    }
+  /**
+   * Presence is tracked per connection (a set of socket ids), so closing one of two tabs
+   * does not mark the user offline. The TTL is refreshed on every connect and heartbeat
+   * so a crashed instance cannot leave users online forever.
+   */
+  async addConnection(userId: string, socketId: string): Promise<void> {
+    await this.redisClient
+      .multi()
+      .sadd(`presence:${userId}`, socketId)
+      .expire(`presence:${userId}`, PRESENCE_TTL_SECONDS)
+      .exec();
+  }
+
+  /** Returns true when the user still has other live connections. */
+  async removeConnection(userId: string, socketId: string): Promise<boolean> {
+    const [, [, remaining]] = (await this.redisClient
+      .multi()
+      .srem(`presence:${userId}`, socketId)
+      .scard(`presence:${userId}`)
+      .exec()) as [[Error | null, number], [Error | null, number]];
+    return remaining > 0;
+  }
+
+  async refreshPresence(userId: string): Promise<void> {
+    await this.redisClient.expire(`presence:${userId}`, PRESENCE_TTL_SECONDS);
   }
 
   async incr(key: string): Promise<number> {
@@ -31,7 +51,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   async getUserPresence(userId: string): Promise<'online' | 'offline'> {
-    const status = await this.redisClient.get(`presence:${userId}`);
-    return status === 'online' ? 'online' : 'offline';
+    const connections = await this.redisClient.scard(`presence:${userId}`);
+    return connections > 0 ? 'online' : 'offline';
   }
 }

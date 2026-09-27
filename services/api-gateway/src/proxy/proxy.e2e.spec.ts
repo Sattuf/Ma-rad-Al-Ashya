@@ -87,6 +87,24 @@ describe('ProxyController (e2e)', () => {
     expect(seen).toHaveLength(0);
   });
 
+  it.each([
+    ['put', '/api/v1/listings/abc/status%3F'],
+    ['post', '/api/v1/listings/batch%23'],
+    ['put', '/api/v1/users/users/abc/verify%3Fx=1'],
+    ['put', '/api/v1/listings/abc%2Fstatus'],
+  ])('rejects encoded ?, # and / that could bypass the blocklist: %s %s', async (method, url) => {
+    const res = await (request(app.getHttpServer()) as any)[method](url).send({});
+    expect(res.status).toBe(400);
+    expect(seen).toHaveLength(0);
+  });
+
+  it('keeps legitimately encoded characters encoded upstream', async () => {
+    await request(app.getHttpServer()).get('/api/v1/search/suggestions?q=a%26b');
+    expect(seen[0].url).toBe('/search/suggestions?q=a%26b');
+    await request(app.getHttpServer()).get('/api/v1/listings/caf%C3%A9');
+    expect(seen[1].url).toBe('/listings/caf%C3%A9');
+  });
+
   it('never forwards x-internal-secret from clients', async () => {
     await request(app.getHttpServer())
       .get('/api/v1/listings')
