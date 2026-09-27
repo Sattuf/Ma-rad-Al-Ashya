@@ -116,6 +116,12 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - name: Migration runner tests
+        run: npm ci --prefix db && node --test db/migrate.test.mjs
+      - name: Apply all migrations to an empty database (twice — must be idempotent)
+        run: node db/migrate.mjs && node db/migrate.mjs
+      - name: Entities match the migrated schema (no drift)
+        run: npx ts-node -P scripts/tsconfig.json scripts/check-entity-schema.ts
       - name: auth-service (Redis atomicity, OTP brute force)
         run: npm run test:int
         working-directory: services/auth-service

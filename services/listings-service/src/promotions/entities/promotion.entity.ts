@@ -25,7 +25,7 @@ export class Promotion {
   @JoinColumn({ name: 'listing_id' })
   listing: Listing;
 
-  @Column({ name: 'seller_id' })
+  @Column({ name: 'seller_id', type: 'uuid' })
   sellerId: string;
 
   @Column({ type: 'varchar' })

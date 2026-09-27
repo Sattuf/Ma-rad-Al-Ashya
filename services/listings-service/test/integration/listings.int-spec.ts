@@ -1,4 +1,4 @@
-import { readFileSync } from 'fs';
+import { readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { of } from 'rxjs';
 import { DataSource } from 'typeorm';
@@ -20,7 +20,8 @@ if (!databaseUrl || !redisUrl) {
   throw new Error('DATABASE_URL and REDIS_URL are required for integration tests');
 }
 
-const MIGRATIONS = ['V005__listings_schema.sql', 'V009__promotions.sql', 'V013__listings_query_indexes.sql'];
+// The same files db/migrate.mjs applies, in order.
+const MIGRATIONS_DIR = join(__dirname, '../../../../db/migrations');
 const SELLER = '11111111-1111-4111-8111-111111111111';
 const OTHER = '22222222-2222-4222-8222-222222222222';
 
@@ -40,12 +41,12 @@ describe('ListingsService against real Postgres and Redis', () => {
       type: 'postgres',
       url: databaseUrl,
       schema,
-      extra: { options: `-c search_path=${schema}` },
+      extra: { options: `-c search_path=${schema},public` },
       entities: [Listing, ListingImage, Category, Promotion],
     });
     await dataSource.initialize();
-    for (const file of MIGRATIONS) {
-      await dataSource.query(readFileSync(join(__dirname, '../../src/database/migrations', file), 'utf8'));
+    for (const file of readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith('.sql')).sort()) {
+      await dataSource.query(readFileSync(join(MIGRATIONS_DIR, file), 'utf8'));
     }
 
     const { hostname, port } = new URL(redisUrl);

@@ -30,7 +30,6 @@ services:
       - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ../services/listings-service/migrations:/docker-entrypoint-initdb.d:ro
     networks:
       - marad-network
     healthcheck:
@@ -115,6 +114,22 @@ services:
     networks:
       - marad-network
 
+  # ترحيلات قاعدة البيانات — runs db/migrations once, before any service that uses Postgres.
+  migrate:
+    image: node:20-alpine
+    container_name: marad-migrate
+    working_dir: /db
+    command: sh -c "npm ci --omit=dev --no-audit --no-fund && node migrate.mjs"
+    environment:
+      - DATABASE_URL=postgresql://marad_user:marad_dev_password@postgres:5432/marad_db
+    volumes:
+      - ../db:/db
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - marad-network
+
   # ============================================================================
   # خدمات NestJS المصغرة — NestJS Microservices
   # ============================================================================
@@ -177,6 +192,8 @@ services:
     volumes:
       - ../services/auth-service/src:/app/src:delegated
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
@@ -211,6 +228,8 @@ services:
     volumes:
       - ../services/listings-service/src:/app/src:delegated
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
@@ -296,6 +315,8 @@ services:
     volumes:
       - ../services/transactions-service/src:/app/src:delegated
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
@@ -331,6 +352,8 @@ services:
     volumes:
       - ../services/identity-service/src:/app/src:delegated
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
@@ -366,6 +389,8 @@ services:
     volumes:
       - ../services/users-service/src:/app/src:delegated
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
@@ -394,8 +419,12 @@ services:
       - LISTINGS_SERVICE_URL=http://listings-service:3002
       - USERS_SERVICE_URL=http://users-service:3007
     depends_on:
-      - postgres
-      - redis
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - marad-network
 
@@ -423,6 +452,8 @@ services:
     volumes:
       - ../services/fraud-service/app:/app/app:delegated
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
@@ -452,6 +483,8 @@ services:
     volumes:
       - ../services/personalization-service/app:/app/app:delegated
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
