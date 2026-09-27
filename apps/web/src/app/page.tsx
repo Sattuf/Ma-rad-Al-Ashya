@@ -7,11 +7,11 @@ import Link from 'next/link';
 
 function ListingSkeleton() {
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden animate-pulse">
+    <div className="bg-surface rounded-xl shadow-sm border border-gray-200 overflow-hidden animate-pulse">
       <div className="h-48 bg-gray-200 w-full" />
-      <div className="p-4 space-y-3 text-right">
-        <div className="h-4 bg-gray-200 rounded w-2/3 mr-auto" />
-        <div className="h-4 bg-gray-200 rounded w-1/2 mr-auto" />
+      <div className="p-4 space-y-3 text-start">
+        <div className="h-4 bg-gray-200 rounded w-2/3 ms-auto" />
+        <div className="h-4 bg-gray-200 rounded w-1/2 ms-auto" />
         <div className="border-t border-gray-100 pt-4 flex justify-between">
           <div className="h-4 bg-gray-200 rounded w-8" />
           <div className="h-4 bg-gray-200 rounded w-8" />
@@ -26,21 +26,21 @@ export default function HomePage() {
   const { listings, isLoading, isPersonalized } = useSuggestedListings();
 
   return (
-    <div className="min-h-screen bg-gray-50 text-right pb-16" dir="rtl">
+    <div className="min-h-screen bg-gray-50 text-start pb-16" dir="rtl">
       {/* Hero Section */}
-      <section className="relative bg-gradient-to-r from-teal-800 to-teal-950 text-white py-24 overflow-hidden mb-12">
+      <section className="relative bg-gradient-to-r from-brand-900 to-brand-950 text-white py-24 overflow-hidden mb-12">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_30%,rgba(20,184,166,0.15),transparent)] pointer-events-none" />
         <div className="container mx-auto px-4 relative z-10 text-center">
           <h1 className="text-4xl md:text-5xl font-extrabold mb-4 tracking-tight leading-tight">
-            ابحث عن عقارك المثالي في <span className="text-teal-400">معرض الأشياء</span>
+            ابحث عن عقارك المثالي في <span className="text-brand-400">معرض الأشياء</span>
           </h1>
-          <p className="text-lg text-teal-100/90 max-w-2xl mx-auto mb-8 font-medium">
+          <p className="text-lg text-brand-100/90 max-w-2xl mx-auto mb-8 font-medium">
             تصفح الآلاف من العقارات المميزة المعروضة للبيع والإيجار بأسعار منافسة في جميع مناطق المملكة.
           </p>
           <div className="flex justify-center gap-4">
             <Link 
               href="/explore"
-              className="bg-white text-teal-900 px-8 py-3.5 rounded-xl font-bold hover:bg-teal-50 transition-colors shadow-lg"
+              className="bg-surface text-brand-950 px-8 py-3.5 rounded-xl font-bold hover:bg-primary-soft transition-colors shadow-lg"
             >
               استكشف الأقسام
             </Link>
@@ -62,7 +62,7 @@ export default function HomePage() {
                 : 'عقارات مختارة بعناية قد تنال إعجابك'}
             </p>
           </div>
-          <Link href="/explore" className="text-teal-600 hover:text-teal-700 font-bold text-sm flex items-center gap-1">
+          <Link href="/explore" className="text-primary hover:text-primary-hover font-bold text-sm flex items-center gap-1">
             <span>استكشف المزيد</span>
             <ArrowLeft size={16} />
           </Link>
@@ -75,7 +75,7 @@ export default function HomePage() {
             ))}
           </div>
         ) : listings.length === 0 ? (
-          <div className="text-center py-16 bg-white rounded-2xl border border-gray-100 shadow-sm">
+          <div className="text-center py-16 bg-surface rounded-2xl border border-gray-100 shadow-sm">
             <p className="text-gray-500 text-sm">لا توجد اقتراحات حالياً. تصفح الموقع وسنقوم بتخصيص الاقتراحات لك.</p>
           </div>
         ) : (

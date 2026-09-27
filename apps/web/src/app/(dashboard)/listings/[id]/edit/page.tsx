@@ -67,7 +67,7 @@ export default function EditListingPage() {
     <div className="max-w-3xl mx-auto py-8 px-4">
       <h1 className="text-2xl font-bold text-gray-900 mb-8">تعديل العقار</h1>
       
-      <form onSubmit={handleSubmit(onSubmit)} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-6">
+      <form onSubmit={handleSubmit(onSubmit)} className="bg-surface rounded-xl shadow-sm border border-gray-200 p-6 space-y-6">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">العنوان</label>
           <input {...register('title')} className="w-full border p-3 rounded-lg" />

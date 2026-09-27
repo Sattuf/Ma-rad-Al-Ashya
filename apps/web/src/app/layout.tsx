@@ -19,6 +19,7 @@ export const metadata: Metadata = {
 };
 
 import FCMProvider from "@/components/providers/FCMProvider";
+import { themeInitScript } from "@/components/ui/ThemeToggle";
 
 export default function RootLayout({
   children,
@@ -26,8 +27,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ar" dir="rtl" className={`${inter.variable} ${cairo.variable}`}>
-      <body className="antialiased min-h-screen flex flex-col bg-gray-50">
+    <html lang="ar" dir="rtl" className={`${inter.variable} ${cairo.variable}`} suppressHydrationWarning>
+      <head>
+        {/* Applies the saved theme before first paint to avoid a light/dark flash. */}
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+      </head>
+      <body className="antialiased min-h-screen flex flex-col bg-canvas text-fg">
         <FCMProvider />
         <Navbar />
         {children}

@@ -74,7 +74,7 @@ export function MessageInput({ onSend, onSendImage, onTyping }: MessageInputProp
   };
 
   return (
-    <div className="flex flex-col border-t border-gray-200 bg-white" dir="rtl">
+    <div className="flex flex-col border-t border-gray-200 bg-surface" dir="rtl">
       {preview && (
         <div className="p-4 relative inline-block">
           <div className="relative inline-block border border-gray-200 rounded-lg overflow-hidden">
@@ -82,7 +82,7 @@ export function MessageInput({ onSend, onSendImage, onTyping }: MessageInputProp
             <button
               type="button"
               onClick={clearSelection}
-              className="absolute top-1 right-1 bg-gray-900/50 text-white rounded-full p-1 hover:bg-gray-900"
+              className="absolute top-1 start-1 bg-gray-900/50 text-white rounded-full p-1 hover:bg-gray-900"
             >
               <X size={16} />
             </button>
@@ -94,7 +94,7 @@ export function MessageInput({ onSend, onSendImage, onTyping }: MessageInputProp
           type="button"
           onClick={() => fileInputRef.current?.click()}
           disabled={isCompressing}
-          className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors disabled:opacity-50"
+          className="p-2 text-gray-500 hover:text-primary-hover hover:bg-primary-soft rounded-full transition-colors disabled:opacity-50"
           title="إرفاق صورة"
         >
           <ImageIcon size={24} />
@@ -112,14 +112,14 @@ export function MessageInput({ onSend, onSendImage, onTyping }: MessageInputProp
           onChange={handleChange}
           placeholder="اكتب رسالة..."
           disabled={!!selectedFile}
-          className="flex-1 px-4 py-2 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
+          className="flex-1 px-4 py-2 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-focus-ring focus:border-transparent disabled:bg-gray-100"
         />
         <button
           type="submit"
           disabled={(!message.trim() && !selectedFile) || isCompressing}
-          className="p-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="p-2 bg-primary text-on-primary rounded-full hover:bg-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
-          <Send size={20} className="mr-1" />
+          <Send size={20} className="ms-1" />
         </button>
       </form>
     </div>

@@ -27,7 +27,7 @@ export default function ListingsPage() {
       <div className="flex flex-col md:flex-row gap-8">
         {/* Sidebar Filters */}
         <aside className="w-full md:w-64 shrink-0">
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 sticky top-24">
+          <div className="bg-surface p-6 rounded-xl shadow-sm border border-gray-200 sticky top-24">
             <div className="flex items-center gap-2 mb-6 text-gray-900 font-bold text-lg">
               <Filter size={20} />
               <h2>الفلاتر</h2>
@@ -89,7 +89,7 @@ export default function ListingsPage() {
           {isLoading ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {[1, 2, 3, 4, 5, 6].map((i) => (
-                <div key={i} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden h-[340px] animate-pulse">
+                <div key={i} className="bg-surface rounded-xl shadow-sm border border-gray-200 overflow-hidden h-[340px] animate-pulse">
                   <div className="h-48 bg-gray-200 w-full" />
                   <div className="p-4 space-y-4">
                     <div className="h-4 bg-gray-200 rounded w-3/4" />

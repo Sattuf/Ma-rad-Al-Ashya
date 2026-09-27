@@ -68,16 +68,16 @@ export default function ListingDetailPage() {
             alt={listing.title}
             className="object-cover w-full h-full"
           />
-          <div className="absolute top-4 right-4 flex gap-2">
-            <span className="bg-white/90 backdrop-blur-sm px-4 py-1.5 rounded-full text-sm font-semibold text-primary">
+          <div className="absolute top-4 start-4 flex gap-2">
+            <span className="bg-surface/90 backdrop-blur-sm px-4 py-1.5 rounded-full text-sm font-semibold text-primary">
               {listing.type === 'sale' ? 'للبيع' : 'للإيجار'}
             </span>
           </div>
-          <div className="absolute top-4 left-4 flex gap-2">
-            <button className="p-2.5 bg-white/90 hover:bg-white backdrop-blur-sm rounded-full text-gray-700 transition-colors shadow-sm">
+          <div className="absolute top-4 end-4 flex gap-2">
+            <button className="p-2.5 bg-surface/90 hover:bg-surface backdrop-blur-sm rounded-full text-gray-700 transition-colors shadow-sm">
               <Share2 size={20} />
             </button>
-            <button className="p-2.5 bg-white/90 hover:bg-white backdrop-blur-sm rounded-full text-gray-700 hover:text-red-500 transition-colors shadow-sm">
+            <button className="p-2.5 bg-surface/90 hover:bg-surface backdrop-blur-sm rounded-full text-gray-700 hover:text-red-500 transition-colors shadow-sm">
               <Heart size={20} />
             </button>
           </div>
@@ -89,8 +89,8 @@ export default function ListingDetailPage() {
             </div>
           ))}
           {listing.images.length > 3 && (
-            <div className="absolute bottom-4 left-4">
-              <button className="bg-white/90 px-4 py-2 rounded-lg font-medium text-sm shadow-sm hover:bg-white transition-colors">
+            <div className="absolute bottom-4 end-4">
+              <button className="bg-surface/90 px-4 py-2 rounded-lg font-medium text-sm shadow-sm hover:bg-surface transition-colors">
                 عرض كل الصور ({listing.images.length})
               </button>
             </div>
@@ -104,12 +104,12 @@ export default function ListingDetailPage() {
           <div>
             <div className="flex justify-between items-start mb-4">
               <h1 className="text-3xl font-bold text-gray-900">{listing.title}</h1>
-              <p className="text-3xl font-bold text-primary whitespace-nowrap mr-4">
+              <p className="text-3xl font-bold text-primary whitespace-nowrap ms-4">
                 {listing.price.toLocaleString()} ر.س
               </p>
             </div>
             <div className="flex items-center text-gray-600 mb-6 text-lg">
-              <MapPin size={20} className="ml-2 text-primary" />
+              <MapPin size={20} className="me-2 text-primary" />
               <span>{listing.location.city} - {listing.location.address}</span>
             </div>
             
@@ -117,7 +117,7 @@ export default function ListingDetailPage() {
             <div className="flex flex-wrap gap-6 py-6 border-y border-gray-100">
               {listing.bedrooms && (
                 <div className="flex items-center gap-3">
-                  <div className="p-3 bg-blue-50 rounded-lg text-primary">
+                  <div className="p-3 bg-primary-soft rounded-lg text-primary">
                     <BedDouble size={24} />
                   </div>
                   <div>
@@ -128,7 +128,7 @@ export default function ListingDetailPage() {
               )}
               {listing.bathrooms && (
                 <div className="flex items-center gap-3">
-                  <div className="p-3 bg-blue-50 rounded-lg text-primary">
+                  <div className="p-3 bg-primary-soft rounded-lg text-primary">
                     <Bath size={24} />
                   </div>
                   <div>
@@ -138,7 +138,7 @@ export default function ListingDetailPage() {
                 </div>
               )}
               <div className="flex items-center gap-3">
-                <div className="p-3 bg-blue-50 rounded-lg text-primary">
+                <div className="p-3 bg-primary-soft rounded-lg text-primary">
                   <Square size={24} />
                 </div>
                 <div>
@@ -178,7 +178,7 @@ export default function ListingDetailPage() {
 
         {/* Sidebar */}
         <div className="lg:col-span-1">
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 sticky top-24">
+          <div className="bg-surface p-6 rounded-xl shadow-sm border border-gray-200 sticky top-24">
             <h3 className="text-lg font-bold text-gray-900 mb-4">تواصل مع المعلن</h3>
             <div className="flex items-center gap-4 mb-6">
               <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center text-xl font-bold text-gray-400">
@@ -213,7 +213,7 @@ export default function ListingDetailPage() {
                     }
                   }}
                   disabled={isBuying}
-                  className="w-full bg-teal-600 hover:bg-teal-700 text-white font-medium py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors mb-2 disabled:opacity-75"
+                  className="w-full bg-primary hover:bg-primary text-on-primary font-medium py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors mb-2 disabled:opacity-75"
                 >
                   <ShoppingCart size={20} />
                   <span>{isBuying ? 'جاري الطلب...' : 'طلب شراء الآن'}</span>
@@ -223,7 +223,7 @@ export default function ListingDetailPage() {
                 <Phone size={20} />
                 <span>إظهار الرقم</span>
               </button>
-              <button className="w-full bg-white hover:bg-gray-50 text-gray-900 border border-gray-200 font-medium py-3 px-4 rounded-lg transition-colors">
+              <button className="w-full bg-surface hover:bg-gray-50 text-gray-900 border border-gray-200 font-medium py-3 px-4 rounded-lg transition-colors">
                 إرسال رسالة
               </button>
             </div>

@@ -9,10 +9,11 @@ import Link from 'next/link';
 import { authApi } from '@/lib/api/auth';
 import { useAuthStore } from '@/lib/store/auth-store';
 import Cookies from 'js-cookie';
+import { Alert, Button, Input } from '@/components/ui';
 
 const loginSchema = z.object({
   identifier: z.string().min(1, 'مطلوب إدخال البريد الإلكتروني أو رقم الهاتف'),
-  password: z.string().min(6, 'كلمة المرور يجب أن تكون 6 أحرف على الأقل'),
+  password: z.string().min(1, 'أدخل كلمة المرور'),
 });
 
 type LoginFormValues = z.infer<typeof loginSchema>;
@@ -55,60 +56,37 @@ export default function LoginPage() {
 
   return (
     <div>
-      <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">تسجيل الدخول</h2>
+      <h2 className="text-2xl font-bold text-fg mb-6 text-center">تسجيل الدخول</h2>
       
       {error && (
-        <div className="bg-red-50 text-red-600 p-3 rounded-lg mb-6 text-sm border border-red-100">
+        <Alert tone="danger" className="mb-6">
           {error}
-        </div>
+        </Alert>
       )}
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-        <div>
-          <label htmlFor="identifier" className="block text-sm font-medium text-gray-700 mb-1">البريد الإلكتروني أو رقم الهاتف</label>
-          <input
-            id="identifier"
-            {...register('identifier')}
-            type="text"
-            className={`w-full px-4 py-3 rounded-xl border focus:ring-2 focus:ring-teal-500 focus:outline-none transition-all ${
-              errors.identifier ? 'border-red-500' : 'border-gray-200'
-            }`}
-            placeholder="example@mail.com أو +966..."
-          />
-          {errors.identifier && <p className="text-red-500 text-xs mt-1">{errors.identifier.message}</p>}
-        </div>
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
+        <Input
+          label="البريد الإلكتروني أو رقم الهاتف"
+          {...register('identifier')}
+          type="text"
+          autoComplete="username"
+          dir="ltr"
+          placeholder="example@mail.com أو +966..."
+          error={errors.identifier?.message}
+        />
 
-        <div>
-          <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">كلمة المرور</label>
-          <input
-            id="password"
-            {...register('password')}
-            type="password"
-            className={`w-full px-4 py-3 rounded-xl border focus:ring-2 focus:ring-teal-500 focus:outline-none transition-all ${
-              errors.password ? 'border-red-500' : 'border-gray-200'
-            }`}
-            placeholder="••••••••"
-          />
-          {errors.password && <p className="text-red-500 text-xs mt-1">{errors.password.message}</p>}
-        </div>
+        <Input
+          label="كلمة المرور"
+          {...register('password')}
+          type="password"
+          autoComplete="current-password"
+          placeholder="••••••••"
+          error={errors.password?.message}
+        />
 
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="w-full bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 text-white font-bold py-3 px-4 rounded-xl transition-all disabled:opacity-70 shadow-md"
-        >
-          {isSubmitting ? (
-            <span className="flex items-center justify-center">
-              <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              جاري تسجيل الدخول...
-            </span>
-          ) : (
-            'تسجيل الدخول'
-          )}
-        </button>
+        <Button type="submit" size="lg" fullWidth loading={isSubmitting}>
+          {isSubmitting ? 'جارٍ تسجيل الدخول…' : 'تسجيل الدخول'}
+        </Button>
       </form>
 
       <div className="mt-6 flex items-center justify-between">
@@ -123,7 +101,7 @@ export default function LoginPage() {
           type="button"
           className="flex items-center justify-center w-full px-4 py-2 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
         >
-          <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" className="h-5 w-5 ml-2" />
+          <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" className="h-5 w-5 me-2" />
           <span className="text-gray-700 font-medium">جوجل</span>
         </button>
         <button
@@ -131,14 +109,14 @@ export default function LoginPage() {
           type="button"
           className="flex items-center justify-center w-full px-4 py-2 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
         >
-          <img src="https://www.svgrepo.com/show/475647/facebook-color.svg" alt="Facebook" className="h-5 w-5 ml-2" />
+          <img src="https://www.svgrepo.com/show/475647/facebook-color.svg" alt="Facebook" className="h-5 w-5 me-2" />
           <span className="text-gray-700 font-medium">فيسبوك</span>
         </button>
       </div>
 
       <p className="mt-8 text-center text-sm text-gray-600">
         ليس لديك حساب؟{' '}
-        <Link href="/register" className="font-bold text-teal-600 hover:text-teal-500 transition-colors">
+        <Link href="/register" className="font-bold text-primary hover:text-primary-hover transition-colors">
           إنشاء حساب جديد
         </Link>
       </p>

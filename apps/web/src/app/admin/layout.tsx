@@ -21,7 +21,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   if (!mounted || !isAuthenticated || user?.role !== 'admin') {
     return <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-500"></div>
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
     </div>;
   }
 
@@ -37,8 +37,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       {/* Sidebar */}
       <div className="w-full md:w-64 bg-gray-950 text-white flex flex-col">
         <div className="p-6">
-          <Link href="/admin" className="text-2xl font-bold text-teal-500 tracking-tighter">
-            معرض <span className="text-white text-sm bg-teal-600 px-2 py-0.5 rounded ml-2">الإدارة</span>
+          <Link href="/admin" className="text-2xl font-bold text-primary tracking-tighter">
+            معرض <span className="text-on-primary text-sm bg-primary px-2 py-0.5 rounded me-2">الإدارة</span>
           </Link>
         </div>
         
@@ -52,7 +52,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 href={item.href}
                 className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
                   isActive 
-                    ? 'bg-teal-600/10 text-teal-400' 
+                    ? 'bg-brand-700/10 text-brand-400' 
                     : 'text-gray-400 hover:bg-gray-900 hover:text-white'
                 }`}
               >

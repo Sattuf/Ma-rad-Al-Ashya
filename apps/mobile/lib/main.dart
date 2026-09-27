@@ -48,6 +48,8 @@ class MyApp extends ConsumerWidget {
     return MaterialApp.router(
       title: 'معرض الأشياء',
       theme: AppTheme.lightTheme,
+      darkTheme: AppTheme.darkTheme,
+      themeMode: ThemeMode.system,
       routerConfig: router,
       debugShowCheckedModeBanner: false,
       localizationsDelegates: const [

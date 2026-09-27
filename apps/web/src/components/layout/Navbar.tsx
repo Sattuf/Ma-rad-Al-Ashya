@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { SearchBar } from '@/components/search/SearchBar';
 import { User, PlusCircle, LayoutDashboard } from 'lucide-react';
 import { useAuthStore } from '@/lib/store/auth-store';
+import { ThemeToggle } from '@/components/ui';
 import { useEffect, useState } from 'react';
 
 export function Navbar() {
@@ -15,10 +16,10 @@ export function Navbar() {
   }, []);
 
   return (
-    <header className="sticky top-0 z-40 w-full bg-white border-b border-gray-100 shadow-sm">
+    <header className="sticky top-0 z-40 w-full bg-surface border-b border-gray-100 shadow-sm">
       <div className="container mx-auto px-4 h-20 flex items-center justify-between gap-6">
         <Link href="/" className="flex items-center gap-2 shrink-0">
-          <div className="w-10 h-10 bg-teal-600 text-white rounded-xl flex items-center justify-center font-bold text-xl">
+          <div className="w-10 h-10 bg-primary text-on-primary rounded-xl flex items-center justify-center font-bold text-xl">
             م
           </div>
           <span className="font-bold text-xl text-gray-900 hidden sm:block">معرض الأشياء</span>
@@ -29,10 +30,11 @@ export function Navbar() {
         </div>
         
         <div className="flex items-center gap-3 shrink-0">
+          <ThemeToggle />
           {mounted && user?.role === 'admin' && (
             <Link
               href="/admin"
-              className="hidden sm:flex items-center gap-2 text-teal-600 bg-teal-50 px-4 py-2.5 rounded-full font-medium hover:bg-teal-100 transition-colors mr-2"
+              className="hidden sm:flex items-center gap-2 text-primary bg-primary-soft px-4 py-2.5 rounded-full font-medium hover:bg-primary-soft transition-colors ms-2"
             >
               <LayoutDashboard size={20} />
               <span>لوحة التحكم</span>
@@ -41,7 +43,7 @@ export function Navbar() {
           
           <Link
             href="/listings/new"
-            className="hidden sm:flex items-center gap-2 bg-teal-600 text-white px-4 py-2.5 rounded-full font-medium hover:bg-teal-700 transition-colors shadow-sm"
+            className="hidden sm:flex items-center gap-2 bg-primary text-on-primary px-4 py-2.5 rounded-full font-medium hover:bg-primary transition-colors shadow-sm"
           >
             <PlusCircle size={20} />
             <span>أضف إعلانك</span>

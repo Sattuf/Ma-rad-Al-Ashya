@@ -20,7 +20,7 @@ const categories = [
     id: 'real-estate',
     name: 'عقارات',
     icon: Building2,
-    color: 'bg-blue-50 text-blue-600',
+    color: 'bg-primary-soft text-primary',
     stats: '12,400+ إعلان',
     description: 'شقق، فلل، أراضي، مكاتب للبيع والإيجار',
     href: '/search?category=real-estate'
@@ -56,7 +56,7 @@ const categories = [
     id: 'jobs',
     name: 'وظائف وأعمال',
     icon: Briefcase,
-    color: 'bg-emerald-50 text-emerald-600',
+    color: 'bg-primary-soft text-primary',
     stats: '1,200+ إعلان',
     description: 'وظائف شاغرة، باحثين عن عمل، خدمات أعمال',
     href: '/search?category=jobs'
@@ -65,7 +65,7 @@ const categories = [
     id: 'services',
     name: 'خدمات',
     icon: HeartHandshake,
-    color: 'bg-cyan-50 text-cyan-600',
+    color: 'bg-primary-soft text-primary',
     stats: '4,800+ إعلان',
     description: 'مقاولات، تنظيف، نقل عفش، خدمات عامة',
     href: '/search?category=services'
@@ -106,7 +106,7 @@ export default function ExplorePage() {
             <Link 
               key={category.id} 
               href={category.href}
-              className="group bg-white rounded-2xl p-6 shadow-sm hover:shadow-md transition-all duration-300 border border-gray-100 flex flex-col items-center text-center hover:-translate-y-1"
+              className="group bg-surface rounded-2xl p-6 shadow-sm hover:shadow-md transition-all duration-300 border border-gray-100 flex flex-col items-center text-center hover:-translate-y-1"
             >
               <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-6 transition-transform group-hover:scale-110 ${category.color}`}>
                 <category.icon className="w-8 h-8" />
@@ -122,7 +122,7 @@ export default function ExplorePage() {
           ))}
         </div>
 
-        <div className="mt-16 bg-white rounded-2xl p-8 shadow-sm border border-gray-100 text-center max-w-4xl mx-auto">
+        <div className="mt-16 bg-surface rounded-2xl p-8 shadow-sm border border-gray-100 text-center max-w-4xl mx-auto">
           <h3 className="text-2xl font-bold text-gray-900 mb-4">هل لديك شيء للبيع؟</h3>
           <p className="text-gray-600 mb-8 max-w-2xl mx-auto">
             انضم إلى آلاف البائعين على منصة مراد وابدأ في عرض إعلاناتك للوصول إلى أكبر شريحة من المشترين المهتمين.

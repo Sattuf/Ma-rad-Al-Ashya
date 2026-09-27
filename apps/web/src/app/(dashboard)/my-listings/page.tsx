@@ -36,7 +36,7 @@ export default function MyListingsPage() {
 
   return (
     <div className="container mx-auto px-4 py-8" dir="rtl">
-      <div className="flex justify-between items-center mb-8 text-right">
+      <div className="flex justify-between items-center mb-8 text-start">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">عقاراتي</h1>
           <p className="text-gray-500">إدارة العقارات الخاصة بك</p>
@@ -57,7 +57,7 @@ export default function MyListingsPage() {
           ))}
         </div>
       ) : listings.length === 0 ? (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
+        <div className="bg-surface rounded-xl shadow-sm border border-gray-200 p-12 text-center">
           <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
             <Plus size={32} className="text-gray-400" />
           </div>
@@ -72,16 +72,16 @@ export default function MyListingsPage() {
           </Link>
         </div>
       ) : (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-          <div className="overflow-x-auto font-sans text-right">
-            <table className="w-full text-right" dir="rtl">
+        <div className="bg-surface rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          <div className="overflow-x-auto font-sans text-start">
+            <table className="w-full text-start" dir="rtl">
               <thead className="bg-gray-50 border-b border-gray-200 text-gray-500 text-sm">
                 <tr>
                   <th className="px-6 py-4 font-medium">العقار</th>
                   <th className="px-6 py-4 font-medium">النوع</th>
                   <th className="px-6 py-4 font-medium">السعر</th>
                   <th className="px-6 py-4 font-medium">الحالة</th>
-                  <th className="px-6 py-4 font-medium text-left">الإجراءات</th>
+                  <th className="px-6 py-4 font-medium text-end">الإجراءات</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -149,7 +149,7 @@ export default function MyListingsPage() {
                           </Link>
                           <Link 
                             href={`/listings/${listing.id}/edit`}
-                            className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
+                            className="p-2 text-gray-400 hover:text-primary-hover hover:bg-primary-soft rounded-lg transition-colors"
                             title="تعديل"
                           >
                             <Edit2 size={18} />

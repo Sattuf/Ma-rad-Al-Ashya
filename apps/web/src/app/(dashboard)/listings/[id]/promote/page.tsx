@@ -170,7 +170,7 @@ function MockCheckoutForm({
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="محمد أحمد"
-          className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-right"
+          className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-start"
         />
       </div>
 
@@ -184,9 +184,9 @@ function MockCheckoutForm({
             value={cardNumber}
             onChange={handleCardNumberChange}
             placeholder="4242 4242 4242 4242"
-            className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary ltr text-left"
+            className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary ltr text-end"
           />
-          <CreditCard className="absolute right-3 top-3.5 text-gray-400" size={18} />
+          <CreditCard className="absolute start-3 top-3.5 text-gray-400" size={18} />
         </div>
       </div>
 
@@ -319,7 +319,7 @@ export default function PromoteListingPage({ params }: { params: Promise<{ id: s
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-5xl text-right" dir="rtl">
+    <div className="container mx-auto px-4 py-8 max-w-5xl text-start" dir="rtl">
       {/* Breadcrumb */}
       <div className="mb-6 flex items-center gap-2 text-sm text-gray-500">
         <Link href="/my-listings" className="hover:text-primary transition-colors">عقاراتي</Link>
@@ -328,7 +328,7 @@ export default function PromoteListingPage({ params }: { params: Promise<{ id: s
       </div>
 
       {paymentSuccess ? (
-        <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-12 text-center max-w-xl mx-auto space-y-6 my-12 animate-in fade-in zoom-in-95 duration-300">
+        <div className="bg-surface rounded-2xl shadow-xl border border-gray-100 p-12 text-center max-w-xl mx-auto space-y-6 my-12 animate-in fade-in zoom-in-95 duration-300">
           <div className="w-20 h-20 bg-green-50 rounded-full flex items-center justify-center mx-auto text-green-500 shadow-inner">
             <ShieldCheck size={48} className="animate-bounce" />
           </div>
@@ -367,16 +367,16 @@ export default function PromoteListingPage({ params }: { params: Promise<{ id: s
                     className={`relative rounded-2xl border-2 p-5 flex flex-col justify-between cursor-pointer transition-all hover:shadow-md ${
                       isSelected
                         ? 'border-primary bg-primary/[0.02] shadow-sm shadow-primary/10'
-                        : 'border-gray-200 bg-white hover:border-gray-300'
+                        : 'border-gray-200 bg-surface hover:border-gray-300'
                     }`}
                   >
                     {isFeatured && (
-                      <span className="absolute -top-3 right-4 bg-primary text-white text-xs px-2.5 py-1 rounded-full font-bold shadow-sm">
+                      <span className="absolute -top-3 start-4 bg-primary text-white text-xs px-2.5 py-1 rounded-full font-bold shadow-sm">
                         الأكثر طلباً 🔥
                       </span>
                     )}
                     {isPremium && (
-                      <span className="absolute -top-3 right-4 bg-gradient-to-r from-amber-500 to-yellow-600 text-white text-xs px-2.5 py-1 rounded-full font-bold shadow-sm flex items-center gap-1">
+                      <span className="absolute -top-3 start-4 bg-gradient-to-r from-amber-500 to-yellow-600 text-white text-xs px-2.5 py-1 rounded-full font-bold shadow-sm flex items-center gap-1">
                         <Sparkles size={12} />
                         <span>ذهبي مميز</span>
                       </span>
@@ -411,7 +411,7 @@ export default function PromoteListingPage({ params }: { params: Promise<{ id: s
                         className={`w-full py-2.5 px-4 rounded-xl font-bold text-sm transition-all text-center border ${
                           isSelected
                             ? 'bg-primary border-primary text-white shadow-sm'
-                            : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+                            : 'bg-surface border-gray-200 text-gray-700 hover:bg-gray-50'
                         }`}
                       >
                         {isSelected ? 'تم الاختيار' : 'اختيار الخطة'}
@@ -424,7 +424,7 @@ export default function PromoteListingPage({ params }: { params: Promise<{ id: s
 
             {/* Selected Plan Details or Stripe Element Container */}
             {selectedPlan && (
-              <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm space-y-6">
+              <div className="bg-surface rounded-2xl p-6 border border-gray-100 shadow-sm space-y-6">
                 {!clientSecret ? (
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
@@ -490,7 +490,7 @@ export default function PromoteListingPage({ params }: { params: Promise<{ id: s
 
           {/* Sidebar Info */}
           <div className="space-y-6">
-            <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm space-y-4">
+            <div className="bg-surface rounded-2xl p-6 border border-gray-100 shadow-sm space-y-4">
               <h3 className="font-bold text-gray-900">ملخص العقار</h3>
               <div className="flex gap-3 items-center">
                 <img
@@ -506,22 +506,22 @@ export default function PromoteListingPage({ params }: { params: Promise<{ id: s
               </div>
             </div>
 
-            <div className="bg-teal-50/50 rounded-2xl p-6 border border-teal-100/60 space-y-4 text-teal-950">
-              <h4 className="font-bold flex items-center gap-2 text-teal-800">
+            <div className="bg-brand-50/50 rounded-2xl p-6 border border-brand-100/60 space-y-4 text-brand-950">
+              <h4 className="font-bold flex items-center gap-2 text-primary">
                 <ShieldCheck size={20} />
                 <span>لماذا تروّج عقارك معنا؟</span>
               </h4>
               <ul className="space-y-3 text-sm">
                 <li className="flex gap-2">
-                  <span className="text-teal-600 font-bold">•</span>
+                  <span className="text-primary font-bold">•</span>
                   <span><strong>أسرع في البيع:</strong> العقارات المروجة تباع أسرع بـ 5 مرات مقارنة بالعادية.</span>
                 </li>
                 <li className="flex gap-2">
-                  <span className="text-teal-600 font-bold">•</span>
+                  <span className="text-primary font-bold">•</span>
                   <span><strong>وصول مضاعف:</strong> يظهر إعلانك للآلاف من زوار الصفحة الرئيسية وتصنيفات البحث فوراً.</span>
                 </li>
                 <li className="flex gap-2">
-                  <span className="text-teal-600 font-bold">•</span>
+                  <span className="text-primary font-bold">•</span>
                   <span><strong>تميز عن البقية:</strong> تمنحك شارة الترويج مصداقية إضافية وتلفت الانتباه فوراً.</span>
                 </li>
               </ul>

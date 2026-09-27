@@ -51,7 +51,7 @@ export default function UserProfilePage({ params }: { params: Promise<{ id: stri
   return (
     <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 space-y-8" dir="rtl">
       {/* User Info Header */}
-      <div className="bg-white p-6 shadow sm:rounded-lg flex flex-col sm:flex-row items-center sm:items-start gap-6">
+      <div className="bg-surface p-6 shadow sm:rounded-lg flex flex-col sm:flex-row items-center sm:items-start gap-6">
         <div className="flex-shrink-0">
           {user.avatar ? (
             <img src={user.avatar} alt={user.fullName} className="h-24 w-24 rounded-full object-cover" />
@@ -61,7 +61,7 @@ export default function UserProfilePage({ params }: { params: Promise<{ id: stri
             </div>
           )}
         </div>
-        <div className="flex-1 text-center sm:text-right">
+        <div className="flex-1 text-center sm:text-start">
           <div className="flex items-center gap-2 flex-wrap justify-center sm:justify-start">
             <h1 className="text-2xl font-bold text-gray-900">{user.fullName || user.name}</h1>
             {user.is_identity_verified && (
@@ -91,7 +91,7 @@ export default function UserProfilePage({ params }: { params: Promise<{ id: stri
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Sidebar: Rating Summary */}
         <div className="space-y-8">
-          <div className="bg-white p-6 shadow sm:rounded-lg">
+          <div className="bg-surface p-6 shadow sm:rounded-lg">
             <h2 className="text-lg font-medium text-gray-900 mb-4">ملخص التقييمات</h2>
             <div className="flex items-center gap-4 mb-6">
               <div className="text-4xl font-bold text-gray-900">{avgRating.toFixed(1)}</div>
@@ -108,14 +108,14 @@ export default function UserProfilePage({ params }: { params: Promise<{ id: stri
             <div className="space-y-2">
               {breakdown.map((item: any) => (
                 <div key={item.stars} className="flex items-center gap-2 text-sm text-gray-600">
-                  <div className="w-12 text-right">{item.stars} نجوم</div>
+                  <div className="w-12 text-start">{item.stars} نجوم</div>
                   <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
                     <div 
                       className="h-full bg-yellow-400" 
                       style={{ width: `${ratingCount > 0 ? (item.count / ratingCount) * 100 : 0}%` }}
                     />
                   </div>
-                  <div className="w-8 text-left">{item.count}</div>
+                  <div className="w-8 text-end">{item.count}</div>
                 </div>
               ))}
             </div>
@@ -125,7 +125,7 @@ export default function UserProfilePage({ params }: { params: Promise<{ id: stri
         {/* Main Content: Active Listings & Reviews */}
         <div className="lg:col-span-2 space-y-8">
           {/* Active Listings Grid */}
-          <div className="bg-white p-6 shadow sm:rounded-lg">
+          <div className="bg-surface p-6 shadow sm:rounded-lg">
             <h2 className="text-lg font-medium text-gray-900 mb-4">الإعلانات النشطة ({activeListings.length})</h2>
             {loadingListings ? (
               <div className="text-gray-500 animate-pulse">جاري التحميل...</div>
@@ -143,7 +143,7 @@ export default function UserProfilePage({ params }: { params: Promise<{ id: stri
                     <div className="p-4">
                       <h3 className="text-sm font-medium text-gray-900 truncate">{listing.title}</h3>
                       <p className="mt-1 text-sm text-gray-500 truncate">{listing.location?.city}</p>
-                      <p className="mt-2 text-base font-semibold text-teal-600">{listing.price} ريال</p>
+                      <p className="mt-2 text-base font-semibold text-primary">{listing.price} ريال</p>
                     </div>
                   </Link>
                 ))}
@@ -154,7 +154,7 @@ export default function UserProfilePage({ params }: { params: Promise<{ id: stri
           </div>
 
           {/* Reviews List */}
-          <div className="bg-white p-6 shadow sm:rounded-lg">
+          <div className="bg-surface p-6 shadow sm:rounded-lg">
             <h2 className="text-lg font-medium text-gray-900 mb-4">التقييمات السابقة</h2>
             {loadingReviews ? (
               <div className="text-gray-500 animate-pulse">جاري التحميل...</div>

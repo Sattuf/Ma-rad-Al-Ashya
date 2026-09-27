@@ -116,13 +116,13 @@ export default function EditProfilePage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+        <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-8">
+    <div className="bg-surface rounded-3xl shadow-sm border border-gray-100 p-8">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900">تعديل البيانات</h1>
         <p className="text-gray-500 mt-1">قم بتحديث معلومات حسابك الشخصية</p>
@@ -133,7 +133,7 @@ export default function EditProfilePage() {
         <div className="flex flex-col items-center sm:flex-row sm:items-start gap-6 pb-8 border-b border-gray-100">
           <div {...getRootProps()} className="relative cursor-pointer group">
             <input {...getInputProps()} />
-            <div className={`w-32 h-32 rounded-full border-4 ${isDragActive ? 'border-blue-500' : 'border-gray-50'} bg-gray-100 overflow-hidden relative shadow-sm transition-colors`}>
+            <div className={`w-32 h-32 rounded-full border-4 ${isDragActive ? 'border-primary' : 'border-gray-50'} bg-gray-100 overflow-hidden relative shadow-sm transition-colors`}>
               {avatarPreview ? (
                 <Image
                   src={avatarPreview}
@@ -170,7 +170,7 @@ export default function EditProfilePage() {
             <input
               {...register('name')}
               type="text"
-              className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors outline-none text-gray-900"
+              className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-brand-600/20 focus:border-primary transition-colors outline-none text-gray-900"
               placeholder="أدخل اسمك الكامل"
             />
             {errors.name && <p className="text-red-500 text-sm mt-1">{errors.name.message}</p>}
@@ -181,7 +181,7 @@ export default function EditProfilePage() {
             <input
               {...register('email')}
               type="email"
-              className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors outline-none text-gray-900"
+              className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-brand-600/20 focus:border-primary transition-colors outline-none text-gray-900"
               placeholder="example@domain.com"
               dir="ltr"
             />
@@ -193,7 +193,7 @@ export default function EditProfilePage() {
             <input
               {...register('phone')}
               type="tel"
-              className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors outline-none text-gray-900 text-right"
+              className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-brand-600/20 focus:border-primary transition-colors outline-none text-gray-900 text-start"
               placeholder="+966 5X XXX XXXX"
               dir="ltr"
             />
@@ -205,7 +205,7 @@ export default function EditProfilePage() {
             <input
               {...register('location')}
               type="text"
-              className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors outline-none text-gray-900"
+              className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-brand-600/20 focus:border-primary transition-colors outline-none text-gray-900"
               placeholder="المدينة، الدولة"
             />
             {errors.location && <p className="text-red-500 text-sm mt-1">{errors.location.message}</p>}
@@ -216,7 +216,7 @@ export default function EditProfilePage() {
           <button
             type="submit"
             disabled={saving || uploadingAvatar}
-            className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-8 py-3 rounded-xl hover:opacity-90 transition-opacity font-medium disabled:opacity-70 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 bg-gradient-to-r from-brand-700 to-brand-700 text-white px-8 py-3 rounded-xl hover:opacity-90 transition-opacity font-medium disabled:opacity-70 disabled:cursor-not-allowed"
           >
             {saving ? (
               <Loader2 className="w-5 h-5 animate-spin" />

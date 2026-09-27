@@ -19,7 +19,7 @@ export default function AdminDashboardPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-500"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
     );
   }
@@ -36,9 +36,9 @@ export default function AdminDashboardPage() {
 
   const statCards = [
     { title: 'بلاغات معلقة', value: data.pendingReports, icon: AlertCircle, color: 'text-amber-500', bg: 'bg-amber-500/10' },
-    { title: 'بلاغات اليوم', value: data.reportsToday, icon: Flag, color: 'text-blue-500', bg: 'bg-blue-500/10' },
-    { title: 'تم حلها اليوم', value: data.resolvedToday, icon: CheckCircle, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
-    { title: 'إجمالي البلاغات', value: data.totalReports, icon: BarChart3, color: 'text-teal-500', bg: 'bg-teal-500/10' },
+    { title: 'بلاغات اليوم', value: data.reportsToday, icon: Flag, color: 'text-primary', bg: 'bg-brand-600/10' },
+    { title: 'تم حلها اليوم', value: data.resolvedToday, icon: CheckCircle, color: 'text-primary', bg: 'bg-brand-600/10' },
+    { title: 'إجمالي البلاغات', value: data.totalReports, icon: BarChart3, color: 'text-primary', bg: 'bg-brand-600/10' },
   ];
 
   return (
@@ -68,13 +68,13 @@ export default function AdminDashboardPage() {
         <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden shadow-sm">
           <div className="p-6 border-b border-gray-700 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <Building className="text-teal-500" size={20} />
+              <Building className="text-primary" size={20} />
               <h2 className="text-xl font-bold text-white">الإعلانات الأكثر إبلاغاً</h2>
             </div>
           </div>
           <div className="p-0">
             {data.topReportedListings.length > 0 ? (
-              <table className="w-full text-right">
+              <table className="w-full text-start">
                 <thead className="bg-gray-900/50 text-gray-400 text-sm">
                   <tr>
                     <th className="p-4 font-medium">العنوان</th>
@@ -85,7 +85,7 @@ export default function AdminDashboardPage() {
                   {data.topReportedListings.map(listing => (
                     <tr key={listing.id} className="hover:bg-gray-700/30 transition-colors">
                       <td className="p-4 text-white">
-                        <Link href={`/listings/${listing.id}`} className="hover:text-teal-400 transition-colors line-clamp-1">
+                        <Link href={`/listings/${listing.id}`} className="hover:text-brand-400 transition-colors line-clamp-1">
                           {listing.title}
                         </Link>
                       </td>
@@ -108,13 +108,13 @@ export default function AdminDashboardPage() {
         <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden shadow-sm">
           <div className="p-6 border-b border-gray-700 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <Users className="text-teal-500" size={20} />
+              <Users className="text-primary" size={20} />
               <h2 className="text-xl font-bold text-white">المستخدمين الأكثر إبلاغاً</h2>
             </div>
           </div>
           <div className="p-0">
             {data.topReportedUsers.length > 0 ? (
-              <table className="w-full text-right">
+              <table className="w-full text-start">
                 <thead className="bg-gray-900/50 text-gray-400 text-sm">
                   <tr>
                     <th className="p-4 font-medium">الاسم</th>
@@ -125,7 +125,7 @@ export default function AdminDashboardPage() {
                   {data.topReportedUsers.map(user => (
                     <tr key={user.id} className="hover:bg-gray-700/30 transition-colors">
                       <td className="p-4 text-white">
-                        <Link href={`/users/${user.id}`} className="hover:text-teal-400 transition-colors line-clamp-1">
+                        <Link href={`/users/${user.id}`} className="hover:text-brand-400 transition-colors line-clamp-1">
                           {user.name}
                         </Link>
                       </td>

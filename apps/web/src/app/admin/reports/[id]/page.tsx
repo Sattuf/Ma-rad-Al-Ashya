@@ -62,7 +62,7 @@ export default function AdminReportDetailPage({ params }: { params: Promise<{ id
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-500"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
     );
   }
@@ -71,7 +71,7 @@ export default function AdminReportDetailPage({ params }: { params: Promise<{ id
     return (
       <div className="text-center py-12">
         <p className="text-red-400">لم يتم العثور على البلاغ</p>
-        <Link href="/admin/reports" className="text-teal-500 mt-4 inline-block hover:underline">
+        <Link href="/admin/reports" className="text-primary mt-4 inline-block hover:underline">
           العودة للقائمة
         </Link>
       </div>
@@ -131,12 +131,12 @@ export default function AdminReportDetailPage({ params }: { params: Promise<{ id
               <Link 
                 href={report.targetType === 'listing' ? `/listings/${report.targetId}` : `/users/${report.targetId}`}
                 target="_blank"
-                className="flex items-center justify-between bg-gray-900/50 p-3 rounded-lg border border-gray-700 hover:border-teal-500/50 transition-colors group"
+                className="flex items-center justify-between bg-gray-900/50 p-3 rounded-lg border border-gray-700 hover:border-brand-600/50 transition-colors group"
               >
-                <span className="text-white group-hover:text-teal-400 transition-colors line-clamp-1">
+                <span className="text-white group-hover:text-brand-400 transition-colors line-clamp-1">
                   {report.targetInfo?.title || report.targetInfo?.name || `رقم: ${report.targetId}`}
                 </span>
-                <Eye size={16} className="text-gray-500 group-hover:text-teal-400" />
+                <Eye size={16} className="text-gray-500 group-hover:text-brand-400" />
               </Link>
             </div>
           </div>
@@ -144,13 +144,13 @@ export default function AdminReportDetailPage({ params }: { params: Promise<{ id
 
         {/* Review Action */}
         <div className="bg-gray-800 rounded-xl border border-gray-700 p-6">
-          <div className="flex items-center gap-3 text-teal-500 mb-6">
+          <div className="flex items-center gap-3 text-primary mb-6">
             <FileText size={24} />
             <h2 className="text-xl font-bold text-white">المراجعة والإجراء</h2>
           </div>
 
           {successMsg && (
-            <div className="mb-6 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-lg flex items-center gap-3 text-emerald-500">
+            <div className="mb-6 p-4 bg-brand-600/10 border border-brand-600/20 rounded-lg flex items-center gap-3 text-primary">
               <CheckCircle size={20} />
               <span>{successMsg}</span>
             </div>
@@ -162,7 +162,7 @@ export default function AdminReportDetailPage({ params }: { params: Promise<{ id
               <select 
                 value={status}
                 onChange={(e) => setStatus(e.target.value as any)}
-                className="w-full bg-gray-900 border border-gray-700 text-white rounded-lg px-4 py-2.5 outline-none focus:border-teal-500 transition-colors"
+                className="w-full bg-gray-900 border border-gray-700 text-white rounded-lg px-4 py-2.5 outline-none focus:border-primary transition-colors"
               >
                 <option value="pending">معلق</option>
                 <option value="reviewed">قيد المراجعة</option>
@@ -176,7 +176,7 @@ export default function AdminReportDetailPage({ params }: { params: Promise<{ id
               <select 
                 value={actionTaken}
                 onChange={(e) => setActionTaken(e.target.value as any)}
-                className="w-full bg-gray-900 border border-gray-700 text-white rounded-lg px-4 py-2.5 outline-none focus:border-teal-500 transition-colors"
+                className="w-full bg-gray-900 border border-gray-700 text-white rounded-lg px-4 py-2.5 outline-none focus:border-primary transition-colors"
               >
                 <option value="none">لا يوجد إجراء</option>
                 <option value="warning">توجيه إنذار</option>
@@ -192,7 +192,7 @@ export default function AdminReportDetailPage({ params }: { params: Promise<{ id
                 value={adminNote}
                 onChange={(e) => setAdminNote(e.target.value)}
                 rows={4}
-                className="w-full bg-gray-900 border border-gray-700 text-white rounded-lg px-4 py-3 outline-none focus:border-teal-500 transition-colors resize-none"
+                className="w-full bg-gray-900 border border-gray-700 text-white rounded-lg px-4 py-3 outline-none focus:border-primary transition-colors resize-none"
                 placeholder="أضف ملاحظات تفصيلية عن الإجراء المتخذ..."
               />
             </div>
@@ -200,7 +200,7 @@ export default function AdminReportDetailPage({ params }: { params: Promise<{ id
             <button 
               type="submit"
               disabled={isSubmitting}
-              className="w-full py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-medium transition-colors flex justify-center items-center gap-2 disabled:opacity-70"
+              className="w-full py-3 bg-primary hover:bg-primary text-on-primary rounded-lg font-medium transition-colors flex justify-center items-center gap-2 disabled:opacity-70"
             >
               {isSubmitting ? 'جاري الحفظ...' : 'حفظ الإجراء'}
             </button>

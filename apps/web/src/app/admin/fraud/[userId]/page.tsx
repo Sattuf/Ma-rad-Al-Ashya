@@ -62,7 +62,7 @@ export default function FraudUserDetailsPage() {
     return (
       <div className="p-8 text-center">
         <p className="text-red-400 mb-4">تعذر العثور على بيانات المخاطر لهذا المستخدم</p>
-        <Link href="/admin/fraud" className="text-teal-500 hover:underline">العودة للوحة التحكم</Link>
+        <Link href="/admin/fraud" className="text-primary hover:underline">العودة للوحة التحكم</Link>
       </div>
     );
   }
@@ -87,7 +87,7 @@ export default function FraudUserDetailsPage() {
             <ArrowRight size={20} />
           </button>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <ShieldAlert className="text-teal-500" />
+            <ShieldAlert className="text-primary" />
             تفاصيل المخاطر للمستخدم
           </h1>
         </div>
@@ -144,7 +144,7 @@ export default function FraudUserDetailsPage() {
           >
             <Flag size={18} />
             تحديد كمشبوه (Flag)
-            {actionLoading === 'flag' && <span className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full ml-2"></span>}
+            {actionLoading === 'flag' && <span className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full me-2"></span>}
           </button>
           
           <button
@@ -154,7 +154,7 @@ export default function FraudUserDetailsPage() {
           >
             <AlertTriangle size={18} />
             تقييد المعدل (Rate Limit)
-            {actionLoading === 'rate_limit' && <span className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full ml-2"></span>}
+            {actionLoading === 'rate_limit' && <span className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full me-2"></span>}
           </button>
           
           <button
@@ -164,7 +164,7 @@ export default function FraudUserDetailsPage() {
           >
             <Lock size={18} />
             قفل الحساب (Lock Account)
-            {actionLoading === 'lock' && <span className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full ml-2"></span>}
+            {actionLoading === 'lock' && <span className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full me-2"></span>}
           </button>
         </div>
       </div>

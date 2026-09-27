@@ -159,6 +159,8 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - name: Design tokens are in sync and meet WCAG AA contrast
+        run: node packages/design-tokens/build.mjs --check
       - name: Typecheck
         run: npx tsc --noEmit
         working-directory: apps/web

@@ -32,7 +32,7 @@ export default function RankingDashboard() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="w-8 h-8 text-teal-500 animate-spin" />
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
       </div>
     );
   }
@@ -71,15 +71,15 @@ export default function RankingDashboard() {
       {/* A/B Comparison Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Variant A */}
-        <div className={`relative p-6 rounded-2xl bg-gradient-to-br from-teal-900/40 to-gray-900 border ${winner === 'A' ? 'border-teal-500/50 shadow-[0_0_20px_rgba(20,184,166,0.15)]' : 'border-gray-800'}`}>
+        <div className={`relative p-6 rounded-2xl bg-gradient-to-br from-brand-950/40 to-gray-900 border ${winner === 'A' ? 'border-brand-600/50 shadow-[0_0_20px_rgba(20,184,166,0.15)]' : 'border-gray-800'}`}>
           {winner === 'A' && (
-            <div className="absolute top-4 left-4 flex items-center gap-1.5 text-teal-400 bg-teal-500/10 px-3 py-1 rounded-full text-sm font-medium">
+            <div className="absolute top-4 end-4 flex items-center gap-1.5 text-brand-400 bg-brand-600/10 px-3 py-1 rounded-full text-sm font-medium">
               <Trophy size={16} />
               <span>الأفضل أداءً</span>
             </div>
           )}
           <div className="flex items-center gap-3 mb-6">
-            <div className="p-3 bg-teal-500/20 rounded-xl text-teal-400">
+            <div className="p-3 bg-brand-600/20 rounded-xl text-brand-400">
               <TrendingUp size={24} />
             </div>
             <h2 className="text-xl font-bold text-white">الخوارزمية الذكية (A)</h2>
@@ -100,9 +100,9 @@ export default function RankingDashboard() {
               </div>
               <div className="text-2xl font-bold text-white">{variantA.total_clicks}</div>
             </div>
-            <div className="bg-teal-500/10 p-4 rounded-xl border border-teal-500/20">
-              <div className="text-teal-400 text-sm mb-1">نسبة النقر (CTR)</div>
-              <div className="text-2xl font-bold text-teal-400">{variantA.ctr.toFixed(1)}%</div>
+            <div className="bg-brand-600/10 p-4 rounded-xl border border-brand-600/20">
+              <div className="text-brand-400 text-sm mb-1">نسبة النقر (CTR)</div>
+              <div className="text-2xl font-bold text-brand-400">{variantA.ctr.toFixed(1)}%</div>
             </div>
           </div>
         </div>
@@ -110,7 +110,7 @@ export default function RankingDashboard() {
         {/* Variant B */}
         <div className={`relative p-6 rounded-2xl bg-gradient-to-br from-gray-800/40 to-gray-900 border ${winner === 'B' ? 'border-gray-400/50 shadow-[0_0_20px_rgba(156,163,175,0.15)]' : 'border-gray-800'}`}>
           {winner === 'B' && (
-            <div className="absolute top-4 left-4 flex items-center gap-1.5 text-gray-300 bg-gray-500/10 px-3 py-1 rounded-full text-sm font-medium">
+            <div className="absolute top-4 end-4 flex items-center gap-1.5 text-gray-300 bg-gray-500/10 px-3 py-1 rounded-full text-sm font-medium">
               <Trophy size={16} />
               <span>الأفضل أداءً</span>
             </div>
@@ -185,7 +185,7 @@ export default function RankingDashboard() {
         <div className="lg:col-span-2 bg-gray-900 border border-gray-800 rounded-2xl p-6 overflow-hidden flex flex-col">
           <h3 className="text-lg font-bold text-white mb-6">أفضل العقارات أداءً</h3>
           <div className="overflow-x-auto">
-            <table className="w-full text-right">
+            <table className="w-full text-start">
               <thead>
                 <tr className="border-b border-gray-800 text-gray-400 text-sm">
                   <th className="pb-3 font-medium">العنوان</th>
@@ -198,7 +198,7 @@ export default function RankingDashboard() {
                 {stats.top_listings?.map((listing) => (
                   <tr key={listing.id} className="hover:bg-gray-800/30 transition-colors">
                     <td className="py-3 font-medium text-white">{listing.title}</td>
-                    <td className="py-3 text-teal-400 font-bold">{listing.score.toFixed(1)}</td>
+                    <td className="py-3 text-brand-400 font-bold">{listing.score.toFixed(1)}</td>
                     <td className="py-3">{listing.views}</td>
                     <td className="py-3">{listing.messages}</td>
                   </tr>

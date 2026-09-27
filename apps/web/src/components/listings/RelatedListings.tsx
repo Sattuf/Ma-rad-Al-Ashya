@@ -60,7 +60,7 @@ export default function RelatedListings({ currentListingId, categoryId }: Relate
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
         {listings.map((listing) => (
           <Link key={listing.id} href={`/listings/${listing.id}`} className="group">
-            <div className="bg-white rounded-xl overflow-hidden border border-gray-100 shadow-sm hover:shadow-md transition-all duration-300">
+            <div className="bg-surface rounded-xl overflow-hidden border border-gray-100 shadow-sm hover:shadow-md transition-all duration-300">
               {/* Image */}
               <div className="relative aspect-[4/3] overflow-hidden bg-gray-100">
                 <img 
@@ -68,7 +68,7 @@ export default function RelatedListings({ currentListingId, categoryId }: Relate
                   alt={listing.title}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                 />
-                <div className="absolute top-2 right-2 bg-white/90 backdrop-blur-sm px-2 py-1 rounded text-xs font-bold text-gray-900">
+                <div className="absolute top-2 start-2 bg-surface/90 backdrop-blur-sm px-2 py-1 rounded text-xs font-bold text-gray-900">
                   {listing.timeAgo}
                 </div>
               </div>
@@ -82,7 +82,7 @@ export default function RelatedListings({ currentListingId, categoryId }: Relate
                   {listing.price.toLocaleString()} ريال
                 </div>
                 <div className="flex items-center text-gray-500 text-sm">
-                  <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 me-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                   </svg>

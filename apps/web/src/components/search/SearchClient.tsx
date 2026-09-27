@@ -84,7 +84,7 @@ export function SearchClient() {
         </h1>
         <button
           onClick={() => setIsSidebarOpen(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-gray-700 font-medium"
+          className="flex items-center gap-2 px-4 py-2 bg-surface border border-gray-200 rounded-lg text-gray-700 font-medium"
         >
           <Filter size={18} />
           <span>تصفية</span>
@@ -94,7 +94,7 @@ export function SearchClient() {
       <div className="flex flex-col lg:flex-row gap-8">
         {/* Sidebar Filters */}
         <aside
-          className={`fixed inset-y-0 right-0 z-50 w-80 bg-white shadow-xl lg:shadow-none lg:bg-transparent lg:static lg:block lg:w-1/4 transition-transform duration-300 ${
+          className={`fixed inset-y-0 start-0 z-50 w-80 bg-surface shadow-xl lg:shadow-none lg:bg-transparent lg:static lg:block lg:w-1/4 transition-transform duration-300 ${
             isSidebarOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'
           }`}
         >
@@ -106,12 +106,12 @@ export function SearchClient() {
               </button>
             </div>
 
-            <div className="bg-white lg:border lg:border-gray-200 rounded-2xl lg:p-6 space-y-6">
+            <div className="bg-surface lg:border lg:border-gray-200 rounded-2xl lg:p-6 space-y-6">
               <div className="flex justify-between items-center">
                 <h3 className="font-bold text-lg text-gray-900 hidden lg:block">تصفية النتائج</h3>
                 <button
                   onClick={handleClearFilters}
-                  className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                  className="text-sm text-primary hover:text-primary-hover font-medium"
                 >
                   مسح الكل
                 </button>
@@ -123,19 +123,19 @@ export function SearchClient() {
                 <div className="flex gap-2">
                   <button
                     onClick={() => handleFilterChange('type', '')}
-                    className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${!filters.type ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                    className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${!filters.type ? 'bg-primary text-on-primary' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
                   >
                     الكل
                   </button>
                   <button
                     onClick={() => handleFilterChange('type', 'sale')}
-                    className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${filters.type === 'sale' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                    className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${filters.type === 'sale' ? 'bg-primary text-on-primary' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
                   >
                     للبيع
                   </button>
                   <button
                     onClick={() => handleFilterChange('type', 'rent')}
-                    className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${filters.type === 'rent' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                    className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${filters.type === 'rent' ? 'bg-primary text-on-primary' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
                   >
                     للإيجار
                   </button>
@@ -148,7 +148,7 @@ export function SearchClient() {
                 <select
                   value={filters.propertyType || ''}
                   onChange={(e) => handleFilterChange('propertyType', e.target.value)}
-                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700"
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-focus-ring text-gray-700"
                 >
                   <option value="">الكل</option>
                   <option value="apartment">شقة</option>
@@ -167,7 +167,7 @@ export function SearchClient() {
                   value={filters.city || ''}
                   onChange={(e) => handleFilterChange('city', e.target.value)}
                   placeholder="ابحث عن مدينة..."
-                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700"
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-focus-ring text-gray-700"
                 />
               </div>
 
@@ -180,7 +180,7 @@ export function SearchClient() {
                     value={filters.minPrice || ''}
                     onChange={(e) => handleFilterChange('minPrice', e.target.value ? Number(e.target.value) : undefined)}
                     placeholder="من"
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700"
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-focus-ring text-gray-700"
                   />
                   <span className="text-gray-400">-</span>
                   <input
@@ -188,7 +188,7 @@ export function SearchClient() {
                     value={filters.maxPrice || ''}
                     onChange={(e) => handleFilterChange('maxPrice', e.target.value ? Number(e.target.value) : undefined)}
                     placeholder="إلى"
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700"
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-focus-ring text-gray-700"
                   />
                 </div>
               </div>
@@ -203,7 +203,7 @@ export function SearchClient() {
                       onClick={() => handleFilterChange('bedrooms', filters.bedrooms === num ? undefined : num)}
                       className={`w-10 h-10 rounded-xl text-sm font-medium transition-colors ${
                         filters.bedrooms === num
-                          ? 'bg-blue-600 text-white'
+                          ? 'bg-primary text-on-primary'
                           : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                       }`}
                     >
@@ -216,7 +216,7 @@ export function SearchClient() {
               {/* Apply Button (Mobile Only) */}
               <button
                 onClick={() => setIsSidebarOpen(false)}
-                className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold mt-6 lg:hidden"
+                className="w-full py-3 bg-primary text-on-primary rounded-xl font-bold mt-6 lg:hidden"
               >
                 تطبيق الفلاتر
               </button>
@@ -244,7 +244,7 @@ export function SearchClient() {
           </div>
 
           {isLoading ? (
-            <div className="flex flex-col items-center justify-center py-20 text-blue-600">
+            <div className="flex flex-col items-center justify-center py-20 text-primary">
               <Loader2 className="animate-spin w-10 h-10 mb-4" />
               <p className="text-gray-600 font-medium">جاري تحميل النتائج...</p>
             </div>
@@ -263,7 +263,7 @@ export function SearchClient() {
               ))}
             </div>
           ) : (
-            <div className="bg-white border border-gray-200 rounded-2xl p-12 text-center">
+            <div className="bg-surface border border-gray-200 rounded-2xl p-12 text-center">
               <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Filter size={32} className="text-gray-400" />
               </div>
@@ -271,7 +271,7 @@ export function SearchClient() {
               <p className="text-gray-500 mb-6">لم نعثر على أي عقارات تطابق خيارات البحث الخاصة بك.</p>
               <button
                 onClick={handleClearFilters}
-                className="px-6 py-2.5 bg-blue-50 text-blue-700 font-bold rounded-xl hover:bg-blue-100 transition-colors"
+                className="px-6 py-2.5 bg-primary-soft text-primary font-bold rounded-xl hover:bg-primary-soft transition-colors"
               >
                 مسح الفلاتر والمحاولة مرة أخرى
               </button>

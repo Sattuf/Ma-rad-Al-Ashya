@@ -12,7 +12,7 @@ export function ConversationList({ selectedId, onSelect }: ConversationListProps
   const { conversations, isLoadingMore, isReachingEnd, setSize, size } = useConversations();
 
   return (
-    <div className="flex flex-col h-full border-l border-gray-200 bg-white" dir="rtl">
+    <div className="flex flex-col h-full border-e border-gray-200 bg-surface" dir="rtl">
       <div className="p-4 border-b border-gray-200">
         <h2 className="text-xl font-bold">الرسائل</h2>
       </div>
@@ -22,7 +22,7 @@ export function ConversationList({ selectedId, onSelect }: ConversationListProps
             key={conv.id}
             onClick={() => onSelect(conv.id)}
             className={`p-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors ${
-              selectedId === conv.id ? 'bg-blue-50' : ''
+              selectedId === conv.id ? 'bg-primary-soft' : ''
             }`}
           >
             <div className="flex items-center justify-between">
@@ -40,7 +40,7 @@ export function ConversationList({ selectedId, onSelect }: ConversationListProps
                 </div>
               </div>
               {conv.unreadCount > 0 && (
-                <div className="w-5 h-5 bg-blue-600 text-white text-xs rounded-full flex items-center justify-center">
+                <div className="w-5 h-5 bg-primary text-on-primary text-xs rounded-full flex items-center justify-center">
                   {conv.unreadCount}
                 </div>
               )}
@@ -52,7 +52,7 @@ export function ConversationList({ selectedId, onSelect }: ConversationListProps
           <button
             onClick={() => setSize(size + 1)}
             disabled={isLoadingMore}
-            className="w-full p-4 text-sm text-blue-600 hover:bg-gray-50 disabled:opacity-50"
+            className="w-full p-4 text-sm text-primary hover:bg-gray-50 disabled:opacity-50"
           >
             {isLoadingMore ? 'جاري التحميل...' : 'تحميل المزيد'}
           </button>

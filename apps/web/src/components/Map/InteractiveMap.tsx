@@ -62,7 +62,7 @@ export default function InteractiveMap({ listings }: InteractiveMapProps) {
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000]">
           <button
             onClick={handleSearchArea}
-            className="bg-white px-6 py-2 rounded-full shadow-md text-sm font-medium text-gray-800 hover:bg-gray-50 transition-colors border border-gray-200"
+            className="bg-surface px-6 py-2 rounded-full shadow-md text-sm font-medium text-gray-800 hover:bg-gray-50 transition-colors border border-gray-200"
           >
             البحث في هذه المنطقة
           </button>
@@ -92,7 +92,7 @@ export default function InteractiveMap({ listings }: InteractiveMapProps) {
                 icon={customIcon}
               >
                 <Popup>
-                  <div className="p-1 w-48 text-right" dir="rtl">
+                  <div className="p-1 w-48 text-start" dir="rtl">
                     <Link href={`/listings/${listing.id}`} className="block">
                       {listing.images && listing.images[0] && (
                         <div className="w-full h-24 mb-2 rounded overflow-hidden">

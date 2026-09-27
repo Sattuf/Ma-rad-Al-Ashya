@@ -12,9 +12,9 @@ const getStatusBadge = (status: string) => {
     case 'pending_seller':
       return <span className="px-2.5 py-1 text-xs font-medium bg-amber-100 text-amber-800 rounded-full">بانتظار البائع</span>;
     case 'pending_buyer':
-      return <span className="px-2.5 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">بانتظار المشتري</span>;
+      return <span className="px-2.5 py-1 text-xs font-medium bg-primary-soft text-primary rounded-full">بانتظار المشتري</span>;
     case 'completed':
-      return <span className="px-2.5 py-1 text-xs font-medium bg-emerald-100 text-emerald-800 rounded-full">مكتمل</span>;
+      return <span className="px-2.5 py-1 text-xs font-medium bg-primary-soft text-primary rounded-full">مكتمل</span>;
     case 'cancelled':
       return <span className="px-2.5 py-1 text-xs font-medium bg-red-100 text-red-800 rounded-full">ملغي</span>;
     default:
@@ -41,7 +41,7 @@ export default function TransactionsDashboard() {
             onClick={() => { setRole('buyer'); setPage(1); }}
             className={`${
               role === 'buyer'
-                ? 'border-emerald-500 text-emerald-600'
+                ? 'border-primary text-primary'
                 : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
             } flex whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium items-center gap-2`}
           >
@@ -52,7 +52,7 @@ export default function TransactionsDashboard() {
             onClick={() => { setRole('seller'); setPage(1); }}
             className={`${
               role === 'seller'
-                ? 'border-emerald-500 text-emerald-600'
+                ? 'border-primary text-primary'
                 : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
             } flex whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium items-center gap-2`}
           >
@@ -62,7 +62,7 @@ export default function TransactionsDashboard() {
         </nav>
       </div>
 
-      <div className="bg-white shadow sm:rounded-md">
+      <div className="bg-surface shadow sm:rounded-md">
         {isLoading ? (
           <div className="p-8 text-center text-gray-500 animate-pulse">جاري التحميل...</div>
         ) : transactions && transactions.length > 0 ? (
@@ -87,7 +87,7 @@ export default function TransactionsDashboard() {
                       </div>
                       <div className="min-w-0 flex-1 px-4 md:grid md:grid-cols-2 md:gap-4">
                         <div>
-                          <p className="text-sm font-medium text-emerald-600 truncate">{transaction.listing?.title || 'إعلان غير متاح'}</p>
+                          <p className="text-sm font-medium text-primary truncate">{transaction.listing?.title || 'إعلان غير متاح'}</p>
                           <p className="mt-2 flex items-center text-sm text-gray-500">
                             <span className="truncate">
                               {role === 'buyer' ? 'البائع: ' : 'المشتري: '}
@@ -110,7 +110,7 @@ export default function TransactionsDashboard() {
                         </div>
                       </div>
                     </div>
-                    <div className="flex flex-col items-end gap-2 ml-5">
+                    <div className="flex flex-col items-end gap-2 me-5">
                       {getStatusBadge(transaction.status)}
                       <ChevronLeft className="h-5 w-5 text-gray-400" aria-hidden="true" />
                     </div>

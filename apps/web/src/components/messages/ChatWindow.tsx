@@ -187,8 +187,8 @@ export function ChatWindow({ conversationId, currentUserId }: ChatWindowProps) {
                   <div
                     className={`px-4 py-2 rounded-2xl ${
                       isMine
-                        ? 'bg-blue-600 text-white rounded-tl-none'
-                        : 'bg-white text-gray-900 border border-gray-200 rounded-tr-none'
+                        ? 'bg-primary text-on-primary rounded-te-none'
+                        : 'bg-surface text-gray-900 border border-gray-200 rounded-ts-none'
                     }`}
                   >
                     {msg.type === 'image' && msg.imageUrl ? (
@@ -199,10 +199,10 @@ export function ChatWindow({ conversationId, currentUserId }: ChatWindowProps) {
                     
                     {msg.content && <p className="whitespace-pre-wrap break-words">{msg.content}</p>}
                     
-                    <div className={`flex items-center gap-1 mt-1 text-[10px] ${isMine ? 'text-blue-100' : 'text-gray-400'}`}>
+                    <div className={`flex items-center gap-1 mt-1 text-[10px] ${isMine ? 'text-brand-100' : 'text-gray-400'}`}>
                       <span>{new Date(msg.createdAt).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })}</span>
                       {isMine && (
-                        <span className="ml-1 tracking-tighter">
+                        <span className="me-1 tracking-tighter">
                           {msg.readAt ? '✓✓' : '✓'}
                         </span>
                       )}
@@ -224,7 +224,7 @@ export function ChatWindow({ conversationId, currentUserId }: ChatWindowProps) {
           })}
           
           {typingUsers.size > 0 && (
-            <div className="self-start bg-white border border-gray-200 px-4 py-2 rounded-2xl rounded-tr-none text-gray-500 text-sm flex items-center gap-1">
+            <div className="self-start bg-surface border border-gray-200 px-4 py-2 rounded-2xl rounded-ts-none text-gray-500 text-sm flex items-center gap-1">
               <span className="animate-bounce">.</span>
               <span className="animate-bounce" style={{ animationDelay: '0.2s' }}>.</span>
               <span className="animate-bounce" style={{ animationDelay: '0.4s' }}>.</span>
@@ -239,7 +239,7 @@ export function ChatWindow({ conversationId, currentUserId }: ChatWindowProps) {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4">
           <button
             onClick={() => setFullscreenImage(null)}
-            className="absolute top-4 right-4 text-white hover:text-gray-300 p-2 rounded-full hover:bg-white/10 transition-colors"
+            className="absolute top-4 start-4 text-white hover:text-gray-300 p-2 rounded-full hover:bg-surface/10 transition-colors"
           >
             <X size={24} />
           </button>

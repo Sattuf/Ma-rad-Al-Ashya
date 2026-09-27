@@ -97,7 +97,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
       </div>
 
       {/* Stepper */}
-      <div className="bg-white p-6 shadow sm:rounded-lg">
+      <div className="bg-surface p-6 shadow sm:rounded-lg">
         {transaction.status === 'cancelled' ? (
           <div className="text-center text-red-600 font-bold p-4 bg-red-50 rounded-md flex items-center justify-center gap-2">
             <AlertCircle className="w-5 h-5" />
@@ -113,13 +113,13 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                 const isActive = stepIdx === currentStepIndex;
                 const isCompleted = stepIdx < currentStepIndex || transaction.status === 'completed';
                 return (
-                  <div key={step.id} className="flex flex-col items-center bg-white px-2">
+                  <div key={step.id} className="flex flex-col items-center bg-surface px-2">
                     <span className={`h-8 w-8 rounded-full flex items-center justify-center ring-4 ring-white ${
-                      isCompleted ? 'bg-emerald-600 text-white' : isActive ? 'bg-teal-600 text-white ring-teal-100' : 'bg-gray-200 text-gray-500'
+                      isCompleted ? 'bg-primary text-on-primary' : isActive ? 'bg-primary text-on-primary ring-brand-100' : 'bg-gray-200 text-gray-500'
                     }`}>
                       {isCompleted ? <Check className="w-5 h-5" /> : <span>{stepIdx + 1}</span>}
                     </span>
-                    <span className={`mt-2 text-sm font-medium ${isActive ? 'text-teal-600' : isCompleted ? 'text-emerald-600' : 'text-gray-500'}`}>
+                    <span className={`mt-2 text-sm font-medium ${isActive ? 'text-primary' : isCompleted ? 'text-primary' : 'text-gray-500'}`}>
                       {step.title}
                     </span>
                   </div>
@@ -131,7 +131,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
       </div>
 
       {/* Details */}
-      <div className="bg-white shadow sm:rounded-lg overflow-hidden">
+      <div className="bg-surface shadow sm:rounded-lg overflow-hidden">
         <div className="px-4 py-5 sm:px-6 flex items-center gap-4">
           {transaction.listing?.images?.[0] && (
              <img src={transaction.listing.images[0]} alt="" className="w-16 h-16 rounded object-cover" />
@@ -162,9 +162,9 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
             <button
               onClick={handleCancel}
               disabled={isCancelling}
-              className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+              className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-surface hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
             >
-              <X className="mr-2 -ml-1 h-5 w-5 text-gray-400" aria-hidden="true" />
+              <X className="ms-2 -me-1 h-5 w-5 text-gray-400" aria-hidden="true" />
               إلغاء المعاملة
             </button>
           )}
@@ -172,9 +172,9 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
             <button
               onClick={handleConfirm}
               disabled={isConfirming}
-              className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-teal-600 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500"
+              className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-on-primary bg-primary hover:bg-primary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-focus-ring"
             >
-              <Check className="mr-2 -ml-1 h-5 w-5" aria-hidden="true" />
+              <Check className="ms-2 -me-1 h-5 w-5" aria-hidden="true" />
               تأكيد المعاملة
             </button>
           )}
@@ -183,7 +183,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
 
       {/* Review Form */}
       {showReviewForm && (
-        <div className="bg-white shadow sm:rounded-lg p-6">
+        <div className="bg-surface shadow sm:rounded-lg p-6">
           <h3 className="text-lg font-medium text-gray-900 mb-4">تقييم تجربتك</h3>
           <form onSubmit={submitReview} className="space-y-4">
             <div>
@@ -216,13 +216,13 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
               <textarea
                 id="comment"
                 rows={3}
-                className="shadow-sm focus:ring-teal-500 focus:border-teal-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                className="shadow-sm focus:ring-focus-ring focus:border-primary block w-full sm:text-sm border-gray-300 rounded-md"
                 placeholder="كيف كانت تجربتك؟"
                 maxLength={500}
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
               />
-              <p className="mt-2 text-sm text-gray-500 text-left" dir="ltr">
+              <p className="mt-2 text-sm text-gray-500 text-end" dir="ltr">
                 {comment.length} / 500
               </p>
             </div>
@@ -230,7 +230,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
             <button
               type="submit"
               disabled={isSubmittingReview}
-              className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 w-full sm:w-auto"
+              className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-on-primary bg-primary hover:bg-primary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-focus-ring w-full sm:w-auto"
             >
               {isSubmittingReview ? 'جاري الإرسال...' : 'إرسال التقييم'}
             </button>

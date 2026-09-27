@@ -22,7 +22,7 @@ function SearchPageContent() {
 export default function SearchPage() {
   return (
     <Suspense fallback={
-      <div className="flex h-[50vh] items-center justify-center text-blue-600">
+      <div className="flex h-[50vh] items-center justify-center text-primary">
         <Loader2 className="animate-spin w-12 h-12" />
       </div>
     }>

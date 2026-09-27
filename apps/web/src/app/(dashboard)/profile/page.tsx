@@ -43,7 +43,7 @@ export default function ProfilePage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+        <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
       </div>
     );
   }
@@ -57,15 +57,15 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+    <div className="bg-surface rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
       {/* Header Cover */}
-      <div className="h-32 bg-gradient-to-r from-blue-600 to-indigo-600"></div>
+      <div className="h-32 bg-gradient-to-r from-brand-700 to-brand-700"></div>
       
       <div className="px-8 pb-8 relative">
         {/* Avatar & Action */}
         <div className="flex justify-between items-end -mt-12 mb-8">
           <div className="relative">
-            <div className="w-24 h-24 rounded-full border-4 border-white bg-white overflow-hidden shadow-md">
+            <div className="w-24 h-24 rounded-full border-4 border-white bg-surface overflow-hidden shadow-md">
               <Image
                 src={profile.avatar || '/placeholder-avatar.png'}
                 alt={profile.name}
@@ -80,7 +80,7 @@ export default function ProfilePage() {
           </div>
           <Link
             href="/profile/edit"
-            className="flex items-center gap-2 bg-blue-50 text-blue-700 px-4 py-2 rounded-xl hover:bg-blue-100 transition-colors font-medium text-sm"
+            className="flex items-center gap-2 bg-primary-soft text-primary px-4 py-2 rounded-xl hover:bg-primary-soft transition-colors font-medium text-sm"
           >
             <Edit2 className="w-4 h-4" />
             تعديل
@@ -111,7 +111,7 @@ export default function ProfilePage() {
                 <Star key={star} className={`w-4 h-4 ${star <= Math.round(profile.rating || 0) ? 'fill-current' : 'text-gray-300'}`} />
               ))}
             </div>
-            <span className="font-medium text-gray-900 ml-1">{(profile.rating || 0).toFixed(1)}</span>
+            <span className="font-medium text-gray-900 me-1">{(profile.rating || 0).toFixed(1)}</span>
             <span className="text-gray-500 text-sm">({profile.ratingCount || 0} تقييم)</span>
           </div>
         </div>
@@ -119,7 +119,7 @@ export default function ProfilePage() {
         {/* Details Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="flex items-start gap-4 p-4 rounded-2xl bg-gray-50/50 border border-gray-100">
-            <div className="p-3 bg-white rounded-xl shadow-sm text-blue-600">
+            <div className="p-3 bg-surface rounded-xl shadow-sm text-primary">
               <Mail className="w-5 h-5" />
             </div>
             <div>
@@ -129,7 +129,7 @@ export default function ProfilePage() {
           </div>
 
           <div className="flex items-start gap-4 p-4 rounded-2xl bg-gray-50/50 border border-gray-100">
-            <div className="p-3 bg-white rounded-xl shadow-sm text-blue-600">
+            <div className="p-3 bg-surface rounded-xl shadow-sm text-primary">
               <Phone className="w-5 h-5" />
             </div>
             <div>
@@ -139,7 +139,7 @@ export default function ProfilePage() {
           </div>
 
           <div className="flex items-start gap-4 p-4 rounded-2xl bg-gray-50/50 border border-gray-100">
-            <div className="p-3 bg-white rounded-xl shadow-sm text-blue-600">
+            <div className="p-3 bg-surface rounded-xl shadow-sm text-primary">
               <MapPin className="w-5 h-5" />
             </div>
             <div>
@@ -149,7 +149,7 @@ export default function ProfilePage() {
           </div>
 
           <div className="flex items-start gap-4 p-4 rounded-2xl bg-gray-50/50 border border-gray-100">
-            <div className="p-3 bg-white rounded-xl shadow-sm text-blue-600">
+            <div className="p-3 bg-surface rounded-xl shadow-sm text-primary">
               <Calendar className="w-5 h-5" />
             </div>
             <div>

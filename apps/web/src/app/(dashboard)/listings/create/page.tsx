@@ -62,7 +62,7 @@ function SortableItem({ id, url, onRemove }: { id: string; url: string; onRemove
           e.stopPropagation();
           onRemove(id);
         }}
-        className="absolute top-2 right-2 p-1 bg-white/80 hover:bg-red-500 hover:text-white rounded-full transition-colors opacity-0 group-hover:opacity-100"
+        className="absolute top-2 start-2 p-1 bg-surface/80 hover:bg-red-500 hover:text-white rounded-full transition-colors opacity-0 group-hover:opacity-100"
       >
         <X size={16} />
       </button>
@@ -160,9 +160,9 @@ export default function CreateListingPage() {
         <h1 className="text-2xl font-bold text-gray-900 mb-6">إضافة عقار جديد</h1>
         {/* Stepper */}
         <div className="flex items-center justify-between relative">
-          <div className="absolute left-0 right-0 top-1/2 h-0.5 bg-gray-200 -z-10" />
+          <div className="absolute end-0 start-0 top-1/2 h-0.5 bg-gray-200 -z-10" />
           {STEPS.map((step, idx) => (
-            <div key={step.id} className="flex flex-col items-center bg-white px-2">
+            <div key={step.id} className="flex flex-col items-center bg-surface px-2">
               <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm mb-2 transition-colors ${
                 currentStep > step.id ? 'bg-primary text-white' :
                 currentStep === step.id ? 'bg-primary text-white ring-4 ring-primary/20' :
@@ -178,7 +178,7 @@ export default function CreateListingPage() {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 md:p-8">
+      <div className="bg-surface rounded-xl shadow-sm border border-gray-200 p-6 md:p-8">
         <form onSubmit={handleSubmit(onSubmit)}>
           {currentStep === 1 && (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
@@ -348,7 +348,7 @@ export default function CreateListingPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">حدد الموقع على الخريطة</label>
                 <Map position={location} onPositionChange={(pos) => setLocation(prev => ({ ...prev, ...pos }))} />
                 <p className="text-sm text-gray-500 mt-2 flex items-center">
-                  <MapPin size={16} className="ml-1" />
+                  <MapPin size={16} className="me-1" />
                   انقر على الخريطة لتحديد موقع العقار بدقة
                 </p>
               </div>

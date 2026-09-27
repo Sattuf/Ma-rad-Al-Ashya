@@ -59,7 +59,7 @@ export default function MapPage() {
   return (
     <div className="flex flex-col md:flex-row h-[calc(100vh-80px)] w-full overflow-hidden" dir="rtl">
       {/* Sidebar Filters */}
-      <div className="w-full md:w-80 lg:w-96 bg-white border-l border-gray-200 shadow-lg z-10 flex flex-col h-full overflow-y-auto">
+      <div className="w-full md:w-80 lg:w-96 bg-surface border-e border-gray-200 shadow-lg z-10 flex flex-col h-full overflow-y-auto">
         <div className="p-6">
           <h1 className="text-2xl font-bold text-gray-900 mb-6">الخريطة</h1>
           
@@ -77,7 +77,7 @@ export default function MapPage() {
             {/* Categories */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">القسم</label>
-              <select className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none bg-white">
+              <select className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none bg-surface">
                 <option value="">جميع الأقسام</option>
                 <option value="real-estate">عقارات</option>
                 <option value="vehicles">سيارات</option>
@@ -114,7 +114,7 @@ export default function MapPage() {
           <h2 className="text-sm font-bold text-gray-500 mb-4 px-2">النتائج ({dummyMapListings.length})</h2>
           <div className="space-y-4">
             {dummyMapListings.map(listing => (
-              <div key={listing.id} className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex gap-3 hover:shadow-md transition-shadow cursor-pointer">
+              <div key={listing.id} className="bg-surface p-3 rounded-xl shadow-sm border border-gray-100 flex gap-3 hover:shadow-md transition-shadow cursor-pointer">
                 <div className="w-20 h-20 bg-gray-200 rounded-lg overflow-hidden shrink-0">
                   {listing.images && listing.images[0] && (
                     <img src={listing.images[0]} alt={listing.title} className="w-full h-full object-cover" />

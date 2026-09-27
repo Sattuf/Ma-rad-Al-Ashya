@@ -13,7 +13,7 @@ export default function MessagesPage() {
   const currentUserId = user?.id || '';
 
   return (
-    <div className="flex h-[calc(100vh-64px)] overflow-hidden bg-white" dir="rtl">
+    <div className="flex h-[calc(100vh-64px)] overflow-hidden bg-surface" dir="rtl">
       {/* Sidebar for Conversations */}
       <div 
         className={`${
@@ -34,10 +34,10 @@ export default function MessagesPage() {
       >
         {selectedConversationId ? (
           <>
-            <div className="md:hidden p-4 border-b border-gray-200 bg-white flex items-center">
+            <div className="md:hidden p-4 border-b border-gray-200 bg-surface flex items-center">
               <button 
                 onClick={() => setSelectedConversationId(null)}
-                className="text-blue-600 font-medium"
+                className="text-primary font-medium"
               >
                 &rarr; العودة للرسائل
               </button>

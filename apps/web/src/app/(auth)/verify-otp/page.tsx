@@ -97,8 +97,8 @@ function VerifyOtpContent() {
 
   return (
     <div className="flex flex-col items-center">
-      <div className="w-16 h-16 bg-teal-50 rounded-full flex items-center justify-center mb-6">
-        <svg className="w-8 h-8 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div className="w-16 h-16 bg-primary-soft rounded-full flex items-center justify-center mb-6">
+        <svg className="w-8 h-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
         </svg>
       </div>
@@ -121,7 +121,7 @@ function VerifyOtpContent() {
             key={index}
             ref={index === activeOtpIndex ? inputRef : null}
             type="text"
-            className="w-12 h-14 border-2 rounded-xl text-center text-xl font-semibold text-gray-800 focus:border-teal-500 focus:outline-none transition-colors"
+            className="w-12 h-14 border-2 rounded-xl text-center text-xl font-semibold text-gray-800 focus:border-primary focus:outline-none transition-colors"
             value={otp[index]}
             onChange={(e) => handleOnChange(e, index)}
             onKeyDown={(e) => handleOnKeyDown(e, index)}
@@ -132,8 +132,8 @@ function VerifyOtpContent() {
 
       <div className="text-center">
         {isSubmitting ? (
-          <div className="text-teal-600 flex items-center justify-center text-sm font-medium">
-            <svg className="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <div className="text-primary flex items-center justify-center text-sm font-medium">
+            <svg className="animate-spin -me-1 ms-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
             </svg>
@@ -144,7 +144,7 @@ function VerifyOtpContent() {
             onClick={handleResend}
             disabled={timeLeft > 0}
             className={`text-sm font-medium transition-colors ${
-              timeLeft > 0 ? 'text-gray-400 cursor-not-allowed' : 'text-teal-600 hover:text-teal-700'
+              timeLeft > 0 ? 'text-gray-400 cursor-not-allowed' : 'text-primary hover:text-primary-hover'
             }`}
           >
             {timeLeft > 0 ? `إعادة إرسال الرمز خلال ${timeLeft} ثانية` : 'لم يصلك الرمز؟ إعادة الإرسال'}
