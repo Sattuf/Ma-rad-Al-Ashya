@@ -1,203 +1,191 @@
 'use client';
 
-import { use, useState, useEffect } from 'react';
+import { use, useState } from 'react';
+import useSWR from 'swr';
+import { formatDistanceToNow } from 'date-fns';
+import { ar } from 'date-fns/locale';
+import { BadgeCheck, Calendar, Flag, MapPin, Star, User } from 'lucide-react';
 import { useUserReviews } from '@/hooks/useUserReviews';
 import { useListings } from '@/hooks/useListings';
 import { userApi } from '@/lib/api/users';
-import { Star, User, Calendar, MapPin, Flag } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
-import { ar } from 'date-fns/locale';
-import Link from 'next/link';
 import { ReportDialog } from '@/components/moderation/ReportDialog';
+import { ListingCard } from '@/components/ListingCard/ListingCard';
+import { Badge, Card, EmptyState, ErrorState, Skeleton } from '@/components/ui';
+import type { RatingSummary } from '@/lib/api/transactions';
+
+const since = (date?: string) => (date ? formatDistanceToNow(new Date(date), { addSuffix: true, locale: ar }) : null);
+
+function Stars({ value, size = 'h-4 w-4' }: { value: number; size?: string }) {
+  return (
+    <span className="flex text-warning" aria-label={`${value.toFixed(1)} من 5`}>
+      {[1, 2, 3, 4, 5].map((s) => (
+        <Star key={s} aria-hidden className={`${size} ${s <= Math.round(value) ? 'fill-current' : 'text-line-strong'}`} />
+      ))}
+    </span>
+  );
+}
+
+function RatingBreakdown({ summary }: { summary: RatingSummary }) {
+  const total = summary.total_reviews;
+  const rows = [5, 4, 3, 2, 1].map((stars) => ({
+    stars,
+    count: Number(summary[`rating_${stars}_count` as keyof RatingSummary] ?? 0),
+  }));
+  return (
+    <ul className="flex flex-col gap-2">
+      {rows.map(({ stars, count }) => (
+        <li key={stars} className="flex items-center gap-2 text-sm text-fg-muted">
+          <span className="w-14">{stars} نجوم</span>
+          <span className="h-2 flex-1 overflow-hidden rounded-pill bg-surface-muted">
+            <span className="block h-full bg-warning" style={{ width: `${total ? (count / total) * 100 : 0}%` }} />
+          </span>
+          <span className="w-8 text-end">{count.toLocaleString('ar')}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 export default function UserProfilePage({ params }: { params: Promise<{ id: string }> }) {
-  const resolvedParams = use(params);
-  const [user, setUser] = useState<any>(null);
-  const [loadingUser, setLoadingUser] = useState(true);
-  const [isReportOpen, setIsReportOpen] = useState(false);
+  const { id } = use(params);
+  const [reportOpen, setReportOpen] = useState(false);
 
-  const { reviews, pagination, isLoading: loadingReviews } = useUserReviews(resolvedParams.id, 1, 10);
-  const { listings, isLoading: loadingListings } = useListings({ userId: resolvedParams.id });
+  const { data: user, error: userError, isLoading: userLoading, mutate: retryUser } = useSWR(['/users', id], () => userApi.getUser(id));
+  const { reviews, summary, isLoading: reviewsLoading, isError: reviewsError, mutate: retryReviews } = useUserReviews(id, 1, 10);
+  const { listings, isLoading: listingsLoading } = useListings({ userId: id });
+  const activeListings = listings.filter((l) => l.status === 'active');
 
-  useEffect(() => {
-    userApi.getUser(resolvedParams.id)
-      .then(data => {
-        setUser(data);
-      })
-      .catch(err => {
-        console.error(err);
-      })
-      .finally(() => setLoadingUser(false));
-  }, [resolvedParams.id]);
+  if (userLoading) {
+    return (
+      <main className="container mx-auto flex flex-col gap-6 px-4 py-8">
+        <Skeleton className="h-32 w-full" />
+        <Skeleton className="h-64 w-full" />
+      </main>
+    );
+  }
 
-  if (loadingUser) return <div className="p-8 text-center text-gray-500 animate-pulse">جاري التحميل...</div>;
-  if (!user) return <div className="p-8 text-center text-red-500">المستخدم غير موجود.</div>;
+  if (userError || !user) {
+    const notFound = userError?.response?.status === 404;
+    return (
+      <main className="container mx-auto px-4 py-16">
+        <Card>
+          <ErrorState
+            title={notFound ? 'هذا الحساب غير موجود' : 'تعذّر تحميل الملف الشخصي'}
+            description={notFound ? 'ربما حُذف الحساب أو أن الرابط غير صحيح.' : undefined}
+            onRetry={notFound ? undefined : () => retryUser()}
+          />
+        </Card>
+      </main>
+    );
+  }
 
-  // Derive rating summary from user data or fallback to 0
-  const avgRating = user.rating || 0;
-  const ratingCount = user.ratingCount || pagination?.total || 0;
-  
-  // Fake breakdown for the chart if not provided by backend
-  const breakdown = user.ratingBreakdown || [
-    { stars: 5, count: Math.ceil(ratingCount * 0.6) },
-    { stars: 4, count: Math.ceil(ratingCount * 0.2) },
-    { stars: 3, count: Math.ceil(ratingCount * 0.1) },
-    { stars: 2, count: Math.ceil(ratingCount * 0.05) },
-    { stars: 1, count: Math.ceil(ratingCount * 0.05) },
-  ];
-
-  const activeListings = listings.filter(l => l.status === 'active');
+  const average = Number(summary?.average_rating ?? 0);
+  const joined = since(user.createdAt);
 
   return (
-    <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 space-y-8" dir="rtl">
-      {/* User Info Header */}
-      <div className="bg-surface p-6 shadow sm:rounded-lg flex flex-col sm:flex-row items-center sm:items-start gap-6">
-        <div className="flex-shrink-0">
-          {user.avatar ? (
-            <img src={user.avatar} alt={user.name} className="h-24 w-24 rounded-full object-cover" />
-          ) : (
-            <div className="h-24 w-24 rounded-full bg-gray-200 flex items-center justify-center">
-              <User className="h-12 w-12 text-gray-500" />
-            </div>
-          )}
-        </div>
+    <main className="container mx-auto flex flex-col gap-8 px-4 py-8">
+      <Card className="flex flex-col items-center gap-6 p-6 sm:flex-row sm:items-start">
+        {user.avatar ? (
+          <img src={user.avatar} alt="" className="h-24 w-24 shrink-0 rounded-pill object-cover" />
+        ) : (
+          <span className="flex h-24 w-24 shrink-0 items-center justify-center rounded-pill bg-surface-muted text-fg-subtle">
+            <User className="h-10 w-10" aria-hidden />
+          </span>
+        )}
         <div className="flex-1 text-center sm:text-start">
-          <div className="flex items-center gap-2 flex-wrap justify-center sm:justify-start">
-            <h1 className="text-2xl font-bold text-gray-900">{user.name}</h1>
-            {user.is_identity_verified && (
-              <span className="inline-flex items-center gap-1 bg-green-50 text-green-700 px-2 py-0.5 rounded-full text-xs font-bold border border-green-200">
-                بائع موثّق ✓
+          <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
+            <h1 className="text-2xl font-bold text-fg">{user.name || 'مستخدم'}</h1>
+            {user.isIdentityVerified && (
+              <Badge tone="success">
+                <BadgeCheck className="h-3.5 w-3.5" aria-hidden /> هوية موثّقة
+              </Badge>
+            )}
+          </div>
+          {user.bio && <p className="mt-2 text-fg-muted">{user.bio}</p>}
+          <div className="mt-3 flex flex-wrap justify-center gap-4 text-sm text-fg-muted sm:justify-start">
+            {user.location && (
+              <span className="flex items-center gap-1"><MapPin className="h-4 w-4" aria-hidden /> {user.location}</span>
+            )}
+            {joined && (
+              <span className="flex items-center gap-1"><Calendar className="h-4 w-4" aria-hidden /> انضم {joined}</span>
+            )}
+            {summary && summary.total_reviews > 0 && (
+              <span className="flex items-center gap-1">
+                <Stars value={average} /> {average.toFixed(1)} ({summary.total_reviews.toLocaleString('ar')} تقييم)
               </span>
             )}
           </div>
-          <div className="mt-2 flex flex-col sm:flex-row gap-4 justify-center sm:justify-start text-sm text-gray-500">
-            <div className="flex items-center gap-1 justify-center">
-              <Calendar className="w-4 h-4" />
-              <span>انضم {user.createdAt ? formatDistanceToNow(new Date(user.createdAt), { addSuffix: true, locale: ar }) : 'مؤخراً'}</span>
-            </div>
-          </div>
         </div>
-        <div className="sm:self-start">
-          <button 
-            onClick={() => setIsReportOpen(true)}
-            className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
-          >
-            <Flag size={16} />
-            <span>الإبلاغ عن المستخدم</span>
-          </button>
-        </div>
-      </div>
+        <button
+          type="button"
+          onClick={() => setReportOpen(true)}
+          className="inline-flex min-h-11 items-center gap-2 rounded-control px-3 text-sm font-medium text-danger hover:bg-danger-soft"
+        >
+          <Flag className="h-4 w-4" aria-hidden /> الإبلاغ عن الحساب
+        </button>
+      </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Sidebar: Rating Summary */}
-        <div className="space-y-8">
-          <div className="bg-surface p-6 shadow sm:rounded-lg">
-            <h2 className="text-lg font-medium text-gray-900 mb-4">ملخص التقييمات</h2>
-            <div className="flex items-center gap-4 mb-6">
-              <div className="text-4xl font-bold text-gray-900">{avgRating.toFixed(1)}</div>
-              <div>
-                <div className="flex text-yellow-400">
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <Star key={star} className={`w-5 h-5 ${star <= Math.round(avgRating) ? 'fill-current' : 'text-gray-300'}`} />
-                  ))}
-                </div>
-                <div className="text-sm text-gray-500 mt-1">بناءً على {ratingCount} تقييم</div>
-              </div>
-            </div>
-            
-            <div className="space-y-2">
-              {breakdown.map((item: any) => (
-                <div key={item.stars} className="flex items-center gap-2 text-sm text-gray-600">
-                  <div className="w-12 text-start">{item.stars} نجوم</div>
-                  <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-yellow-400" 
-                      style={{ width: `${ratingCount > 0 ? (item.count / ratingCount) * 100 : 0}%` }}
-                    />
-                  </div>
-                  <div className="w-8 text-end">{item.count}</div>
-                </div>
+      <div className="grid gap-8 lg:grid-cols-3">
+        <section className="flex flex-col gap-4 lg:col-span-2" aria-labelledby="listings-heading">
+          <h2 id="listings-heading" className="text-lg font-semibold text-fg">
+            الإعلانات المنشورة {!listingsLoading && `(${activeListings.length.toLocaleString('ar')})`}
+          </h2>
+          {listingsLoading ? (
+            <div className="grid gap-4 sm:grid-cols-2">
+              {[1, 2].map((i) => (
+                <Skeleton key={i} className="h-72" />
               ))}
             </div>
-          </div>
-        </div>
+          ) : activeListings.length ? (
+            <div className="grid gap-4 sm:grid-cols-2">
+              {activeListings.map((listing) => (
+                <ListingCard key={listing.id} listing={listing} />
+              ))}
+            </div>
+          ) : (
+            <Card>
+              <EmptyState title="لا توجد إعلانات منشورة حالياً" />
+            </Card>
+          )}
+        </section>
 
-        {/* Main Content: Active Listings & Reviews */}
-        <div className="lg:col-span-2 space-y-8">
-          {/* Active Listings Grid */}
-          <div className="bg-surface p-6 shadow sm:rounded-lg">
-            <h2 className="text-lg font-medium text-gray-900 mb-4">الإعلانات النشطة ({activeListings.length})</h2>
-            {loadingListings ? (
-              <div className="text-gray-500 animate-pulse">جاري التحميل...</div>
-            ) : activeListings.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {activeListings.map(listing => (
-                  <Link key={listing.id} href={`/listings/${listing.id}`} className="group block border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow">
-                    <div className="aspect-w-16 aspect-h-9 bg-gray-200">
-                      {listing.images?.[0] ? (
-                        <img src={listing.images[0]} alt={listing.title} className="w-full h-48 object-cover group-hover:opacity-75" />
-                      ) : (
-                        <div className="w-full h-48 flex items-center justify-center text-gray-400">لا توجد صورة</div>
-                      )}
-                    </div>
-                    <div className="p-4">
-                      <h3 className="text-sm font-medium text-gray-900 truncate">{listing.title}</h3>
-                      <p className="mt-1 text-sm text-gray-500 truncate">{listing.location?.city}</p>
-                      <p className="mt-2 text-base font-semibold text-primary">{listing.price} ريال</p>
-                    </div>
-                  </Link>
-                ))}
-              </div>
+        <section className="flex flex-col gap-4" aria-labelledby="reviews-heading">
+          <h2 id="reviews-heading" className="text-lg font-semibold text-fg">التقييمات</h2>
+          <Card className="flex flex-col gap-6 p-5">
+            {reviewsLoading ? (
+              <Skeleton className="h-40 w-full" />
+            ) : reviewsError ? (
+              <ErrorState title="تعذّر تحميل التقييمات" onRetry={() => retryReviews()} />
+            ) : !summary || summary.total_reviews === 0 ? (
+              <EmptyState title="لا توجد تقييمات بعد" description="تظهر التقييمات بعد إتمام صفقات مع هذا البائع." />
             ) : (
-              <p className="text-gray-500 text-sm">لا توجد إعلانات نشطة.</p>
-            )}
-          </div>
-
-          {/* Reviews List */}
-          <div className="bg-surface p-6 shadow sm:rounded-lg">
-            <h2 className="text-lg font-medium text-gray-900 mb-4">التقييمات السابقة</h2>
-            {loadingReviews ? (
-              <div className="text-gray-500 animate-pulse">جاري التحميل...</div>
-            ) : reviews && reviews.length > 0 ? (
-              <div className="space-y-6">
-                {reviews.map((review: any) => (
-                  <div key={review.id} className="border-b border-gray-100 pb-6 last:border-0 last:pb-0">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
-                          <User className="w-4 h-4 text-gray-500" />
-                        </div>
-                        <span className="text-sm font-medium text-gray-900">{review.reviewer?.name || 'مستخدم'}</span>
-                      </div>
-                      <span className="text-xs text-gray-500">
-                        {review.createdAt ? formatDistanceToNow(new Date(review.createdAt), { addSuffix: true, locale: ar }) : ''}
-                      </span>
-                    </div>
-                    <div className="flex text-yellow-400 mb-2">
-                      {[1, 2, 3, 4, 5].map((star) => (
-                        <Star key={star} className={`w-4 h-4 ${star <= review.rating ? 'fill-current' : 'text-gray-300'}`} />
-                      ))}
-                    </div>
-                    {review.comment && (
-                      <p className="text-sm text-gray-600">{review.comment}</p>
-                    )}
+              <>
+                <div className="flex items-center gap-4">
+                  <span className="text-4xl font-bold text-fg">{average.toFixed(1)}</span>
+                  <div>
+                    <Stars value={average} size="h-5 w-5" />
+                    <p className="mt-1 text-sm text-fg-muted">من {summary.total_reviews.toLocaleString('ar')} تقييم</p>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-gray-500 text-sm">لا توجد تقييمات حتى الآن.</p>
+                </div>
+                <RatingBreakdown summary={summary} />
+                <ul className="flex flex-col divide-y divide-line">
+                  {reviews.map((review) => (
+                    <li key={review.id} className="flex flex-col gap-1 py-4 first:pt-0 last:pb-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <Stars value={review.rating} />
+                        <span className="text-xs text-fg-subtle">{since(review.created_at)}</span>
+                      </div>
+                      {review.comment && <p className="text-sm text-fg">{review.comment}</p>}
+                    </li>
+                  ))}
+                </ul>
+              </>
             )}
-          </div>
-        </div>
+          </Card>
+        </section>
       </div>
 
-      {isReportOpen && (
-        <ReportDialog 
-          targetType="user" 
-          targetId={resolvedParams.id} 
-          onClose={() => setIsReportOpen(false)} 
-        />
-      )}
-    </div>
+      {reportOpen && <ReportDialog targetType="user" targetId={id} onClose={() => setReportOpen(false)} />}
+    </main>
   );
 }

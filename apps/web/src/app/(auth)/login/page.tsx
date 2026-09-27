@@ -10,6 +10,8 @@ import { authApi } from '@/lib/api/auth';
 import { useAuthStore } from '@/lib/store/auth-store';
 import Cookies from 'js-cookie';
 import { Alert, Button, Input } from '@/components/ui';
+import { SocialLogin } from '@/components/auth/SocialLogin';
+import { safeNext } from '@/lib/safe-next';
 
 const loginSchema = z.object({
   identifier: z.string().min(1, 'مطلوب إدخال البريد الإلكتروني أو رقم الهاتف'),
@@ -40,19 +42,12 @@ export default function LoginPage() {
       Cookies.set('refresh_token', res.tokens.refresh_token, { expires: 7, secure: true, sameSite: 'strict' });
       
       setAuth(res.user, res.tokens.access_token);
-      router.push('/');
+      router.replace(safeNext(new URLSearchParams(window.location.search).get('next')));
     } catch (err: any) {
       setError(err.response?.data?.message || 'حدث خطأ غير متوقع أثناء تسجيل الدخول');
     }
   };
 
-  const handleGoogleLogin = () => {
-    window.location.href = 'http://localhost:3000/api/v1/auth/google';
-  };
-
-  const handleFacebookLogin = () => {
-    window.location.href = 'http://localhost:3000/api/v1/auth/facebook';
-  };
 
   return (
     <div>
@@ -89,32 +84,9 @@ export default function LoginPage() {
         </Button>
       </form>
 
-      <div className="mt-6 flex items-center justify-between">
-        <hr className="w-full border-gray-200" />
-        <span className="px-3 text-sm text-gray-400 whitespace-nowrap">أو الدخول بواسطة</span>
-        <hr className="w-full border-gray-200" />
-      </div>
+      <SocialLogin />
 
-      <div className="mt-6 grid grid-cols-2 gap-4">
-        <button
-          onClick={handleGoogleLogin}
-          type="button"
-          className="flex items-center justify-center w-full px-4 py-2 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
-        >
-          <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" className="h-5 w-5 me-2" />
-          <span className="text-gray-700 font-medium">جوجل</span>
-        </button>
-        <button
-          onClick={handleFacebookLogin}
-          type="button"
-          className="flex items-center justify-center w-full px-4 py-2 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
-        >
-          <img src="https://www.svgrepo.com/show/475647/facebook-color.svg" alt="Facebook" className="h-5 w-5 me-2" />
-          <span className="text-gray-700 font-medium">فيسبوك</span>
-        </button>
-      </div>
-
-      <p className="mt-8 text-center text-sm text-gray-600">
+      <p className="mt-8 text-center text-sm text-fg-muted">
         ليس لديك حساب؟{' '}
         <Link href="/register" className="font-bold text-primary hover:text-primary-hover transition-colors">
           إنشاء حساب جديد

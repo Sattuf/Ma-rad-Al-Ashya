@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { SearchBar } from '@/components/search/SearchBar';
-import { User, PlusCircle, LayoutDashboard } from 'lucide-react';
+import { User, PlusCircle, LayoutDashboard, MessageSquare } from 'lucide-react';
 import { useAuthStore } from '@/lib/store/auth-store';
 import { ThemeToggle } from '@/components/ui';
 import { useEffect, useState } from 'react';
@@ -16,47 +16,59 @@ export function Navbar() {
   }, []);
 
   return (
-    <header className="sticky top-0 z-40 w-full bg-surface border-b border-gray-100 shadow-sm">
-      <div className="container mx-auto px-4 h-20 flex items-center justify-between gap-6">
+    <header className="sticky top-0 z-40 w-full bg-surface border-b border-line shadow-sm">
+      <div className="container mx-auto px-4 h-16 flex items-center justify-between gap-3 sm:gap-6">
         <Link href="/" className="flex items-center gap-2 shrink-0">
           <div className="w-10 h-10 bg-primary text-on-primary rounded-xl flex items-center justify-center font-bold text-xl">
             م
           </div>
-          <span className="font-bold text-xl text-gray-900 hidden sm:block">معرض الأشياء</span>
+          <span className="font-bold text-xl text-fg hidden md:block">معرض الأشياء</span>
         </Link>
         
         <div className="flex-1 max-w-2xl mx-auto flex justify-center">
           <SearchBar />
         </div>
         
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
           <ThemeToggle />
           {mounted && user?.role === 'admin' && (
             <Link
               href="/admin"
-              className="hidden sm:flex items-center gap-2 text-primary bg-primary-soft px-4 py-2.5 rounded-full font-medium hover:bg-primary-soft transition-colors ms-2"
+              className="hidden sm:flex items-center gap-2 text-primary bg-primary-soft px-4 py-2.5 rounded-full font-medium hover:bg-primary-soft transition-colors"
             >
-              <LayoutDashboard size={20} />
+              <LayoutDashboard size={20} aria-hidden />
               <span>لوحة التحكم</span>
             </Link>
           )}
           
           <Link
-            href="/listings/new"
-            className="hidden sm:flex items-center gap-2 bg-primary text-on-primary px-4 py-2.5 rounded-full font-medium hover:bg-primary transition-colors shadow-sm"
+            href="/listings/create"
+            aria-label="أضف إعلانك"
+            className="flex h-11 min-w-11 items-center justify-center gap-2 rounded-pill bg-primary px-3 font-medium text-on-primary shadow-sm transition-colors hover:bg-primary-hover sm:px-4"
           >
-            <PlusCircle size={20} />
-            <span>أضف إعلانك</span>
+            <PlusCircle size={20} aria-hidden />
+            <span className="hidden sm:inline">أضف إعلانك</span>
           </Link>
-          
+
+          {mounted && isAuthenticated && (
+            <Link
+              href="/messages"
+              aria-label="الرسائل"
+              className="hidden h-11 w-11 items-center justify-center rounded-pill text-fg-muted transition-colors hover:bg-surface-muted hover:text-fg sm:flex"
+            >
+              <MessageSquare size={20} aria-hidden />
+            </Link>
+          )}
+
           <Link
-            href={mounted && isAuthenticated ? "/profile" : "/login"}
-            className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-gray-100 text-gray-700 transition-colors"
+            href={mounted && isAuthenticated ? '/profile' : '/login'}
+            aria-label={mounted && isAuthenticated ? 'حسابي' : 'تسجيل الدخول'}
+            className="flex h-11 w-11 items-center justify-center rounded-pill text-fg-muted transition-colors hover:bg-surface-muted hover:text-fg"
           >
             {mounted && user?.avatar ? (
-              <img src={user.avatar} alt="Profile" className="w-8 h-8 rounded-full object-cover" />
+              <img src={user.avatar} alt="" className="h-8 w-8 rounded-pill object-cover" />
             ) : (
-              <User size={20} />
+              <User size={20} aria-hidden />
             )}
           </Link>
         </div>

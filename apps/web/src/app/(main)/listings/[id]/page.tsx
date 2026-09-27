@@ -1,257 +1,250 @@
 'use client';
 
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
+import useSWR from 'swr';
+import { BadgeCheck, Eye, Flag, Heart, ImageOff, MessageCircle, Pencil, Rocket, Share2, ShoppingCart } from 'lucide-react';
 import { useListingDetail } from '@/hooks/useListings';
-import Map from '@/components/Map';
-import { MapPin, BedDouble, Bath, Square, Calendar, Share2, Heart, Phone } from 'lucide-react';
-import Image from 'next/image';
-import RelatedListings from '@/components/listings/RelatedListings';
-import { useState, useEffect } from 'react';
-import { trackEvent } from '@/lib/analytics';
-
+import { useFavoriteCheck } from '@/hooks/useFavorite';
 import { useAuthStore } from '@/lib/store/auth-store';
 import { transactionsApi } from '@/lib/api/transactions';
-import { ShoppingCart, Flag } from 'lucide-react';
+import { messagingApi } from '@/lib/api/messaging';
+import { userApi } from '@/lib/api/users';
+import { trackEvent } from '@/lib/analytics';
+import RelatedListings from '@/components/listings/RelatedListings';
 import { ReportDialog } from '@/components/moderation/ReportDialog';
+import { Alert, Badge, Button, Card, ErrorState, Skeleton } from '@/components/ui';
+import { formatPrice } from '@/types/listing';
+import { cn } from '@/lib/cn';
+
+const dateFormat = new Intl.DateTimeFormat('ar', { dateStyle: 'medium' });
 
 export default function ListingDetailPage() {
-  const params = useParams();
+  const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const id = params.id as string;
-  const { listing, isLoading, error } = useListingDetail(id);
+  const { listing, isLoading, error, mutate } = useListingDetail(id);
   const { user, isAuthenticated } = useAuthStore();
-  const [isBuying, setIsBuying] = useState(false);
+  const { isFavorite, toggleFavorite } = useFavoriteCheck(id);
+  const { data: seller } = useSWR(listing ? `/users/${listing.userId}` : null, () => userApi.getUser(listing!.userId));
+  const [activeImage, setActiveImage] = useState(0);
+  const [busy, setBusy] = useState<'buy' | 'message' | null>(null);
+  const [notice, setNotice] = useState<{ tone: 'danger' | 'success'; text: string } | null>(null);
   const [isReportOpen, setIsReportOpen] = useState(false);
 
   useEffect(() => {
-    if (listing) {
-      trackEvent('view', {
-        listingId: listing.id,
-        categoryId: (listing as any).categoryId,
-      });
-    }
+    if (listing) trackEvent('view', { listingId: listing.id, categoryId: listing.categoryId ?? undefined });
   }, [listing]);
 
   if (isLoading) {
     return (
-      <div className="container mx-auto px-4 py-8 animate-pulse">
-        <div className="h-[400px] bg-gray-200 rounded-xl mb-8" />
-        <div className="max-w-4xl space-y-4">
-          <div className="h-8 bg-gray-200 rounded w-3/4" />
-          <div className="h-6 bg-gray-200 rounded w-1/4" />
-          <div className="flex gap-4 pt-4">
-            <div className="h-10 bg-gray-200 rounded w-24" />
-            <div className="h-10 bg-gray-200 rounded w-24" />
-            <div className="h-10 bg-gray-200 rounded w-24" />
-          </div>
-        </div>
-      </div>
+      <main className="container mx-auto px-4 py-8" aria-busy="true">
+        <Skeleton className="mb-8 aspect-[16/9] w-full md:aspect-[21/9]" />
+        <Skeleton className="mb-3 h-8 w-2/3" />
+        <Skeleton className="h-6 w-1/4" />
+      </main>
     );
   }
 
   if (error || !listing) {
+    const notFound = error?.response?.status === 404 || error?.response?.status === 400;
     return (
-      <div className="container mx-auto px-4 py-20 text-center">
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">عذراً، لم يتم العثور على العقار</h2>
-        <p className="text-gray-500">قد يكون العقار محذوفاً أو غير متاح حالياً.</p>
-      </div>
+      <main className="container mx-auto px-4 py-16">
+        <Card>
+          <ErrorState
+            title={notFound ? 'هذا الإعلان غير متاح' : 'تعذّر تحميل الإعلان'}
+            description={notFound ? 'ربما باعه صاحبه أو حذفه. تصفّح إعلانات أخرى مشابهة.' : undefined}
+            onRetry={notFound ? undefined : () => mutate()}
+          />
+          {notFound && (
+            <div className="pb-8 text-center">
+              <Link href="/listings" className="font-medium text-primary">تصفّح الإعلانات</Link>
+            </div>
+          )}
+        </Card>
+      </main>
     );
   }
 
+  const images = [...listing.images].sort((a, b) => a.sortOrder - b.sortOrder);
+  const isOwner = user?.id === listing.userId;
+  const canBuy = !isOwner && listing.status === 'active';
+
+  const requireLogin = () => router.push(`/login?next=/listings/${listing.id}`);
+
+  const buy = async () => {
+    if (!isAuthenticated) return requireLogin();
+    setBusy('buy');
+    setNotice(null);
+    try {
+      const tx = await transactionsApi.createTransaction(listing.id, listing.userId);
+      router.push(`/transactions/${tx.id}`);
+    } catch (err: any) {
+      setNotice({
+        tone: 'danger',
+        text: err?.response?.status === 409 ? 'أرسلت طلب شراء لهذا الإعلان مسبقاً. تابعه من صفحة صفقاتي.' : 'تعذّر إرسال طلب الشراء، حاول مجدداً.',
+      });
+      setBusy(null);
+    }
+  };
+
+  const message = async () => {
+    if (!isAuthenticated) return requireLogin();
+    setBusy('message');
+    try {
+      const conversation = await messagingApi.startConversation(listing.userId, listing.id);
+      router.push(`/messages?c=${conversation.id}`);
+    } catch {
+      setNotice({ tone: 'danger', text: 'تعذّر فتح المحادثة، حاول مجدداً.' });
+      setBusy(null);
+    }
+  };
+
+  const share = async () => {
+    const url = window.location.href;
+    try {
+      if (navigator.share) await navigator.share({ title: listing.title, url });
+      else {
+        await navigator.clipboard.writeText(url);
+        setNotice({ tone: 'success', text: 'نُسخ رابط الإعلان.' });
+      }
+    } catch {
+      // user cancelled the share sheet
+    }
+  };
+
   return (
-    <div className="container mx-auto px-4 py-8">
-      {/* Image Gallery */}
-      <div className="mb-8 grid grid-cols-1 md:grid-cols-4 gap-4 h-[400px] md:h-[500px]">
-        <div className="md:col-span-3 h-full relative rounded-xl overflow-hidden group">
-          <img
-            src={listing.images[0] || 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=1200&q=80'}
-            alt={listing.title}
-            className="object-cover w-full h-full"
-          />
-          <div className="absolute top-4 start-4 flex gap-2">
-            <span className="bg-surface/90 backdrop-blur-sm px-4 py-1.5 rounded-full text-sm font-semibold text-primary">
-              {listing.type === 'sale' ? 'للبيع' : 'للإيجار'}
-            </span>
-          </div>
-          <div className="absolute top-4 end-4 flex gap-2">
-            <button className="p-2.5 bg-surface/90 hover:bg-surface backdrop-blur-sm rounded-full text-gray-700 transition-colors shadow-sm">
-              <Share2 size={20} />
-            </button>
-            <button className="p-2.5 bg-surface/90 hover:bg-surface backdrop-blur-sm rounded-full text-gray-700 hover:text-red-500 transition-colors shadow-sm">
-              <Heart size={20} />
-            </button>
-          </div>
-        </div>
-        <div className="hidden md:flex flex-col gap-4 h-full">
-          {listing.images.slice(1, 3).map((img, idx) => (
-            <div key={idx} className="h-1/2 relative rounded-xl overflow-hidden">
-              <img src={img} alt={`${listing.title} - ${idx + 2}`} className="object-cover w-full h-full" />
-            </div>
-          ))}
-          {listing.images.length > 3 && (
-            <div className="absolute bottom-4 end-4">
-              <button className="bg-surface/90 px-4 py-2 rounded-lg font-medium text-sm shadow-sm hover:bg-surface transition-colors">
-                عرض كل الصور ({listing.images.length})
-              </button>
+    <main className="container mx-auto px-4 py-8">
+      {/* Gallery */}
+      <section aria-label="صور الإعلان" className="mb-8">
+        <div className="relative aspect-[4/3] overflow-hidden rounded-card bg-surface-muted md:aspect-[21/9]">
+          {images[activeImage] ? (
+            <img src={images[activeImage].imageUrl} alt={`${listing.title} — صورة ${activeImage + 1}`} className="h-full w-full object-contain" />
+          ) : (
+            <div className="flex h-full items-center justify-center text-fg-subtle">
+              <ImageOff className="h-10 w-10" aria-hidden />
             </div>
           )}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Main Content */}
-        <div className="lg:col-span-2 space-y-8">
-          <div>
-            <div className="flex justify-between items-start mb-4">
-              <h1 className="text-3xl font-bold text-gray-900">{listing.title}</h1>
-              <p className="text-3xl font-bold text-primary whitespace-nowrap ms-4">
-                {listing.price.toLocaleString()} ر.س
-              </p>
-            </div>
-            <div className="flex items-center text-gray-600 mb-6 text-lg">
-              <MapPin size={20} className="me-2 text-primary" />
-              <span>{listing.location.city} - {listing.location.address}</span>
-            </div>
-            
-            {/* Key Features */}
-            <div className="flex flex-wrap gap-6 py-6 border-y border-gray-100">
-              {listing.bedrooms && (
-                <div className="flex items-center gap-3">
-                  <div className="p-3 bg-primary-soft rounded-lg text-primary">
-                    <BedDouble size={24} />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">غرف النوم</p>
-                    <p className="font-semibold">{listing.bedrooms}</p>
-                  </div>
-                </div>
-              )}
-              {listing.bathrooms && (
-                <div className="flex items-center gap-3">
-                  <div className="p-3 bg-primary-soft rounded-lg text-primary">
-                    <Bath size={24} />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">دورات المياه</p>
-                    <p className="font-semibold">{listing.bathrooms}</p>
-                  </div>
-                </div>
-              )}
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-primary-soft rounded-lg text-primary">
-                  <Square size={24} />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">المساحة</p>
-                  <p className="font-semibold">{listing.area} م²</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <h2 className="text-xl font-bold text-gray-900 mb-4">وصف العقار</h2>
-            <div className="text-gray-600 leading-relaxed whitespace-pre-line">
-              {listing.description}
-            </div>
-          </div>
-
-          {listing.features && listing.features.length > 0 && (
-            <div>
-              <h2 className="text-xl font-bold text-gray-900 mb-4">المميزات</h2>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                {listing.features.map((feature, idx) => (
-                  <div key={idx} className="flex items-center gap-2 text-gray-600">
-                    <div className="w-2 h-2 bg-primary rounded-full" />
-                    <span>{feature}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div>
-            <h2 className="text-xl font-bold text-gray-900 mb-4">الموقع</h2>
-            <Map position={{ lat: listing.location.lat, lng: listing.location.lng }} readOnly />
-          </div>
-        </div>
-
-        {/* Sidebar */}
-        <div className="lg:col-span-1">
-          <div className="bg-surface p-6 rounded-xl shadow-sm border border-gray-200 sticky top-24">
-            <h3 className="text-lg font-bold text-gray-900 mb-4">تواصل مع المعلن</h3>
-            <div className="flex items-center gap-4 mb-6">
-              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center text-xl font-bold text-gray-400">
-                {listing.seller?.name ? listing.seller.name.charAt(0) : 'A'}
-              </div>
-              <div>
-                <div className="flex items-center gap-1">
-                  <p className="font-semibold text-gray-900">{listing.seller?.name || 'أحمد محمد'}</p>
-                  {listing.seller?.is_identity_verified && (
-                    <span className="inline-flex items-center gap-0.5 bg-green-50 text-green-700 px-1.5 py-0.5 rounded-full text-[10px] font-bold border border-green-200">
-                      بائع موثّق ✓
-                    </span>
-                  )}
-                </div>
-                <p className="text-sm text-gray-500">عضو منذ {listing.seller?.createdAt ? new Date(listing.seller.createdAt).getFullYear() : '2023'}</p>
-              </div>
-            </div>
-            
-            <div className="space-y-3">
-              {isAuthenticated && user?.id !== listing.userId && listing.status === 'active' && (
-                <button 
-                  onClick={async () => {
-                    try {
-                      setIsBuying(true);
-                      const transaction = await transactionsApi.createTransaction(listing.id, listing.userId);
-                      const tId = transaction.data?.id || transaction.id;
-                      router.push(`/transactions/${tId}`);
-                    } catch (err) {
-                      console.error(err);
-                      alert('حدث خطأ أثناء إنشاء الطلب');
-                      setIsBuying(false);
-                    }
-                  }}
-                  disabled={isBuying}
-                  className="w-full bg-primary hover:bg-primary text-on-primary font-medium py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors mb-2 disabled:opacity-75"
-                >
-                  <ShoppingCart size={20} />
-                  <span>{isBuying ? 'جاري الطلب...' : 'طلب شراء الآن'}</span>
-                </button>
-              )}
-              <button className="w-full bg-primary hover:bg-primary/90 text-white font-medium py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors">
-                <Phone size={20} />
-                <span>إظهار الرقم</span>
-              </button>
-              <button className="w-full bg-surface hover:bg-gray-50 text-gray-900 border border-gray-200 font-medium py-3 px-4 rounded-lg transition-colors">
-                إرسال رسالة
-              </button>
-            </div>
-
-            {/* Report Button */}
-            <div className="mt-6 pt-6 border-t border-gray-100">
-              <button 
-                onClick={() => setIsReportOpen(true)}
-                className="w-full text-red-500 hover:bg-red-50 hover:text-red-600 font-medium py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
+          <div className="absolute top-3 end-3 flex gap-2">
+            <button type="button" onClick={share} aria-label="مشاركة الإعلان" className="inline-flex h-11 w-11 items-center justify-center rounded-pill bg-surface/90 text-fg shadow-sm">
+              <Share2 className="h-5 w-5" aria-hidden />
+            </button>
+            {isAuthenticated && !isOwner && (
+              <button
+                type="button"
+                onClick={() => toggleFavorite()}
+                aria-pressed={isFavorite}
+                aria-label={isFavorite ? 'إزالة من المفضلة' : 'إضافة إلى المفضلة'}
+                className="inline-flex h-11 w-11 items-center justify-center rounded-pill bg-surface/90 text-fg shadow-sm"
               >
-                <Flag size={18} />
-                <span>الإبلاغ عن الإعلان</span>
+                <Heart className={cn('h-5 w-5', isFavorite && 'fill-current text-danger')} aria-hidden />
               </button>
-            </div>
+            )}
           </div>
         </div>
+        {images.length > 1 && (
+          <ul className="mt-3 flex gap-2 overflow-x-auto pb-1">
+            {images.map((img, i) => (
+              <li key={img.id}>
+                <button
+                  type="button"
+                  onClick={() => setActiveImage(i)}
+                  aria-label={`عرض الصورة ${i + 1}`}
+                  aria-current={i === activeImage}
+                  className={cn('h-16 w-16 overflow-hidden rounded-control border-2', i === activeImage ? 'border-primary' : 'border-transparent')}
+                >
+                  <img src={img.thumbnailUrl} alt="" className="h-full w-full object-cover" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
+        <article className="space-y-6 lg:col-span-2">
+          <header>
+            <div className="mb-2 flex flex-wrap items-center gap-2 text-sm text-fg-subtle">
+              {listing.category?.name && <Badge tone="primary">{listing.category.name}</Badge>}
+              {listing.status === 'sold' && <Badge>تم البيع</Badge>}
+              <span>نُشر {dateFormat.format(new Date(listing.createdAt))}</span>
+              <span className="inline-flex items-center gap-1">
+                <Eye className="h-4 w-4" aria-hidden /> {listing.viewsCount.toLocaleString('ar')} مشاهدة
+              </span>
+            </div>
+            <h1 className="text-2xl font-bold text-fg md:text-3xl">{listing.title}</h1>
+            <p className="mt-2 text-2xl font-bold text-primary md:text-3xl">{formatPrice(listing.price, listing.currency)}</p>
+          </header>
+          <section>
+            <h2 className="mb-2 text-lg font-bold text-fg">الوصف</h2>
+            <p className="whitespace-pre-line leading-relaxed text-fg-muted">{listing.description}</p>
+          </section>
+        </article>
+
+        <aside className="lg:col-span-1">
+          <Card className="space-y-4 p-6 lg:sticky lg:top-24">
+            <Link href={`/users/${listing.userId}`} className="flex items-center gap-3 rounded-control hover:bg-surface-muted">
+              {seller?.avatar ? (
+                <img src={seller.avatar} alt="" className="h-14 w-14 rounded-pill object-cover" />
+              ) : (
+                <span className="flex h-14 w-14 items-center justify-center rounded-pill bg-primary-soft text-xl font-bold text-on-primary-soft" aria-hidden>
+                  {seller?.name?.charAt(0) ?? '؟'}
+                </span>
+              )}
+              <span className="min-w-0">
+                <span className="flex items-center gap-1 font-semibold text-fg">
+                  {seller?.name ?? 'البائع'}
+                  {seller?.isIdentityVerified && <BadgeCheck className="h-4 w-4 text-success" aria-label="هوية موثّقة" />}
+                </span>
+                {seller?.createdAt && <span className="block text-sm text-fg-muted">عضو منذ {new Date(seller.createdAt).getFullYear()}</span>}
+              </span>
+            </Link>
+
+            {notice && <Alert tone={notice.tone}>{notice.text}</Alert>}
+
+            {isOwner ? (
+              <div className="space-y-2">
+                <Button fullWidth onClick={() => router.push(`/listings/${listing.id}/edit`)}>
+                  <Pencil className="h-4 w-4" aria-hidden /> تعديل الإعلان
+                </Button>
+                {listing.status === 'active' && (
+                  <Button variant="secondary" fullWidth onClick={() => router.push(`/listings/${listing.id}/promote`)}>
+                    <Rocket className="h-4 w-4" aria-hidden /> ترويج الإعلان
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {canBuy && (
+                  <Button fullWidth loading={busy === 'buy'} onClick={buy}>
+                    <ShoppingCart className="h-4 w-4" aria-hidden /> طلب شراء
+                  </Button>
+                )}
+                <Button variant="secondary" fullWidth loading={busy === 'message'} onClick={message}>
+                  <MessageCircle className="h-4 w-4" aria-hidden /> مراسلة البائع
+                </Button>
+                <p className="text-xs text-fg-muted">
+                  الدفع عند اللقاء. لا تحوّل أي مبلغ قبل معاينة السلعة، وقابل البائع في مكان عام.
+                </p>
+              </div>
+            )}
+
+            {!isOwner && (
+              <button
+                type="button"
+                onClick={() => (isAuthenticated ? setIsReportOpen(true) : requireLogin())}
+                className="flex min-h-11 w-full items-center justify-center gap-2 rounded-control text-sm font-medium text-danger hover:bg-danger-soft"
+              >
+                <Flag className="h-4 w-4" aria-hidden /> الإبلاغ عن الإعلان
+              </button>
+            )}
+          </Card>
+        </aside>
       </div>
 
-      {/* Related Listings */}
-      <RelatedListings currentListingId={id} categoryId={listing.category || 'real-estate'} />
+      <RelatedListings currentListingId={listing.id} categoryId={listing.categoryId} />
 
-      {isReportOpen && (
-        <ReportDialog 
-          targetType="listing" 
-          targetId={id} 
-          onClose={() => setIsReportOpen(false)} 
-        />
-      )}
-    </div>
+      {isReportOpen && <ReportDialog targetType="listing" targetId={listing.id} onClose={() => setIsReportOpen(false)} />}
+    </main>
   );
 }

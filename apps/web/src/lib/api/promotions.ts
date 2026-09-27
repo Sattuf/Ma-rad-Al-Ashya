@@ -1,10 +1,13 @@
 import { api } from './auth';
 
 export interface PromotionPlan {
-  id: string;
+  id: 'basic' | 'featured' | 'premium';
   name: string;
+  /** Charged amount, always from the server (never a client-side constant). */
   price: number;
+  currency: string;
   durationDays: number;
+  boostMultiplier: number;
   description: string;
   features: string[];
 }
@@ -13,45 +16,49 @@ export interface Promotion {
   id: string;
   listingId: string;
   planId: string;
-  status: 'active' | 'expired';
-  startDate: string;
-  endDate: string;
+  status: 'active' | 'pending' | 'expired' | 'failed';
+  startDate?: string;
+  endDate?: string;
+}
+
+// Display copy only. It describes what listings-service actually does: a ranking boost
+// in search results for a fixed period. Price and duration come from the server.
+const PLAN_COPY: Record<PromotionPlan['id'], { name: string; description: string }> = {
+  basic: { name: 'أساسي', description: 'يرفع ترتيب إعلانك في نتائج البحث.' },
+  featured: { name: 'مميّز', description: 'دفعة أقوى في نتائج البحث لمدة أطول.' },
+  premium: { name: 'ذهبي', description: 'أعلى أولوية في نتائج البحث لأطول مدة.' },
+};
+
+interface ServerPlan {
+  id: PromotionPlan['id'];
+  price: number;
+  boost_multiplier: number;
+  duration_days: number;
+}
+
+interface ServerPromotion {
+  id: string;
+  listingId: string;
+  plan: string;
+  stripePaymentStatus: 'pending' | 'succeeded' | 'failed';
+  startsAt?: string | null;
+  expiresAt?: string | null;
 }
 
 export const promotionsApi = {
+  /** No offline fallback: showing a price the server would not charge is worse than an error. */
   getPlans: async (): Promise<PromotionPlan[]> => {
-    try {
-      const response = await api.get('/promotions/plans');
-      return response.data;
-    } catch (error) {
-      // Fallback plans in case the backend is not ready
-      return [
-        {
-          id: 'basic',
-          name: 'أساسي (Basic)',
-          price: 49,
-          durationDays: 7,
-          description: 'ترقية الإعلان ووضعه في مقدمة القائمة لمدة 7 أيام.',
-          features: ['ظهور متقدم في نتائج البحث', 'علامة تمييز بسيطة', 'دعم فني عادي'],
-        },
-        {
-          id: 'featured',
-          name: 'مميز (Featured)',
-          price: 99,
-          durationDays: 14,
-          description: 'وضع الإعلان في قائمة العقارات المميزة مع فرصة تصفح أعلى بـ 3 أضعاف.',
-          features: ['ظهور في قسم العقارات المميزة', 'شارة "مروّج 🚀" بارزة', 'إحصائيات متقدمة للمشاهدات', 'دعم فني سريع'],
-        },
-        {
-          id: 'premium',
-          name: 'ذهبي (Premium)',
-          price: 199,
-          durationDays: 30,
-          description: 'أقصى درجات الظهور والتفاعل. يثبت الإعلان في الصفحة الرئيسية مع ترويج مكثف.',
-          features: ['تثبيت في أعلى الصفحة الرئيسية', 'شارة "مروّج 🚀" ذهبية براقة', 'تنبيهات للمشتركين المهتمين', 'دعم فني على مدار الساعة', 'تقارير أسبوعية مفصلة'],
-        },
-      ];
-    }
+    const response = await api.get('/promotions/plans');
+    return (response.data as ServerPlan[]).map((p) => ({
+      id: p.id,
+      name: PLAN_COPY[p.id]?.name ?? p.id,
+      description: PLAN_COPY[p.id]?.description ?? '',
+      price: Number(p.price),
+      currency: 'USD',
+      durationDays: p.duration_days,
+      boostMultiplier: p.boost_multiplier,
+      features: [`ترتيب أعلى ×${p.boost_multiplier} في نتائج البحث`, `لمدة ${p.duration_days} يوماً`, 'دفع آمن عبر Stripe'],
+    }));
   },
 
   /**
@@ -65,6 +72,21 @@ export const promotionsApi = {
 
   getMyPromotions: async (): Promise<Promotion[]> => {
     const response = await api.get('/promotions/my');
-    return response.data || [];
+    const now = Date.now();
+    return ((response.data ?? []) as ServerPromotion[]).map((p) => ({
+      id: p.id,
+      listingId: p.listingId,
+      planId: p.plan,
+      startDate: p.startsAt ?? undefined,
+      endDate: p.expiresAt ?? undefined,
+      status:
+        p.stripePaymentStatus === 'failed'
+          ? 'failed'
+          : p.stripePaymentStatus === 'pending'
+            ? 'pending'
+            : p.expiresAt && new Date(p.expiresAt).getTime() > now
+              ? 'active'
+              : 'expired',
+    }));
   },
 };

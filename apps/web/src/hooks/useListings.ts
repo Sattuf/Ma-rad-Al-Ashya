@@ -6,7 +6,7 @@ import { PaginatedResponse } from '@/lib/api/listings';
 
 export function useListings(query: ListingsQuery = {}) {
   const getKey = (pageIndex: number, previousPageData: PaginatedResponse<Listing> | null) => {
-    if (previousPageData && !previousPageData.data.length) return null; // reached the end
+    if (previousPageData && previousPageData.meta.page >= previousPageData.meta.lastPage) return null;
     return ['/listings', { ...query, page: pageIndex + 1 }];
   };
 
@@ -14,7 +14,7 @@ export function useListings(query: ListingsQuery = {}) {
     return listingsApi.getListings(params);
   };
 
-  const { data, error, size, setSize, isValidating } = useSWRInfinite(getKey, fetcher, {
+  const { data, error, size, setSize, isValidating, mutate } = useSWRInfinite(getKey, fetcher, {
     revalidateOnFocus: false,
   });
 
@@ -24,8 +24,9 @@ export function useListings(query: ListingsQuery = {}) {
     isLoadingInitialData ||
     (size > 0 && data && typeof data[size - 1] === 'undefined');
   const isEmpty = data?.[0]?.data.length === 0;
-  const isReachingEnd =
-    isEmpty || (data && data[data.length - 1]?.data.length < (query.limit || 10));
+  const last = data?.[data.length - 1];
+  const isReachingEnd = isEmpty || (!!last && last.meta.page >= last.meta.lastPage);
+  const total = data?.[0]?.meta.total ?? 0;
 
   return {
     listings,
@@ -36,6 +37,8 @@ export function useListings(query: ListingsQuery = {}) {
     size,
     setSize,
     isValidating,
+    total,
+    retry: () => mutate(),
   };
 }
 

@@ -1,7 +1,8 @@
 import axios from 'axios';
 import Cookies from 'js-cookie';
 
-const API_URL = 'http://localhost:3000/api/v1';
+/** Public gateway URL, inlined at build time. Localhost only as a dev default. */
+export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1';
 
 export const api = axios.create({
   baseURL: API_URL,

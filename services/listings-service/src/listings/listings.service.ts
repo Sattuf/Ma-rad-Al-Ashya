@@ -29,6 +29,20 @@ function toPositiveInt(value: unknown, fallback: number): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const MAX_IDS = 20;
+
+/** A query value that must be a UUID (Postgres rejects anything else with a 500). */
+function toUuid(value: unknown): string | undefined {
+  return typeof value === 'string' && UUID.test(value) ? value : undefined;
+}
+
+/** "a,b,c" → valid UUIDs only, de-duplicated, at most MAX_IDS. */
+function toUuidList(value: unknown): string[] {
+  if (typeof value !== 'string') return [];
+  return [...new Set(value.split(',').map((v) => v.trim()).filter((v) => UUID.test(v)))].slice(0, MAX_IDS);
+}
+
 /** Escapes LIKE wildcards so user input is matched literally. */
 function escapeLike(value: string): string {
   return value.replace(/[\\%_]/g, (c) => `\\${c}`);
@@ -116,8 +130,10 @@ export class ListingsService {
    * column, so the cost per request stays bounded no matter how large the table grows.
    */
   async findAll(query: Record<string, any> = {}): Promise<ListingsPage> {
-    const categoryId = query.categoryId ?? query.category_id;
-    const userId = query.userId;
+    const categoryId = toUuid(query.categoryId ?? query.category_id);
+    const userId = toUuid(query.userId);
+    // Batch lookup by id (e.g. recommendations) without counting a view per listing.
+    const ids = toUuidList(query.ids);
     const search = typeof (query.search ?? query.q) === 'string' ? String(query.search ?? query.q).trim().slice(0, 100) : '';
     const status = PUBLIC_STATUSES.includes(query.status) ? query.status : ListingStatus.ACTIVE;
     const page = toPositiveInt(query.page, 1);
@@ -130,7 +146,12 @@ export class ListingsService {
 
     if (categoryId) qb.andWhere('listing.categoryId = :categoryId', { categoryId });
     if (userId) qb.andWhere('listing.userId = :userId', { userId });
+    if (query.ids !== undefined) qb.andWhere(ids.length ? 'listing.id IN (:...ids)' : '1 = 0', { ids });
     if (search) qb.andWhere("listing.title ILIKE :search ESCAPE '\\'", { search: `%${escapeLike(search)}%` });
+    const minPrice = Number(query.minPrice);
+    const maxPrice = Number(query.maxPrice);
+    if (Number.isFinite(minPrice) && minPrice > 0) qb.andWhere('listing.price >= :minPrice', { minPrice });
+    if (Number.isFinite(maxPrice) && maxPrice > 0) qb.andWhere('listing.price <= :maxPrice', { maxPrice });
 
     qb.orderBy('listing.createdAt', 'DESC')
       .addOrderBy('listing.id', 'DESC')

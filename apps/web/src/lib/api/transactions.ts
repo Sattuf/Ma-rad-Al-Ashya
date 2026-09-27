@@ -1,5 +1,30 @@
 import { api } from './auth';
 
+export interface Review {
+  id: string;
+  reviewer_id: string;
+  listing_id: string;
+  rating: number;
+  comment: string | null;
+  created_at: string;
+}
+
+export interface RatingSummary {
+  total_reviews: number;
+  average_rating: number | string;
+  rating_1_count?: number;
+  rating_2_count?: number;
+  rating_3_count?: number;
+  rating_4_count?: number;
+  rating_5_count?: number;
+}
+
+/** GET /users/:id/reviews (transactions-service) → { summary, reviews }. */
+export interface UserReviews {
+  summary: RatingSummary;
+  reviews: Review[];
+}
+
 export const transactionsApi = {
   createTransaction: async (listingId: string, sellerId: string) => {
     const response = await api.post('/transactions', { listing_id: listingId, seller_id: sellerId });
@@ -39,7 +64,7 @@ export const transactionsApi = {
     return response.data;
   },
 
-  getUserReviews: async (userId: string, page: number = 1, limit: number = 10) => {
+  getUserReviews: async (userId: string, page: number = 1, limit: number = 10): Promise<UserReviews> => {
     const params = new URLSearchParams({
       page: page.toString(),
       limit: limit.toString(),

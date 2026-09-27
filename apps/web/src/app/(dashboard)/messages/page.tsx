@@ -1,60 +1,53 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { ArrowRight, MessageSquare } from 'lucide-react';
 import { ConversationList } from '@/components/messages/ConversationList';
 import { ChatWindow } from '@/components/messages/ChatWindow';
 import { useAuthStore } from '@/lib/store/auth-store';
 
 export default function MessagesPage() {
-  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
-  
-  // Retrieve the current user from auth store or context.
-  const user = useAuthStore((state) => state.user);
-  const currentUserId = user?.id || '';
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const currentUserId = useAuthStore((state) => state.user?.id) ?? '';
+
+  // "/messages?c=<id>" (from "message the seller") opens that conversation directly.
+  useEffect(() => {
+    const c = new URLSearchParams(window.location.search).get('c');
+    if (c) setSelectedId(c);
+  }, []);
+
+  const select = (id: string | null) => {
+    setSelectedId(id);
+    const url = id ? `/messages?c=${encodeURIComponent(id)}` : '/messages';
+    window.history.replaceState(null, '', url);
+  };
 
   return (
-    <div className="flex h-[calc(100vh-64px)] overflow-hidden bg-surface" dir="rtl">
-      {/* Sidebar for Conversations */}
-      <div 
-        className={`${
-          selectedConversationId ? 'hidden md:block' : 'block'
-        } w-full md:w-1/3 lg:w-1/4 h-full shrink-0`}
-      >
-        <ConversationList 
-          selectedId={selectedConversationId} 
-          onSelect={(id) => setSelectedConversationId(id)} 
-        />
+    <div className="flex h-[calc(100dvh-64px)] overflow-hidden bg-surface">
+      <div className={`${selectedId ? 'hidden md:block' : 'block'} h-full w-full shrink-0 md:w-1/3 lg:w-1/4`}>
+        <ConversationList selectedId={selectedId} onSelect={select} />
       </div>
 
-      {/* Main Chat Area */}
-      <div 
-        className={`${
-          !selectedConversationId ? 'hidden md:flex' : 'flex'
-        } flex-1 flex-col h-full relative`}
-      >
-        {selectedConversationId ? (
+      <div className={`${selectedId ? 'flex' : 'hidden md:flex'} relative h-full flex-1 flex-col`}>
+        {selectedId ? (
           <>
-            <div className="md:hidden p-4 border-b border-gray-200 bg-surface flex items-center">
-              <button 
-                onClick={() => setSelectedConversationId(null)}
-                className="text-primary font-medium"
+            <div className="flex items-center border-b border-line bg-surface p-2 md:hidden">
+              <button
+                type="button"
+                onClick={() => select(null)}
+                className="inline-flex min-h-11 items-center gap-2 rounded-control px-3 font-medium text-primary hover:bg-primary-soft"
               >
-                &rarr; العودة للرسائل
+                <ArrowRight className="h-4 w-4" aria-hidden /> كل المحادثات
               </button>
             </div>
-            <ChatWindow 
-              conversationId={selectedConversationId} 
-              currentUserId={currentUserId} 
-            />
+            <ChatWindow conversationId={selectedId} currentUserId={currentUserId} />
           </>
         ) : (
-          <div className="flex-1 flex flex-col items-center justify-center bg-gray-50 text-gray-500">
-            <div className="w-16 h-16 mb-4 rounded-full bg-gray-200 flex items-center justify-center">
-              <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-              </svg>
-            </div>
-            <p className="text-lg">اختر محادثة للبدء في المراسلة</p>
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 bg-canvas text-fg-muted">
+            <span className="flex h-16 w-16 items-center justify-center rounded-pill bg-surface-muted">
+              <MessageSquare className="h-8 w-8 text-fg-subtle" aria-hidden />
+            </span>
+            <p className="text-lg">اختر محادثة لعرض الرسائل</p>
           </div>
         )}
       </div>

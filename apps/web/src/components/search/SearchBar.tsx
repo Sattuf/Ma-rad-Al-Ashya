@@ -45,7 +45,7 @@ export function SearchBar() {
             setIsOpen(true);
           }}
           onFocus={() => setIsOpen(true)}
-          placeholder="ابحث عن عقارات، سيارات، إلكترونيات..."
+          placeholder="ابحث عن جوال، أثاث، دراجة…"
           className="w-full h-12 ps-5 pe-20 bg-gray-50 border border-gray-200 rounded-full focus:outline-none focus:ring-2 focus:ring-focus-ring focus:bg-surface transition-all text-gray-900 placeholder-gray-500 text-sm"
           dir="rtl"
         />

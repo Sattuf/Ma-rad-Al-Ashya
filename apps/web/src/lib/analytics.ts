@@ -1,3 +1,4 @@
+import { API_URL } from './api/auth';
 export interface TrackingData {
   listingId?: string;
   categoryId?: string;
@@ -8,7 +9,7 @@ export function trackEvent(
   eventType: string,
   data?: TrackingData
 ) {
-  const url = 'http://localhost:3000/api/v1/recommendations/events';
+  const url = `${API_URL}/recommendations/events`;
   const timestamp = new Date().toISOString();
   
   let userId: string | null = null;

@@ -10,6 +10,7 @@ import { authApi } from '@/lib/api/auth';
 import { useAuthStore } from '@/lib/store/auth-store';
 import Cookies from 'js-cookie';
 import { getFingerprint } from '@/lib/fingerprint';
+import { SocialLogin } from '@/components/auth/SocialLogin';
 
 const registerSchema = z.object({
   fullName: z.string().min(2, 'الاسم يجب أن يكون حرفين على الأقل'),
@@ -75,17 +76,10 @@ export default function RegisterPage() {
     }
   };
 
-  const handleGoogleLogin = () => {
-    window.location.href = 'http://localhost:3000/api/v1/auth/google';
-  };
-
-  const handleFacebookLogin = () => {
-    window.location.href = 'http://localhost:3000/api/v1/auth/facebook';
-  };
 
   return (
     <div>
-      <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">إنشاء حساب جديد</h2>
+      <h2 className="text-2xl font-bold text-fg mb-6 text-center">إنشاء حساب جديد</h2>
       
       {error && (
         <div className="bg-red-50 text-red-600 p-3 rounded-lg mb-6 text-sm border border-red-100">
@@ -166,32 +160,9 @@ export default function RegisterPage() {
         </button>
       </form>
 
-      <div className="mt-6 flex items-center justify-between">
-        <hr className="w-full border-gray-200" />
-        <span className="px-3 text-sm text-gray-400 whitespace-nowrap">أو الدخول بواسطة</span>
-        <hr className="w-full border-gray-200" />
-      </div>
+      <SocialLogin />
 
-      <div className="mt-6 grid grid-cols-2 gap-4">
-        <button
-          onClick={handleGoogleLogin}
-          type="button"
-          className="flex items-center justify-center w-full px-4 py-2 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
-        >
-          <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" className="h-5 w-5 me-2" />
-          <span className="text-gray-700 font-medium">جوجل</span>
-        </button>
-        <button
-          onClick={handleFacebookLogin}
-          type="button"
-          className="flex items-center justify-center w-full px-4 py-2 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
-        >
-          <img src="https://www.svgrepo.com/show/475647/facebook-color.svg" alt="Facebook" className="h-5 w-5 me-2" />
-          <span className="text-gray-700 font-medium">فيسبوك</span>
-        </button>
-      </div>
-
-      <p className="mt-8 text-center text-sm text-gray-600">
+      <p className="mt-8 text-center text-sm text-fg-muted">
         لديك حساب بالفعل؟{' '}
         <Link href="/login" className="font-bold text-primary hover:text-primary-hover transition-colors">
           تسجيل الدخول

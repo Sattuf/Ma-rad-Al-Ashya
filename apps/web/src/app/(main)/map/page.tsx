@@ -57,7 +57,7 @@ const dummyMapListings = [
 
 export default function MapPage() {
   return (
-    <div className="flex flex-col md:flex-row h-[calc(100vh-80px)] w-full overflow-hidden" dir="rtl">
+    <div className="flex flex-col md:flex-row h-[calc(100dvh-64px)] w-full overflow-hidden" dir="rtl">
       {/* Sidebar Filters */}
       <div className="w-full md:w-80 lg:w-96 bg-surface border-e border-gray-200 shadow-lg z-10 flex flex-col h-full overflow-y-auto">
         <div className="p-6">

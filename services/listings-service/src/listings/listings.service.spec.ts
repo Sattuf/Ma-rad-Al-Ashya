@@ -180,6 +180,34 @@ describe('ListingsService', () => {
 
       expect(qb.andWhere).toHaveBeenCalledWith(expect.stringContaining('ILIKE'), { search: '%100\\%\\_off%' });
     });
+
+    it('filters by a bounded list of valid ids and drops malformed ones', async () => {
+      const qb = queryBuilder();
+      mockListingRepository.createQueryBuilder.mockReturnValue(qb);
+      const id = '3f2b8c1e-8a1d-4c55-9a7e-0b6f1f0e2d11';
+
+      await service.findAll({ ids: `${id},not-a-uuid,${id}` });
+
+      expect(qb.andWhere).toHaveBeenCalledWith('listing.id IN (:...ids)', { ids: [id] });
+    });
+
+    it('returns nothing (not everything) when ids are all invalid', async () => {
+      const qb = queryBuilder();
+      mockListingRepository.createQueryBuilder.mockReturnValue(qb);
+
+      await service.findAll({ ids: "1' OR '1'='1" });
+
+      expect(qb.andWhere).toHaveBeenCalledWith('1 = 0', { ids: [] });
+    });
+
+    it('ignores non-uuid category and user filters instead of failing in Postgres', async () => {
+      const qb = queryBuilder();
+      mockListingRepository.createQueryBuilder.mockReturnValue(qb);
+
+      await service.findAll({ categoryId: 'abc', userId: '../x' });
+
+      expect(qb.andWhere).not.toHaveBeenCalled();
+    });
   });
 
   describe('deleted listings', () => {
