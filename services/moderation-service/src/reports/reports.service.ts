@@ -1,6 +1,6 @@
 import { Injectable, ConflictException, BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { MoreThan, Repository } from 'typeorm';
 import { Report } from './entities/report.entity';
 import { ReportCount } from './entities/report-count.entity';
 import { CreateReportDto } from './dto/create-report.dto';
@@ -9,9 +9,12 @@ import { Queue } from 'bull';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { internalHeaders } from '../common/security';
+import { TtlCache, dailySeries, windowStart } from '../common/stats';
 
 @Injectable()
 export class ReportsService {
+  private readonly statsCache = new TtlCache<Awaited<ReturnType<ReportsService['computeAdminStats']>>>(30_000);
+
   constructor(
     @InjectRepository(Report)
     private reportsRepository: Repository<Report>,
@@ -167,30 +170,56 @@ export class ReportsService {
     return saved;
   }
 
-  async getAdminStats() {
-    const pending_reports = await this.reportsRepository.count({ where: { status: 'pending' } });
-    const total_reports = await this.reportsRepository.count();
-    
-    const today = new Date();
-    today.setHours(0,0,0,0);
-    const qbToday = this.reportsRepository.createQueryBuilder('report').where('report.created_at >= :today', { today });
-    const reports_today = await qbToday.getCount();
+  /**
+   * Admin dashboard numbers. Bounded queries (30-day window, LIMIT on rankings), cached
+   * 30s: short enough that the queue count follows the moderators' work closely.
+   */
+  getAdminStats() {
+    return this.statsCache.get(() => this.computeAdminStats());
+  }
 
-    const qbResolved = this.reportsRepository.createQueryBuilder('report').where('report.reviewed_at >= :today AND report.status = :status', { today, status: 'resolved' });
-    const resolved_today = await qbResolved.getCount();
+  private async computeAdminStats() {
+    // reports.created_at / reviewed_at are TIMESTAMP (no zone) written in UTC.
+    const since = windowStart().toISOString().slice(0, 19).replace('T', ' ');
+    const today = new Date().toISOString().slice(0, 10);
+    const q = (sql: string, params: unknown[] = []) => this.reportsRepository.query(sql, params);
 
-    const top_reported_listings = await this.reportCountsRepository.find({
-      where: { target_type: 'listing' },
-      order: { pending_count: 'DESC' },
-      take: 5,
-    });
+    const [totals, created, handled, reasons, topListings, topUsers] = await Promise.all([
+      q(
+        `SELECT count(*) FILTER (WHERE status = 'pending')::int AS pending,
+                count(*)::int AS total,
+                count(*) FILTER (WHERE created_at >= $1::date)::int AS today,
+                count(*) FILTER (WHERE reviewed_at >= $1::date AND status IN ('resolved', 'dismissed'))::int AS handled_today,
+                extract(epoch FROM (now() AT TIME ZONE 'UTC') - min(created_at) FILTER (WHERE status = 'pending'))::float / 3600 AS oldest_pending_hours,
+                avg(extract(epoch FROM reviewed_at - created_at)) FILTER (WHERE reviewed_at >= $2)::float / 3600 AS avg_review_hours
+           FROM reports`,
+        [today, since],
+      ),
+      q(`SELECT to_char(created_at, 'YYYY-MM-DD') AS day, count(*)::int AS count FROM reports WHERE created_at >= $1 GROUP BY 1`, [since]),
+      q(
+        `SELECT to_char(reviewed_at, 'YYYY-MM-DD') AS day, count(*)::int AS count FROM reports
+          WHERE reviewed_at >= $1 AND status IN ('resolved', 'dismissed') GROUP BY 1`,
+        [since],
+      ),
+      q(`SELECT reason, count(*)::int AS count FROM reports WHERE created_at >= $1 GROUP BY reason ORDER BY 2 DESC`, [since]),
+      this.reportCountsRepository.find({ where: { target_type: 'listing', pending_count: MoreThan(0) }, order: { pending_count: 'DESC' }, take: 5 }),
+      this.reportCountsRepository.find({ where: { target_type: 'user', pending_count: MoreThan(0) }, order: { pending_count: 'DESC' }, take: 5 }),
+    ]);
 
-    const top_reported_users = await this.reportCountsRepository.find({
-      where: { target_type: 'user' },
-      order: { pending_count: 'DESC' },
-      take: 5,
-    });
-
-    return { pending_reports, total_reports, reports_today, resolved_today, top_reported_listings, top_reported_users };
+    const t = totals[0] ?? {};
+    const round1 = (v: number | null) => (v == null ? null : Math.round(v * 10) / 10);
+    return {
+      pending_reports: t.pending ?? 0,
+      total_reports: t.total ?? 0,
+      reports_today: t.today ?? 0,
+      resolved_today: t.handled_today ?? 0,
+      oldest_pending_hours: round1(t.oldest_pending_hours),
+      avg_review_hours_30d: round1(t.avg_review_hours),
+      created_daily: dailySeries(created),
+      handled_daily: dailySeries(handled),
+      reasons_30d: reasons,
+      top_reported_listings: topListings,
+      top_reported_users: topUsers,
+    };
   }
 }

@@ -157,6 +157,8 @@ services:
       - PERSONALIZATION_SERVICE_URL=http://personalization-service:8002
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      # Bearer token Prometheus uses to scrape the gateway's public /metrics.
+      - METRICS_TOKEN=${METRICS_TOKEN:?set METRICS_TOKEN in infra/.env}
     ports:
       - "127.0.0.1:3000:3000"
     volumes:
@@ -447,6 +449,8 @@ services:
       - DATABASE_URL=postgresql://marad_user:marad_dev_password@postgres:5432/marad_db
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      # Admin "lock account" suspends through users-service.
+      - USERS_SERVICE_URL=http://users-service:3007
     ports:
       - "127.0.0.1:8001:8001"
     volumes:
@@ -508,6 +512,8 @@ services:
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
+    secrets:
+      - metrics_token
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
@@ -520,7 +526,8 @@ services:
     restart: unless-stopped
     profiles: ["monitoring", "all"]
     ports:
-      - "127.0.0.1:3100:3000"
+      # 3100 is the web app's dev port.
+      - "127.0.0.1:3200:3000"
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in infra/.env}
@@ -541,6 +548,11 @@ networks:
   marad-network:
     driver: bridge
     name: marad-network
+
+secrets:
+  # Read from infra/.env; Prometheus reads it as a file (it cannot expand env vars).
+  metrics_token:
+    environment: METRICS_TOKEN
 
 volumes:
   postgres_data:

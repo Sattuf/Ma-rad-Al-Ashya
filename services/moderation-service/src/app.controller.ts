@@ -9,4 +9,10 @@ export class AppController {
   getHello(): string {
     return this.appService.getHello();
   }
+
+  /** Liveness probe used by the gateway's upstream_up metric and container health checks. */
+  @Get('health')
+  getHealth() {
+    return { status: 'ok', service: 'moderation-service', timestamp: new Date().toISOString() };
+  }
 }

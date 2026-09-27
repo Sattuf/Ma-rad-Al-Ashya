@@ -16,7 +16,7 @@ export const fraudApi = {
   takeAction: async (userId: string, actionType: string, reason: string) => {
     const response = await api.post('/fraud/admin/action', {
       user_id: userId,
-      action_type: actionType,
+      action: actionType,
       reason,
     });
     return response.data;

@@ -28,10 +28,13 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     if (isBlockedStatus(user.status)) {
       throw new UnauthorizedException('حسابك موقوف حالياً');
     }
+    // Same shape as the login response's `user`, so GET /auth/me can restore a session.
     return {
       id: user.id,
-      email: user.email,
-      phone: user.phone,
+      email: user.email ?? undefined,
+      phone: user.phone ?? undefined,
+      fullName: user.fullName,
+      avatar: user.avatarUrl ?? undefined,
       role: user.role,
       status: user.status,
     };

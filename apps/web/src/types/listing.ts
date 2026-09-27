@@ -63,16 +63,25 @@ export function coverImage(listing: Pick<Listing, 'images'>, size: 'thumb' | 'fu
   return size === 'thumb' ? first.thumbnailUrl : first.imageUrl;
 }
 
-const priceFormatters = new Map<string, Intl.NumberFormat>();
+const numberFormatters = new Map<number, Intl.NumberFormat>();
 
-/** Formats a price for Arabic readers, e.g. "١٬٢٥٠ US$" → uses the listing currency. */
-export function formatPrice(price: number | string, currency = 'USD'): string {
-  const value = typeof price === 'string' ? Number(price) : price;
-  if (!Number.isFinite(value)) return '—';
-  let fmt = priceFormatters.get(currency);
+// Arabic currency names: "US$" inside right-to-left text is reordered by the bidi
+// algorithm and shows up as "$US 334", so the unit is written as a word instead.
+const CURRENCY_NAMES: Record<string, string> = { USD: 'دولار', SAR: 'ر.س', AED: 'د.إ', EUR: 'يورو', SYP: 'ل.س', IQD: 'د.ع', EGP: 'ج.م' };
+
+/** "1,250.5" + "USD" → "1,250.5 دولار". Unknown currencies keep their ISO code. */
+export function formatMoney(value: number | string, currency = 'USD', maxFractionDigits = 2): string {
+  const n = typeof value === 'string' ? Number(value) : value;
+  if (!Number.isFinite(n)) return '—';
+  let fmt = numberFormatters.get(maxFractionDigits);
   if (!fmt) {
-    fmt = new Intl.NumberFormat('ar', { style: 'currency', currency, maximumFractionDigits: 2 });
-    priceFormatters.set(currency, fmt);
+    fmt = new Intl.NumberFormat('ar', { maximumFractionDigits: maxFractionDigits });
+    numberFormatters.set(maxFractionDigits, fmt);
   }
-  return fmt.format(value);
+  return `${fmt.format(n)} ${CURRENCY_NAMES[currency] ?? currency}`;
+}
+
+/** Listing price for Arabic readers, in the listing's currency. */
+export function formatPrice(price: number | string, currency = 'USD'): string {
+  return formatMoney(price, currency, 2);
 }

@@ -56,6 +56,10 @@
   --color-warning: var(--ds-warning);
   --color-warning-soft: var(--ds-warning-soft);
   --color-focus-ring: var(--ds-focus-ring);
+  --color-chart1: var(--ds-chart1);
+  --color-chart2: var(--ds-chart2);
+  --color-chart3: var(--ds-chart3);
+  --color-chart-grid: var(--ds-chart-grid);
   --radius-control: 10px;
   --radius-card: 14px;
   --radius-sheet: 20px;
@@ -100,6 +104,10 @@
   --ds-warning: #b45309;
   --ds-warning-soft: #fffbeb;
   --ds-focus-ring: #14b8a6;
+  --ds-chart1: #2a78d6;
+  --ds-chart2: #eb6834;
+  --ds-chart3: #1baf7a;
+  --ds-chart-grid: #e2e8f0;
   color-scheme: light;
 }
 
@@ -139,6 +147,10 @@
     --ds-warning: #fbbf24;
     --ds-warning-soft: #2a2110;
     --ds-focus-ring: #2dd4bf;
+    --ds-chart1: #3987e5;
+    --ds-chart2: #d95926;
+    --ds-chart3: #199e70;
+    --ds-chart-grid: #1e293b;
     color-scheme: dark;
   }
 }
@@ -177,5 +189,9 @@
   --ds-warning: #fbbf24;
   --ds-warning-soft: #2a2110;
   --ds-focus-ring: #2dd4bf;
+  --ds-chart1: #3987e5;
+  --ds-chart2: #d95926;
+  --ds-chart3: #199e70;
+  --ds-chart-grid: #1e293b;
   color-scheme: dark;
 }

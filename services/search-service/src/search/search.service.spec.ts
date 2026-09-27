@@ -17,6 +17,15 @@ jest.mock('ioredis', () => {
   return { __esModule: true, default: mRedis };
 });
 
+const mockPgQuery = jest.fn();
+const mockPoolCtor = jest.fn();
+jest.mock('pg', () => ({
+  Pool: jest.fn().mockImplementation((opts) => {
+    mockPoolCtor(opts);
+    return { query: mockPgQuery, end: jest.fn() };
+  }),
+}));
+
 describe('SearchService', () => {
   let service: SearchService;
   let esService: ElasticsearchService;
@@ -164,5 +173,30 @@ describe('SearchService', () => {
     const result = await service.suggestions('sug');
     expect(result).toEqual([{ text: 'suggestion 1' }]);
     expect(esService.client.search).toHaveBeenCalled();
+  });
+
+  describe('database access', () => {
+    beforeEach(() => {
+      mockPgQuery.mockReset().mockResolvedValue({ rows: [] });
+    });
+
+    it('reuses one connection pool for every click instead of a connection per request', async () => {
+      const before = mockPoolCtor.mock.calls.length;
+      await service.trackClick({ variant: 'A', session_id: 's', query: 'q', listing_id: undefined } as any);
+      await service.trackClick({ variant: 'B', session_id: 's', query: 'q', listing_id: undefined } as any);
+      expect(mockPoolCtor.mock.calls.length - before).toBeLessThanOrEqual(1);
+      expect(mockPgQuery).toHaveBeenCalledTimes(2);
+      expect(mockPoolCtor.mock.calls.at(-1)?.[0]).toMatchObject({ max: expect.any(Number) });
+    });
+
+    it('bounds ranking stats to a window and caches them', async () => {
+      await service.getRankingStats();
+      await service.getRankingStats();
+      expect(mockPgQuery).toHaveBeenCalledTimes(3); // second call served from cache
+      for (const [sql, params] of mockPgQuery.mock.calls) {
+        expect(sql).toContain('created_at >= $1');
+        expect(params).toHaveLength(1);
+      }
+    });
   });
 });

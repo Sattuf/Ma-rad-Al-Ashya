@@ -8,12 +8,13 @@ import { ProxyModule } from './proxy/proxy.module';
 import configuration from './config/configuration';
 
 import { PrometheusModule } from '@willsoto/nestjs-prometheus';
+import { MetricsController } from './metrics/metrics.controller';
 
 const isAuthRoute = (path: string) => path.startsWith('/api/v1/auth');
 
 @Module({
   imports: [
-    PrometheusModule.register(),
+    PrometheusModule.register({ controller: MetricsController }),
     ConfigModule.forRoot({
       isGlobal: true,
       load: [configuration],

@@ -22,7 +22,10 @@ const TARGET_TYPE_MAP = {
 export default function AdminReportsPage() {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState('');
+  // Linked from the dashboard as /admin/reports?status=pending (read once, client-side).
+  const [statusFilter, setStatusFilter] = useState(() =>
+    typeof window === 'undefined' ? '' : (new URLSearchParams(window.location.search).get('status') ?? ''),
+  );
   const [typeFilter, setTypeFilter] = useState('');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);

@@ -14,6 +14,7 @@ import { Request, Response } from 'express';
 import { firstValueFrom } from 'rxjs';
 import { ApiTags, ApiOperation, ApiParam } from '@nestjs/swagger';
 import { BLOCKED_ROUTES, ROUTE_OVERRIDES, SERVICES_CONFIG, ServiceConfig } from './services.config';
+import { cacheRequests, serviceLabel, statusClass, upstreamDuration } from '../metrics/gateway-metrics';
 import { ResponseCacheService } from '../cache/response-cache.service';
 
 const UPSTREAM_TIMEOUT_MS = parseInt(process.env.UPSTREAM_TIMEOUT_MS || '15000', 10);
@@ -71,7 +72,7 @@ function toBuffer(data: unknown): Buffer {
 export function isBlockedRoute(serviceName: string, method: string, forwardedPath: string): boolean {
   return BLOCKED_ROUTES.some(
     (route) =>
-      route.service === serviceName &&
+      (route.service === '*' || route.service === serviceName) &&
       (route.method === '*' || route.method === method.toUpperCase()) &&
       route.pattern.test(forwardedPath),
   );
@@ -152,6 +153,7 @@ export class ProxyController {
     const cacheKey = `gw:cache:${service.name}:${encodedPath}${queryString}`;
     if (cacheable) {
       const hit = await this.cache!.get(cacheKey);
+      cacheRequests.inc({ service: serviceLabel(service), result: hit ? 'hit' : 'miss' });
       if (hit) {
         res.setHeader('x-cache', 'HIT');
         res.setHeader('content-type', hit.contentType);
@@ -170,6 +172,7 @@ export class ProxyController {
       headers['content-length'] = req.headers['content-length'];
     }
 
+    const stopTimer = upstreamDuration.startTimer({ service: serviceLabel(service), method: req.method });
     try {
       const response = await firstValueFrom(
         this.httpService.request({
@@ -186,6 +189,7 @@ export class ProxyController {
         }),
       );
 
+      stopTimer({ status_class: statusClass(response.status) });
       for (const header of FORWARDED_RESPONSE_HEADERS) {
         const value = response.headers[header];
         if (value !== undefined) res.setHeader(header, value as any);
@@ -204,6 +208,7 @@ export class ProxyController {
 
       return res.status(response.status).send(body);
     } catch (error) {
+      stopTimer({ status_class: statusClass() });
       // Details stay in the logs; clients only learn the service is unavailable.
       this.logger.error(`Upstream ${service.name} failed for ${req.method} ${forwardedPath}: ${error.message}`);
       throw new HttpException(

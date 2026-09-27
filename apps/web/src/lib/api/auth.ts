@@ -1,6 +1,13 @@
 import axios from 'axios';
 import Cookies from 'js-cookie';
 
+declare module 'axios' {
+  interface AxiosRequestConfig {
+    /** On an unrecoverable 401, reject instead of redirecting to /login. */
+    skipLoginRedirect?: boolean;
+  }
+}
+
 /** Public gateway URL, inlined at build time. Localhost only as a dev default. */
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1';
 
@@ -49,7 +56,10 @@ api.interceptors.response.use(
         if (typeof window !== 'undefined') {
           localStorage.removeItem('access_token');
           Cookies.remove('refresh_token');
-          window.location.href = '/login';
+          // Background checks (session restore) must not push a guest off a public page.
+          if (!originalRequest.skipLoginRedirect) {
+            window.location.href = `/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+          }
         }
         return Promise.reject(refreshError);
       }

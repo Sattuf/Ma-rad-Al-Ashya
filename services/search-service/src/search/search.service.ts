@@ -1,4 +1,5 @@
-import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
+import { Injectable, Logger, HttpException, HttpStatus, OnModuleDestroy } from '@nestjs/common';
+import { closePgPool, pgPool } from './pg-pool';
 import { ElasticsearchService } from './elasticsearch.service';
 import Redis from 'ioredis';
 import * as crypto from 'crypto';
@@ -7,7 +8,9 @@ import { SearchQueryDto } from './dto/search-query.dto';
 import { TrackClickDto } from './dto/track-click.dto';
 
 @Injectable()
-export class SearchService {
+export class SearchService implements OnModuleDestroy {
+  private rankingStatsCache?: { at: number; value: unknown };
+
   private readonly logger = new Logger(SearchService.name);
   private readonly redisClient: Redis;
   private readonly indexName = 'marad_listings';
@@ -417,17 +420,10 @@ export class SearchService {
 
   async trackClick(body: TrackClickDto) {
     try {
-      const { Client } = require('pg');
-      const pgClient = new Client({
-        connectionString: process.env.DATABASE_URL || 'postgres://postgres:postgres@localhost:5432/marad_db',
-      });
-      await pgClient.connect();
-
-      await pgClient.query(
+      await pgPool().query(
         `INSERT INTO ab_test_results (variant, session_id, query, clicked_listing_id, click_position, results_count) VALUES ($1, $2, $3, $4, $5, $6)`,
         [body.variant, body.session_id, body.query, body.listing_id || null, body.position || null, body.listing_id ? 1 : 0]
       );
-      await pgClient.end();
 
       if (body.listing_id) {
         await this.redisClient.incr(`listing:views:${body.listing_id}`);
@@ -439,77 +435,51 @@ export class SearchService {
     }
   }
 
+  /** Admin A/B stats, cached 60s. Clicks are counted over the same 30 days as the dashboard. */
   async getRankingStats() {
+    if (this.rankingStatsCache && Date.now() - this.rankingStatsCache.at < 60_000) return this.rankingStatsCache.value;
     try {
-      const { Client } = require('pg');
-      const pgClient = new Client({
-        connectionString: process.env.DATABASE_URL || 'postgres://postgres:postgres@localhost:5432/marad_db',
-      });
-      await pgClient.connect();
-
-      const [totalA, totalB] = await Promise.all([
-        this.redisClient.get('search:ab:A:total'),
-        this.redisClient.get('search:ab:B:total'),
+      const db = pgPool();
+      const since = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString().slice(0, 19).replace('T', ' ');
+      const [[totalA, totalB], clicks, zeroResults, topRanked] = await Promise.all([
+        Promise.all([this.redisClient.get('search:ab:A:total'), this.redisClient.get('search:ab:B:total')]),
+        // idx_ab_test_variant_created serves the window filter.
+        db.query(
+          `SELECT variant, COUNT(clicked_listing_id)::int AS clicks FROM ab_test_results WHERE created_at >= $1 GROUP BY variant`,
+          [since],
+        ),
+        db.query(
+          `SELECT query, COUNT(*)::int AS count FROM ab_test_results
+            WHERE results_count = 0 AND created_at >= $1 AND query <> ''
+            GROUP BY query ORDER BY 2 DESC LIMIT 10`,
+          [since],
+        ),
+        db.query(
+          `SELECT clicked_listing_id AS id, COUNT(*)::int AS clicks FROM ab_test_results
+            WHERE clicked_listing_id IS NOT NULL AND created_at >= $1
+            GROUP BY clicked_listing_id ORDER BY clicks DESC LIMIT 10`,
+          [since],
+        ),
       ]);
 
+      const clicksOf = (v: string) => clicks.rows.find((r) => r.variant === v)?.clicks ?? 0;
+      const variant = (searches: number, c: number) => ({ total_searches: searches, total_clicks: c, ctr: searches > 0 ? c / searches : 0 });
       const searchesA = parseInt(totalA || '0', 10);
       const searchesB = parseInt(totalB || '0', 10);
-
-      const clickResult = await pgClient.query(`
-        SELECT variant, COUNT(clicked_listing_id) as clicks
-        FROM ab_test_results
-        GROUP BY variant
-      `);
-      
-      let clicksA = 0;
-      let clicksB = 0;
-      for (const row of clickResult.rows) {
-        if (row.variant === 'A') clicksA = parseInt(row.clicks, 10);
-        if (row.variant === 'B') clicksB = parseInt(row.clicks, 10);
-      }
-
-      const zeroResults = await pgClient.query(`
-        SELECT query FROM ab_test_results
-        WHERE results_count = 0
-        ORDER BY created_at DESC LIMIT 10
-      `);
-
-      const topRanked = await pgClient.query(`
-        SELECT clicked_listing_id as id, COUNT(*) as clicks
-        FROM ab_test_results
-        WHERE clicked_listing_id IS NOT NULL
-        GROUP BY clicked_listing_id
-        ORDER BY clicks DESC
-        LIMIT 10
-      `);
-
-      const avgRes = await pgClient.query(`
-        SELECT AVG(results_count) as avg
-        FROM ab_test_results
-      `);
-
-      await pgClient.end();
-
-      return {
-        ab_test: {
-          variant_a: {
-            total_searches: searchesA,
-            total_clicks: clicksA,
-            ctr: searchesA > 0 ? (clicksA / searchesA) : 0
-          },
-          variant_b: {
-            total_searches: searchesB,
-            total_clicks: clicksB,
-            ctr: searchesB > 0 ? (clicksB / searchesB) : 0
-          }
-        },
+      const value = {
+        ab_test: { variant_a: variant(searchesA, clicksOf('A')), variant_b: variant(searchesB, clicksOf('B')) },
         top_ranked_listings: topRanked.rows,
-        avg_results_per_search: parseFloat(avgRes.rows[0]?.avg || '0'),
-        zero_results_queries: zeroResults.rows.map((r: any) => r.query)
+        zero_results_queries: zeroResults.rows,
       };
+      this.rankingStatsCache = { at: Date.now(), value };
+      return value;
     } catch (error) {
       this.logger.error(`Failed to get stats: ${error.message}`);
       throw new HttpException('Stats failed', HttpStatus.INTERNAL_SERVER_ERROR);
     }
+  }
+
+  async onModuleDestroy() {
+    await closePgPool();
   }
 }

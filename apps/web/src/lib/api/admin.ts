@@ -15,15 +15,6 @@ export interface Report {
   targetInfo?: any; // populated info about the listing or user
 }
 
-export interface AdminStats {
-  pendingReports: number;
-  reportsToday: number;
-  resolvedToday: number;
-  totalReports: number;
-  topReportedListings: Array<{ id: string; title: string; count: number }>;
-  topReportedUsers: Array<{ id: string; name: string; count: number }>;
-}
-
 export const adminApi = {
   getReports: async (
     status?: string,
@@ -57,25 +48,5 @@ export const adminApi = {
       admin_note: data.adminNote,
     });
     return response.data;
-  },
-
-  getDashboardStats: async (): Promise<AdminStats> => {
-    const response = await api.get('/admin/dashboard/stats');
-    const s = response.data as {
-      pending_reports: number;
-      reports_today: number;
-      resolved_today: number;
-      total_reports?: number;
-      top_reported_listings: Array<{ target_id: string; pending_count: number; total_count: number }>;
-      top_reported_users: Array<{ target_id: string; pending_count: number; total_count: number }>;
-    };
-    return {
-      pendingReports: s.pending_reports,
-      reportsToday: s.reports_today,
-      resolvedToday: s.resolved_today,
-      totalReports: s.total_reports ?? 0,
-      topReportedListings: s.top_reported_listings.map((r) => ({ id: r.target_id, title: r.target_id, count: r.pending_count })),
-      topReportedUsers: s.top_reported_users.map((r) => ({ id: r.target_id, name: r.target_id, count: r.pending_count })),
-    };
   },
 };

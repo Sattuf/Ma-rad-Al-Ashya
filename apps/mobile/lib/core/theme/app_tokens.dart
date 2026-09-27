@@ -27,6 +27,10 @@ class AppColors {
   final Color warning;
   final Color warningSoft;
   final Color focusRing;
+  final Color chart1;
+  final Color chart2;
+  final Color chart3;
+  final Color chartGrid;
 
   const AppColors({
     required this.background,
@@ -51,6 +55,10 @@ class AppColors {
     required this.warning,
     required this.warningSoft,
     required this.focusRing,
+    required this.chart1,
+    required this.chart2,
+    required this.chart3,
+    required this.chartGrid,
   });
 
   static const light = AppColors(
@@ -76,6 +84,10 @@ class AppColors {
     warning: AppLightColors.warning,
     warningSoft: AppLightColors.warningSoft,
     focusRing: AppLightColors.focusRing,
+    chart1: AppLightColors.chart1,
+    chart2: AppLightColors.chart2,
+    chart3: AppLightColors.chart3,
+    chartGrid: AppLightColors.chartGrid,
   );
 
   static const dark = AppColors(
@@ -101,6 +113,10 @@ class AppColors {
     warning: AppDarkColors.warning,
     warningSoft: AppDarkColors.warningSoft,
     focusRing: AppDarkColors.focusRing,
+    chart1: AppDarkColors.chart1,
+    chart2: AppDarkColors.chart2,
+    chart3: AppDarkColors.chart3,
+    chartGrid: AppDarkColors.chartGrid,
   );
 }
 
@@ -128,6 +144,10 @@ abstract final class AppLightColors {
   static const warning = Color(0xFFB45309);
   static const warningSoft = Color(0xFFFFFBEB);
   static const focusRing = Color(0xFF14B8A6);
+  static const chart1 = Color(0xFF2A78D6);
+  static const chart2 = Color(0xFFEB6834);
+  static const chart3 = Color(0xFF1BAF7A);
+  static const chartGrid = Color(0xFFE2E8F0);
 }
 
 /// Compile-time constants (usable inside `const` widgets).
@@ -154,6 +174,10 @@ abstract final class AppDarkColors {
   static const warning = Color(0xFFFBBF24);
   static const warningSoft = Color(0xFF2A2110);
   static const focusRing = Color(0xFF2DD4BF);
+  static const chart1 = Color(0xFF3987E5);
+  static const chart2 = Color(0xFFD95926);
+  static const chart3 = Color(0xFF199E70);
+  static const chartGrid = Color(0xFF1E293B);
 }
 
 /// Brand palette (same in both modes).

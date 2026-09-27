@@ -28,6 +28,9 @@ export interface ServiceConfig {
  * Matched against `${METHOD} /${forwardedPath}`.
  */
 export const BLOCKED_ROUTES: { service: string; method: string; pattern: RegExp }[] = [
+  // Every NestJS/FastAPI service exposes Prometheus metrics at /metrics for internal
+  // scraping; where the prefix is stripped (/auth/metrics → /metrics) it must not leak.
+  { service: '*', method: '*', pattern: /^\/metrics\/?$/i },
   { service: 'listings-service', method: 'POST', pattern: /^\/listings\/batch\/?$/i },
   { service: 'listings-service', method: 'PUT', pattern: /^\/listings\/[^/]+\/status\/?$/i },
   { service: 'users-service', method: '*', pattern: /^\/users\/[^/]+\/(status|verify)\/?$/i },

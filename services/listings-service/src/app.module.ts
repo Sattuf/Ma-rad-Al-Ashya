@@ -13,6 +13,7 @@ import { ListingImage } from './listings/entities/listing-image.entity';
 import { Category } from './categories/entities/category.entity';
 import { Promotion } from './promotions/entities/promotion.entity';
 import { PromotionsModule } from './promotions/promotions.module';
+import { AdminStatsModule } from './admin-stats/admin-stats.module';
 
 import { PrometheusModule } from '@willsoto/nestjs-prometheus';
 
@@ -35,6 +36,7 @@ import { PrometheusModule } from '@willsoto/nestjs-prometheus';
     ListingsModule,
     CategoriesModule,
     PromotionsModule,
+    AdminStatsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

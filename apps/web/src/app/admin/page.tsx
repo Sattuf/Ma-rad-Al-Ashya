@@ -1,149 +1,308 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { adminApi, AdminStats } from '@/lib/api/admin';
-import { AlertCircle, Flag, CheckCircle, BarChart3, Users, Building } from 'lucide-react';
 import Link from 'next/link';
+import useSWR from 'swr';
+import { RefreshCw } from 'lucide-react';
+import { adminDashboardApi, type ModerationStats } from '@/lib/api/admin-dashboard';
+import { listingsApi } from '@/lib/api/listings';
+import { userApi } from '@/lib/api/users';
+import { Button, ErrorState, Skeleton } from '@/components/ui';
+import { BarList, ChartCard, StatTile, TrendChart, TrendTable, type TrendSeries } from '@/components/admin/charts';
+import { fmt } from '@/components/admin/format';
+
+// Server caches are 30–60s; refreshing faster only re-reads the same numbers.
+const SWR_OPTIONS = { refreshInterval: 60_000, revalidateOnFocus: false, keepPreviousData: true };
+
+const REASONS: Record<string, string> = {
+  spam: 'رسائل مزعجة',
+  fake: 'إعلان مزيّف',
+  scam: 'احتيال',
+  inappropriate: 'محتوى غير لائق',
+  offensive: 'مسيء',
+  wrong_category: 'قسم خاطئ',
+  other: 'أخرى',
+};
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="flex flex-col gap-4">
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-fg-subtle">{title}</h2>
+      {children}
+    </section>
+  );
+}
+
+function Failed({ what, retry }: { what: string; retry: () => void }) {
+  return (
+    <div className="rounded-card border border-line bg-surface">
+      <ErrorState title={`تعذّر تحميل ${what}`} description="بقية اللوحة تعمل؛ هذا القسم وحده متأثر." onRetry={retry} />
+    </div>
+  );
+}
+
+function Fact({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <div className="rounded-card border border-line bg-surface p-4">
+      <p className="text-sm text-fg-muted">{label}</p>
+      <p className="mt-1 text-xl font-semibold text-fg">{value}</p>
+      {hint && <p className="mt-1 text-xs text-fg-subtle">{hint}</p>}
+    </div>
+  );
+}
+
+/** Reported ids → readable names. Deleted or sold listings are not returned by the public list. */
+function useReportedNames(moderation?: ModerationStats) {
+  const listingIds = moderation?.topReportedListings.map((l) => l.id) ?? [];
+  const userIds = moderation?.topReportedUsers.map((u) => u.id) ?? [];
+  const { data: listings } = useSWR(listingIds.length ? ['admin-reported-listings', ...listingIds] : null, async () => {
+    const page = await listingsApi.getListings({ ids: listingIds.join(','), limit: listingIds.length });
+    return new Map(page.data.map((l) => [l.id, l.title]));
+  });
+  const { data: users } = useSWR(userIds.length ? ['admin-reported-users', ...userIds] : null, async () => {
+    const found = await Promise.allSettled(userIds.map((id) => userApi.getUser(id)));
+    return new Map(found.flatMap((r, i) => (r.status === 'fulfilled' ? [[userIds[i], r.value.name || 'مستخدم'] as const] : [])));
+  });
+  return { listings, users };
+}
 
 export default function AdminDashboardPage() {
-  const [stats, setStats] = useState<AdminStats | null>(null);
-  const [loading, setLoading] = useState(true);
+  const moderation = useSWR('admin-stats-moderation', adminDashboardApi.moderation, SWR_OPTIONS);
+  const users = useSWR('admin-stats-users', adminDashboardApi.users, SWR_OPTIONS);
+  const listings = useSWR('admin-stats-listings', adminDashboardApi.listings, SWR_OPTIONS);
+  const deals = useSWR('admin-stats-transactions', adminDashboardApi.transactions, SWR_OPTIONS);
+  const fraud = useSWR('admin-stats-fraud', adminDashboardApi.fraud, SWR_OPTIONS);
+  const names = useReportedNames(moderation.data);
 
-  useEffect(() => {
-    adminApi.getDashboardStats()
-      .then(setStats)
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, []);
+  const all = [moderation, users, listings, deals, fraud];
+  const refreshing = all.some((s) => s.isValidating);
+  const refresh = () => all.forEach((s) => s.mutate());
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
-
-  // Provide defaults if stats is null
-  const data = stats || {
-    pendingReports: 0,
-    reportsToday: 0,
-    resolvedToday: 0,
-    totalReports: 0,
-    topReportedListings: [],
-    topReportedUsers: []
-  };
-
-  const statCards = [
-    { title: 'بلاغات معلقة', value: data.pendingReports, icon: AlertCircle, color: 'text-amber-500', bg: 'bg-amber-500/10' },
-    { title: 'بلاغات اليوم', value: data.reportsToday, icon: Flag, color: 'text-primary', bg: 'bg-brand-600/10' },
-    { title: 'تم حلها اليوم', value: data.resolvedToday, icon: CheckCircle, color: 'text-primary', bg: 'bg-brand-600/10' },
-    { title: 'إجمالي البلاغات', value: data.totalReports, icon: BarChart3, color: 'text-primary', bg: 'bg-brand-600/10' },
-  ];
+  const m = moderation.data;
+  const reportSeries: TrendSeries[] | null = m
+    ? [
+        { key: 'created', label: 'بلاغات واردة', color: 'chart1', data: m.createdDaily },
+        { key: 'handled', label: 'بلاغات عولجت', color: 'chart2', data: m.handledDaily },
+      ]
+    : null;
+  const queueIsOld = (m?.oldestPendingHours ?? 0) > 24;
 
   return (
-    <div className="space-y-8">
-      <h1 className="text-3xl font-bold text-white">لوحة التحكم</h1>
+    <div className="flex flex-col gap-10">
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-fg">لوحة التحكم</h1>
+          <p className="text-fg-muted">آخر 30 يوماً، بتوقيت UTC. تتحدّث الأرقام كل دقيقة.</p>
+        </div>
+        <Button variant="secondary" onClick={refresh} loading={refreshing}>
+          <RefreshCw className="h-4 w-4" aria-hidden /> تحديث
+        </Button>
+      </header>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {statCards.map((card, i) => {
-          const Icon = card.icon;
-          return (
-            <div key={i} className="bg-gray-800 rounded-xl p-6 border border-gray-700 shadow-sm">
-              <div className="flex items-center justify-between mb-4">
-                <div className={`p-3 rounded-lg ${card.bg}`}>
-                  <Icon size={24} className={card.color} />
-                </div>
-                <span className="text-3xl font-bold text-white">{card.value}</span>
+      {/* KPI row: the queue that needs action first, then growth. */}
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {m ? (
+          <StatTile
+            label="بلاغات بانتظار المراجعة"
+            value={m.pendingReports}
+            href="/admin/reports?status=pending"
+            tone={queueIsOld ? 'attention' : 'default'}
+            footnote={
+              m.oldestPendingHours != null ? (
+                <span className={queueIsOld ? 'font-semibold text-warning' : undefined}>
+                  {queueIsOld && '⚠ '}أقدمها منذ {fmt.hours(m.oldestPendingHours)}
+                </span>
+              ) : (
+                'لا شيء بانتظارك'
+              )
+            }
+          />
+        ) : moderation.error ? (
+          <Failed what="البلاغات" retry={() => moderation.mutate()} />
+        ) : (
+          <Skeleton className="h-36" />
+        )}
+
+        {users.data ? (
+          <StatTile label="مستخدمون جدد · 7 أيام" value={users.data.signupsLast7Days} previous={users.data.signupsPrevious7Days} trend={users.data.signupsDaily} />
+        ) : users.error ? (
+          <Failed what="المستخدمين" retry={() => users.mutate()} />
+        ) : (
+          <Skeleton className="h-36" />
+        )}
+
+        {listings.data ? (
+          <StatTile
+            label="إعلانات جديدة · 7 أيام"
+            value={listings.data.listings.createdLast7Days}
+            previous={listings.data.listings.createdPrevious7Days}
+            trend={listings.data.listings.createdDaily}
+          />
+        ) : listings.error ? (
+          <Failed what="الإعلانات" retry={() => listings.mutate()} />
+        ) : (
+          <Skeleton className="h-36" />
+        )}
+
+        {deals.data ? (
+          <StatTile label="صفقات مكتملة · 7 أيام" value={deals.data.completedLast7Days} previous={deals.data.completedPrevious7Days} trend={deals.data.completedDaily} />
+        ) : deals.error ? (
+          <Failed what="الصفقات" retry={() => deals.mutate()} />
+        ) : (
+          <Skeleton className="h-36" />
+        )}
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-5">
+        <div className="lg:col-span-3">
+          {reportSeries ? (
+            <ChartCard
+              title="البلاغات: الواردة مقابل المعالَجة"
+              subtitle={`يومياً، آخر 30 يوماً (اليوم الأخير لم يكتمل بعد)${m?.avgReviewHours30d != null ? ` · متوسط زمن المراجعة ${fmt.hours(m.avgReviewHours30d)}` : ''}`}
+              table={<TrendTable series={reportSeries} />}
+            >
+              <TrendChart series={reportSeries} />
+            </ChartCard>
+          ) : moderation.error ? (
+            <Failed what="اتجاه البلاغات" retry={() => moderation.mutate()} />
+          ) : (
+            <Skeleton className="h-80" />
+          )}
+        </div>
+        <div className="lg:col-span-2">
+          {listings.data ? (
+            <ChartCard
+              title="الأقسام الأكثر نشاطاً"
+              subtitle="عدد الإعلانات المنشورة الآن"
+              table={
+                <table className="w-full text-sm">
+                  <thead className="text-fg-muted">
+                    <tr>
+                      <th scope="col" className="py-2 text-start font-medium">القسم</th>
+                      <th scope="col" className="py-2 text-end font-medium">إعلانات منشورة</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-line tabular-nums">
+                    {listings.data.topCategories.map((c) => (
+                      <tr key={c.id}>
+                        <th scope="row" className="py-1.5 text-start font-normal text-fg">{c.name}</th>
+                        <td className="py-1.5 text-end text-fg">{fmt.int(c.activeListings)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              }
+            >
+              {listings.data.topCategories.length ? (
+                <BarList
+                  valueLabel="الإعلانات المنشورة"
+                  items={listings.data.topCategories.map((c) => ({ id: c.id, label: c.name, value: c.activeListings, href: `/listings?categoryId=${c.id}` }))}
+                />
+              ) : (
+                <p className="py-8 text-center text-sm text-fg-muted">لا توجد إعلانات منشورة بعد.</p>
+              )}
+            </ChartCard>
+          ) : listings.error ? (
+            <Failed what="الأقسام" retry={() => listings.mutate()} />
+          ) : (
+            <Skeleton className="h-80" />
+          )}
+        </div>
+      </div>
+
+      <Section title="السوق">
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
+          {listings.data && (
+            <>
+              <Fact label="إعلانات منشورة" value={fmt.compact(listings.data.listings.active)} hint={`${fmt.int(listings.data.listings.sold)} مباعة · ${fmt.int(listings.data.listings.expired)} منتهية`} />
+              <Fact
+                label="إيراد الترويج · 30 يوماً"
+                value={fmt.money(listings.data.promotions.revenueLast30Days, listings.data.promotions.currency)}
+                hint={`${fmt.int(listings.data.promotions.paidLast30Days)} عملية دفع · ${fmt.int(listings.data.promotions.active)} ترويج نشط`}
+              />
+            </>
+          )}
+          {deals.data && (
+            <>
+              <Fact
+                label="نسبة إتمام الصفقات"
+                value={deals.data.completionRate == null ? '—' : fmt.percent(deals.data.completionRate)}
+                hint="من الصفقات التي بدأت وانتهت خلال 30 يوماً"
+              />
+              <Fact label="صفقات مفتوحة" value={fmt.int(deals.data.openDeals)} hint="بانتظار تأكيد أحد الطرفين" />
+              <Fact
+                label="متوسط التقييم · 30 يوماً"
+                value={deals.data.averageRatingLast30Days == null ? '—' : `${fmt.decimal(deals.data.averageRatingLast30Days)} من 5`}
+                hint={`${fmt.int(deals.data.reviewsLast30Days)} تقييم`}
+              />
+            </>
+          )}
+          {users.data && (
+            <Fact
+              label="هويات موثّقة"
+              value={users.data.totalUsers ? fmt.percent(users.data.identityVerified / users.data.totalUsers) : '—'}
+              hint={`${fmt.int(users.data.identityVerified)} من ${fmt.int(users.data.totalUsers)} مستخدم`}
+            />
+          )}
+        </div>
+      </Section>
+
+      <Section title="الثقة والأمان">
+        <div className="grid gap-4 lg:grid-cols-3">
+          <div className="rounded-card border border-line bg-surface p-5">
+            <h3 className="mb-3 font-semibold text-fg">الإعلانات الأكثر إبلاغاً</h3>
+            {m?.topReportedListings.length ? (
+              <ol className="flex flex-col divide-y divide-line">
+                {m.topReportedListings.map((r) => (
+                  <li key={r.id} className="flex items-center justify-between gap-3 py-2">
+                    <Link href={`/listings/${r.id}`} className="min-w-0 truncate text-sm text-fg hover:text-primary">
+                      {names.listings?.get(r.id) ?? (names.listings ? 'إعلان محذوف أو مباع' : '…')}
+                    </Link>
+                    <span className="shrink-0 text-sm text-fg-muted tabular-nums">{fmt.int(r.pending)} معلّق</span>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p className="text-sm text-fg-muted">{m ? 'لا توجد بلاغات معلّقة على إعلانات.' : '…'}</p>
+            )}
+          </div>
+          <div className="rounded-card border border-line bg-surface p-5">
+            <h3 className="mb-3 font-semibold text-fg">الحسابات الأكثر إبلاغاً</h3>
+            {m?.topReportedUsers.length ? (
+              <ol className="flex flex-col divide-y divide-line">
+                {m.topReportedUsers.map((r) => (
+                  <li key={r.id} className="flex items-center justify-between gap-3 py-2">
+                    <Link href={`/admin/fraud/${r.id}`} className="min-w-0 truncate text-sm text-fg hover:text-primary">
+                      {names.users?.get(r.id) ?? (names.users ? 'حساب غير متاح' : '…')}
+                    </Link>
+                    <span className="shrink-0 text-sm text-fg-muted tabular-nums">{fmt.int(r.pending)} معلّق</span>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p className="text-sm text-fg-muted">{m ? 'لا توجد بلاغات معلّقة على حسابات.' : '…'}</p>
+            )}
+          </div>
+          <div className="flex flex-col gap-4">
+            {fraud.data ? (
+              <Link href="/admin/fraud" className="block rounded-card border border-line bg-surface p-5 hover:border-line-strong">
+                <p className="text-sm text-fg-muted">حسابات عالية الخطورة · 7 أيام</p>
+                <p className="mt-1 text-3xl font-semibold text-fg">{fmt.int(fraud.data.highRiskUsers7d)}</p>
+                <p className="mt-1 text-xs text-fg-subtle">{fmt.int(fraud.data.highRiskSignals7d)} إشارة بدرجة خطورة 0٫7 فأعلى</p>
+              </Link>
+            ) : fraud.error ? (
+              <Failed what="مؤشرات الاحتيال" retry={() => fraud.mutate()} />
+            ) : (
+              <Skeleton className="h-28" />
+            )}
+            {m && m.reasons30d.length > 0 && (
+              <div className="rounded-card border border-line bg-surface p-5">
+                <h3 className="mb-3 font-semibold text-fg">أسباب البلاغات · 30 يوماً</h3>
+                <BarList valueLabel="البلاغات" items={m.reasons30d.map((r) => ({ id: r.reason, label: REASONS[r.reason] ?? r.reason, value: r.count }))} />
               </div>
-              <h3 className="text-gray-400 font-medium">{card.title}</h3>
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Top Reported Listings */}
-        <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden shadow-sm">
-          <div className="p-6 border-b border-gray-700 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Building className="text-primary" size={20} />
-              <h2 className="text-xl font-bold text-white">الإعلانات الأكثر إبلاغاً</h2>
-            </div>
-          </div>
-          <div className="p-0">
-            {data.topReportedListings.length > 0 ? (
-              <table className="w-full text-start">
-                <thead className="bg-gray-900/50 text-gray-400 text-sm">
-                  <tr>
-                    <th className="p-4 font-medium">العنوان</th>
-                    <th className="p-4 font-medium w-24">البلاغات</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-700">
-                  {data.topReportedListings.map(listing => (
-                    <tr key={listing.id} className="hover:bg-gray-700/30 transition-colors">
-                      <td className="p-4 text-white">
-                        <Link href={`/listings/${listing.id}`} className="hover:text-brand-400 transition-colors line-clamp-1">
-                          {listing.title}
-                        </Link>
-                      </td>
-                      <td className="p-4">
-                        <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-full text-xs font-medium bg-red-500/10 text-red-400">
-                          {listing.count}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <div className="p-8 text-center text-gray-500">لا توجد بيانات حالياً</div>
             )}
           </div>
         </div>
-
-        {/* Top Reported Users */}
-        <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden shadow-sm">
-          <div className="p-6 border-b border-gray-700 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Users className="text-primary" size={20} />
-              <h2 className="text-xl font-bold text-white">المستخدمين الأكثر إبلاغاً</h2>
-            </div>
-          </div>
-          <div className="p-0">
-            {data.topReportedUsers.length > 0 ? (
-              <table className="w-full text-start">
-                <thead className="bg-gray-900/50 text-gray-400 text-sm">
-                  <tr>
-                    <th className="p-4 font-medium">الاسم</th>
-                    <th className="p-4 font-medium w-24">البلاغات</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-700">
-                  {data.topReportedUsers.map(user => (
-                    <tr key={user.id} className="hover:bg-gray-700/30 transition-colors">
-                      <td className="p-4 text-white">
-                        <Link href={`/users/${user.id}`} className="hover:text-brand-400 transition-colors line-clamp-1">
-                          {user.name}
-                        </Link>
-                      </td>
-                      <td className="p-4">
-                        <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-full text-xs font-medium bg-red-500/10 text-red-400">
-                          {user.count}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <div className="p-8 text-center text-gray-500">لا توجد بيانات حالياً</div>
-            )}
-          </div>
-        </div>
-      </div>
+      </Section>
     </div>
   );
 }

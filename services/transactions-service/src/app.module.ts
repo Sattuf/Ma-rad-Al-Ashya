@@ -7,6 +7,7 @@ import { postgresConnectionOptions } from './common/database';
 import { TransactionsModule } from './transactions/transactions.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { AdminStatsModule } from './admin-stats/admin-stats.module';
 
 import { PrometheusModule } from '@willsoto/nestjs-prometheus';
 
@@ -20,6 +21,7 @@ import { PrometheusModule } from '@willsoto/nestjs-prometheus';
     TransactionsModule,
     ReviewsModule,
     NotificationsModule,
+    AdminStatsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

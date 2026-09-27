@@ -47,13 +47,28 @@ def test_admin_action_with_token(monkeypatch):
     # We mock pg_pool to avoid errors
     token = get_admin_token()
     headers = {"Authorization": f"Bearer {token}"}
-    payload = {
-        "user_id": "u1",
-        "action": "BLOCK"
-    }
-    response = client.post("/fraud/admin/action", json=payload, headers=headers)
-    assert response.status_code == 200
-    assert "applied to user" in response.json()["message"]
+    # An action the service cannot perform is refused, never reported as done.
+    response = client.post("/fraud/admin/action", json={"user_id": "u1", "action": "BLOCK"}, headers=headers)
+    assert response.status_code == 400
+
+
+def test_admin_lock_reports_failure_when_users_service_is_down(monkeypatch):
+    import httpx as _httpx
+
+    class DownClient:
+        def __init__(self, *a, **k):
+            pass
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, *a):
+            pass
+        async def put(self, *a, **k):
+            raise _httpx.ConnectError("down")
+
+    monkeypatch.setattr("routers.admin.httpx.AsyncClient", DownClient)
+    headers = {"Authorization": f"Bearer {get_admin_token()}"}
+    response = client.post("/fraud/admin/action", json={"user_id": "u1", "action": "lock"}, headers=headers)
+    assert response.status_code == 502
 
 def test_risk_score(monkeypatch):
     def mock_acquire(*args, **kwargs):

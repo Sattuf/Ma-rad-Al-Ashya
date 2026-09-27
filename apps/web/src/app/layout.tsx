@@ -20,6 +20,7 @@ export const metadata: Metadata = {
 
 import FCMProvider from "@/components/providers/FCMProvider";
 import { themeInitScript } from "@/components/ui/ThemeToggle";
+import { SessionRestore } from "@/components/auth/SessionRestore";
 
 export default function RootLayout({
   children,
@@ -33,6 +34,7 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body className="antialiased min-h-screen flex flex-col bg-canvas text-fg">
+        <SessionRestore />
         <FCMProvider />
         <Navbar />
         {children}

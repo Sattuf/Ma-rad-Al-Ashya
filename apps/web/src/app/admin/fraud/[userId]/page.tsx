@@ -41,14 +41,14 @@ export default function FraudUserDetailsPage() {
       }
       
       await fraudApi.takeAction(userId, actionType, reason);
-      alert('تم تنفيذ الإجراء بنجاح');
+      alert(actionType === 'lock' ? 'تم إيقاف الحساب.' : 'سُجّل الحساب كمشبوه.');
       
       // Refresh data
       const data = await fraudApi.getRiskDetails(userId);
       setRiskData(data);
-    } catch (error) {
-      console.error('Error taking action:', error);
-      alert('حدث خطأ أثناء تنفيذ الإجراء');
+    } catch (error: any) {
+      // The server only answers 2xx when the action really happened.
+      alert(`لم يُنفَّذ الإجراء: ${error?.response?.data?.detail ?? 'تعذّر الاتصال بالخادم'}`);
     } finally {
       setActionLoading(null);
     }
@@ -145,16 +145,6 @@ export default function FraudUserDetailsPage() {
             <Flag size={18} />
             تحديد كمشبوه (Flag)
             {actionLoading === 'flag' && <span className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full me-2"></span>}
-          </button>
-          
-          <button
-            onClick={() => handleAction('rate_limit')}
-            disabled={actionLoading !== null}
-            className="flex items-center gap-2 bg-orange-500/10 hover:bg-orange-500/20 text-orange-500 border border-orange-500/20 px-4 py-2.5 rounded-lg transition-colors"
-          >
-            <AlertTriangle size={18} />
-            تقييد المعدل (Rate Limit)
-            {actionLoading === 'rate_limit' && <span className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full me-2"></span>}
           </button>
           
           <button
