@@ -28,12 +28,12 @@ export interface ServiceConfig {
  * Matched against `${METHOD} /${forwardedPath}`.
  */
 export const BLOCKED_ROUTES: { service: string; method: string; pattern: RegExp }[] = [
-  { service: 'listings-service', method: 'POST', pattern: /^\/listings\/batch\/?$/ },
-  { service: 'listings-service', method: 'PUT', pattern: /^\/listings\/[^/]+\/status\/?$/ },
-  { service: 'users-service', method: '*', pattern: /^\/users\/[^/]+\/(status|verify)\/?$/ },
-  { service: 'search-service', method: 'POST', pattern: /^\/search\/index\/?$/ },
-  { service: 'search-service', method: 'PUT', pattern: /^\/search\/listings\/[^/]+\/boost\/?$/ },
-  { service: 'fraud-service', method: '*', pattern: /^\/fraud\/(device|transaction)(\/|$)/ },
+  { service: 'listings-service', method: 'POST', pattern: /^\/listings\/batch\/?$/i },
+  { service: 'listings-service', method: 'PUT', pattern: /^\/listings\/[^/]+\/status\/?$/i },
+  { service: 'users-service', method: '*', pattern: /^\/users\/[^/]+\/(status|verify)\/?$/i },
+  { service: 'search-service', method: 'POST', pattern: /^\/search\/index\/?$/i },
+  { service: 'search-service', method: 'PUT', pattern: /^\/search\/listings\/[^/]+\/boost\/?$/i },
+  { service: 'fraud-service', method: '*', pattern: /^\/fraud\/(device|transaction)(\/|$)/i },
 ];
 
 export const SERVICES_CONFIG: ServiceConfig[] = [

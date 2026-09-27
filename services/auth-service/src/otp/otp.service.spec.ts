@@ -51,6 +51,7 @@ describe('OtpService', () => {
       del: jest.fn(),
       setIfAbsent: jest.fn().mockResolvedValue(true),
       incrWithTtl: jest.fn().mockResolvedValue(1),
+      deleteByPattern: jest.fn(),
     };
 
     const mockUsersService = {
@@ -214,6 +215,16 @@ describe('OtpService', () => {
         status: HttpStatus.TOO_MANY_REQUESTS,
       });
       expect(authService.loginWithoutPassword).not.toHaveBeenCalled();
+    });
+      it('drops the password of an unverified pre-registered account on first phone proof', async () => {
+      redisService.get.mockImplementation(async (key: string) => (key === `otp_code:${mockPhone}` ? '482913' : null));
+      usersService.findOneByPhone.mockResolvedValue({ ...mockUser, isPhoneVerified: false, passwordHash: 'attacker' });
+      usersService.update.mockResolvedValue({ ...mockUser, isPhoneVerified: true, passwordHash: null });
+
+      await service.verifyOtp(mockPhone, '482913');
+
+      expect(usersService.update).toHaveBeenCalledWith(mockUser.id, { isPhoneVerified: true, passwordHash: null });
+      expect((redisService as any).deleteByPattern).toHaveBeenCalledWith(`refresh:${mockUser.id}:*`);
     });
   });
 });

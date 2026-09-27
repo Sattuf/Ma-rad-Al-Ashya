@@ -172,7 +172,11 @@ export class OtpService {
         preferredLanguage: 'ar',
       });
     } else if (!user.isPhoneVerified) {
-      user = await this.usersService.update(user.id, { isPhoneVerified: true });
+      // First proof of phone ownership. Whoever registered this number before without
+      // verifying it may not be its owner, so their password and sessions are dropped
+      // (pre-registration account hijack).
+      user = await this.usersService.update(user.id, { isPhoneVerified: true, passwordHash: null });
+      await this.redisService.deleteByPattern(`refresh:${user.id}:*`);
     }
 
     return this.authService.loginWithoutPassword(user);

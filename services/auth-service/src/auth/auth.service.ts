@@ -262,6 +262,13 @@ export class AuthService {
           const updateData: Partial<User> = {
             authProvider: provider,
           };
+          if (!user.isEmailVerified) {
+            // The provider proves email ownership for the first time: an unverified
+            // registrant's password and sessions must not survive (pre-registration hijack).
+            updateData.isEmailVerified = true;
+            updateData.passwordHash = null;
+            await this.redisService.deleteByPattern(`refresh:${user.id}:*`);
+          }
           if (provider === AuthProvider.GOOGLE) {
             updateData.googleId = profile.id;
           } else if (provider === AuthProvider.FACEBOOK) {

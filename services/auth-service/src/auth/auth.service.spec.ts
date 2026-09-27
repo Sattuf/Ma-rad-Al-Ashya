@@ -209,6 +209,23 @@ describe('AuthService', () => {
     });
   });
 
+  describe('handleOAuth pre-registration hijack', () => {
+    it('clears the password of an unverified account when Google proves the email', async () => {
+      (usersService as any).findOneByGoogleId = jest.fn().mockResolvedValue(null);
+      usersService.findOneByEmail.mockResolvedValue({ ...mockUser, isEmailVerified: false });
+      usersService.update.mockResolvedValue({ ...mockUser, isEmailVerified: true, passwordHash: null });
+      jwtService.signAsync.mockResolvedValue('t');
+
+      await service.handleOAuth({ id: 'g-1', email: mockUser.email, emailVerified: true }, AuthProvider.GOOGLE);
+
+      expect(usersService.update).toHaveBeenCalledWith(
+        mockUser.id,
+        expect.objectContaining({ googleId: 'g-1', isEmailVerified: true, passwordHash: null }),
+      );
+      expect(redisService.deleteByPattern).toHaveBeenCalledWith(`refresh:${mockUser.id}:*`);
+    });
+  });
+
   describe('refresh', () => {
     it('should revoke all sessions when a token rotated long ago is replayed', async () => {
       jwtService.verifyAsync.mockResolvedValue({ sub: 'user-uuid-123', jti: 'old-jti' });
