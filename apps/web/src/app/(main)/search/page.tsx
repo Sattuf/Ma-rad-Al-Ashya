@@ -1,33 +1,16 @@
-'use client';
+import { redirect } from 'next/navigation';
 
-import { Suspense, useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
-import { SearchClient } from '@/components/search/SearchClient';
-import { Loader2 } from 'lucide-react';
-import { trackEvent } from '@/lib/analytics';
-
-function SearchPageContent() {
-  const searchParams = useSearchParams();
-  const q = searchParams.get('q') || '';
-
-  useEffect(() => {
-    if (q) {
-      trackEvent('search', { searchQuery: q });
-    }
-  }, [q]);
-
-  return <SearchClient />;
+/**
+ * Old search URL. Search lives on /listings (text, category and price filters that the
+ * API actually supports); this keeps shared /search?q=… links working.
+ */
+export default async function SearchPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const params = await searchParams;
+  const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v)?.trim() ?? '';
+  const next = new URLSearchParams();
+  const search = one(params.q) || one(params.search);
+  if (search) next.set('search', search.slice(0, 100));
+  for (const key of ['minPrice', 'maxPrice', 'categoryId'] as const) if (one(params[key])) next.set(key, one(params[key]));
+  const qs = next.toString();
+  redirect(qs ? `/listings?${qs}` : '/listings');
 }
-
-export default function SearchPage() {
-  return (
-    <Suspense fallback={
-      <div className="flex h-[50vh] items-center justify-center text-primary">
-        <Loader2 className="animate-spin w-12 h-12" />
-      </div>
-    }>
-      <SearchPageContent />
-    </Suspense>
-  );
-}
-

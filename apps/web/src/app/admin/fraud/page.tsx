@@ -28,7 +28,7 @@ export default function FraudDashboardPage() {
   }, []);
 
   if (loading) {
-    return <div className="p-8 text-center">جاري التحميل...</div>;
+    return <div className="p-8 text-center">جارٍ التحميل…</div>;
   }
 
   const statCards = [

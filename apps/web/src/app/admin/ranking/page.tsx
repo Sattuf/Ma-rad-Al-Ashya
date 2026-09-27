@@ -62,7 +62,7 @@ export default function RankingDashboard() {
   if (error || !data) {
     return (
       <Card>
-        <ErrorState title="تعذّر تحميل إحصائيات الترتيب" onRetry={() => mutate()} />
+        <ErrorState error={error} title="تعذّر تحميل إحصائيات الترتيب" onRetry={() => mutate()} />
       </Card>
     );
   }

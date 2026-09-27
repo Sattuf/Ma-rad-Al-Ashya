@@ -1,3 +1,4 @@
+import 'package:marad_mobile/core/utils/money.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
@@ -36,7 +37,7 @@ class _PromoteListingScreenState extends ConsumerState<PromoteListingScreen> {
               children: [
                 Text('الخطة: ${plan.name}'),
                 const SizedBox(height: 8),
-                Text('السعر: \$${plan.price}'),
+                Text('السعر: ${formatPrice(plan.price)}'),
                 const SizedBox(height: 16),
                 const Text(
                   'لقد تم اكتشاف بيئة تجريبية/موجّه محلي. هل ترغب في محاكاة نجاح الدفع؟',
@@ -217,7 +218,7 @@ class _PromoteListingScreenState extends ConsumerState<PromoteListingScreen> {
                                         borderRadius: BorderRadius.circular(20),
                                       ),
                                       child: Text(
-                                        '\$${plan.price}',
+                                        formatPrice(plan.price),
                                         style: TextStyle(
                                           fontSize: 18,
                                           fontWeight: FontWeight.bold,
@@ -306,7 +307,21 @@ class _PromoteListingScreenState extends ConsumerState<PromoteListingScreen> {
             );
           },
           loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, s) => Center(child: Text('حدث خطأ في تحميل الخطط: $e')),
+          error: (e, s) => Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('تعذّر تحميل خطط الترويج', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  const Text('لن نعرض أسعاراً غير مؤكدة. تحقّق من اتصالك ثم حاول مجدداً.', textAlign: TextAlign.center),
+                  const SizedBox(height: 16),
+                  OutlinedButton(onPressed: () => ref.invalidate(promotionsPlansProvider), child: const Text('إعادة المحاولة')),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );

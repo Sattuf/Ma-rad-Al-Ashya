@@ -34,8 +34,8 @@ export default function AdminReportsPage() {
     setLoading(true);
     adminApi.getReports(statusFilter || undefined, typeFilter || undefined, page, 15)
       .then((res: any) => {
-        setReports(res.data || []);
-        if (res.meta) setTotalPages(res.meta.lastPage || 1);
+        setReports(res.data);
+        setTotalPages(res.lastPage);
       })
       .catch(console.error)
       .finally(() => setLoading(false));

@@ -1,3 +1,4 @@
+import 'package:marad_mobile/core/utils/errors.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -38,7 +39,7 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('خطأ: $e'), backgroundColor: Colors.red),
+        SnackBar(content: Text(userMessage(e, 'تعذّر نشر تقييمك. حاول مجدداً.')), backgroundColor: Colors.red),
       );
     } finally {
       if (mounted) setState(() => _isSubmitting = false);

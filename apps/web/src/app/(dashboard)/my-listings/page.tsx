@@ -75,7 +75,7 @@ export default function MyListingsPage() {
         </div>
       ) : error ? (
         <Card>
-          <ErrorState title="تعذّر تحميل إعلاناتك" onRetry={() => mutate()} />
+          <ErrorState error={error} title="تعذّر تحميل إعلاناتك" onRetry={() => mutate()} />
         </Card>
       ) : listings.length === 0 ? (
         <Card>

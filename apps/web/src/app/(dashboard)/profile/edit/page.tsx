@@ -1,5 +1,7 @@
 'use client';
 
+import { Alert } from '@/components/ui';
+import { errorMessage } from '@/lib/errors';
 import React, { useEffect, useState, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -26,6 +28,7 @@ export default function EditProfilePage() {
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [email, setEmail] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
 
   const {
     register,
@@ -45,7 +48,7 @@ export default function EditProfilePage() {
         setEmail(user.email);
         if (user.avatar) setAvatarPreview(user.avatar);
       } catch (error) {
-        console.error('Failed to fetch profile', error);
+        setFormError(errorMessage(error, 'تعذّر تحميل بياناتك الحالية. حاول مجدداً.'));
       } finally {
         setLoading(false);
       }
@@ -71,8 +74,8 @@ export default function EditProfilePage() {
       };
       const compressedFile = await imageCompression(file, options);
       setAvatarFile(compressedFile);
-    } catch (error) {
-      console.error('Error compressing image:', error);
+    } catch {
+      setFormError('تعذّر تجهيز الصورة. جرّب صورة JPG أو PNG أخرى.');
     } finally {
       setUploadingAvatar(false);
     }
@@ -103,8 +106,7 @@ export default function EditProfilePage() {
       await userApi.updateProfile(data);
       router.push('/profile');
     } catch (error) {
-      console.error('Failed to update profile', error);
-      // Handle error state here
+      setFormError(errorMessage(error, 'تعذّر حفظ التعديلات. لم يتغيّر شيء؛ حاول مجدداً.'));
     } finally {
       setSaving(false);
     }
@@ -125,6 +127,7 @@ export default function EditProfilePage() {
         <p className="text-gray-500 mt-1">قم بتحديث معلومات حسابك الشخصية</p>
       </div>
 
+      {formError && <Alert tone="danger" className="mb-6">{formError}</Alert>}
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
         {/* Avatar Upload */}
         <div className="flex flex-col items-center sm:flex-row sm:items-start gap-6 pb-8 border-b border-gray-100">

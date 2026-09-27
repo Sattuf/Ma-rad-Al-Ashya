@@ -70,6 +70,7 @@ export default function UserProfilePage({ params }: { params: Promise<{ id: stri
       <main className="container mx-auto px-4 py-16">
         <Card>
           <ErrorState
+            error={userError}
             title={notFound ? 'هذا الحساب غير موجود' : 'تعذّر تحميل الملف الشخصي'}
             description={notFound ? 'ربما حُذف الحساب أو أن الرابط غير صحيح.' : undefined}
             onRetry={notFound ? undefined : () => retryUser()}
@@ -155,7 +156,7 @@ export default function UserProfilePage({ params }: { params: Promise<{ id: stri
             {reviewsLoading ? (
               <Skeleton className="h-40 w-full" />
             ) : reviewsError ? (
-              <ErrorState title="تعذّر تحميل التقييمات" onRetry={() => retryReviews()} />
+              <ErrorState error={reviewsError} title="تعذّر تحميل التقييمات" onRetry={() => retryReviews()} />
             ) : !summary || summary.total_reviews === 0 ? (
               <EmptyState title="لا توجد تقييمات بعد" description="تظهر التقييمات بعد إتمام صفقات مع هذا البائع." />
             ) : (

@@ -1,5 +1,6 @@
 'use client';
 
+import { errorMessage } from '@/lib/errors';
 import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -73,7 +74,7 @@ export default function PromoteListingPage({ params }: { params: Promise<{ id: s
   const { listing, isLoading: listingLoading } = useListingDetail(listingId);
 
   const [plans, setPlans] = useState<PromotionPlan[] | null>(null);
-  const [plansError, setPlansError] = useState(false);
+  const [plansError, setPlansError] = useState<unknown>(null);
   const [selected, setSelected] = useState<PromotionPlan | null>(null);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
@@ -81,7 +82,7 @@ export default function PromoteListingPage({ params }: { params: Promise<{ id: s
   const [paid, setPaid] = useState(false);
 
   const loadPlans = () => {
-    setPlansError(false);
+    setPlansError(null);
     setPlans(null);
     promotionsApi
       .getPlans()
@@ -89,7 +90,7 @@ export default function PromoteListingPage({ params }: { params: Promise<{ id: s
         setPlans(data);
         setSelected(data.find((p) => p.id === 'featured') ?? data[0] ?? null);
       })
-      .catch(() => setPlansError(true));
+      .catch((err) => setPlansError(err));
   };
   useEffect(loadPlans, []);
 
@@ -101,7 +102,7 @@ export default function PromoteListingPage({ params }: { params: Promise<{ id: s
       const { clientSecret } = await promotionsApi.createPaymentIntent(listingId, selected);
       setClientSecret(clientSecret);
     } catch (err: any) {
-      setPaymentError(err?.response?.data?.message ?? 'تعذّر الاتصال ببوابة الدفع الآن. لم يُخصم أي مبلغ، حاول بعد قليل.');
+      setPaymentError(errorMessage(err, 'تعذّر بدء الدفع. لم يُخصم أي مبلغ؛ حاول مجدداً.'));
     } finally {
       setStarting(false);
     }
@@ -170,7 +171,7 @@ export default function PromoteListingPage({ params }: { params: Promise<{ id: s
 
             {plansError ? (
               <Card>
-                <ErrorState title="تعذّر تحميل خطط الترويج" onRetry={loadPlans} />
+                <ErrorState error={plansError} title="تعذّر تحميل خطط الترويج" onRetry={loadPlans} />
               </Card>
             ) : !plans ? (
               <div className="grid gap-4 md:grid-cols-3">

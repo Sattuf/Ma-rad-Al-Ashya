@@ -1,5 +1,6 @@
 'use client';
 
+import { errorMessage } from '@/lib/errors';
 import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { authApi } from '@/lib/api/auth';
@@ -78,7 +79,7 @@ function VerifyOtpContent() {
       setAuth(res.user, res.tokens.access_token);
       router.push('/');
     } catch (err: any) {
-      setError(err.response?.data?.message || 'رمز التحقق غير صحيح');
+      setError(errorMessage(err, 'رمز التحقق غير صحيح. تأكد من الأرقام وحاول مجدداً.'));
     } finally {
       setIsSubmitting(false);
     }
@@ -91,7 +92,7 @@ function VerifyOtpContent() {
       await authApi.sendOtp(phone);
       setTimeLeft(60);
     } catch (err: any) {
-      setError(err.response?.data?.message || 'حدث خطأ أثناء إعادة إرسال الرمز');
+      setError(errorMessage(err, 'تعذّر إرسال رمز جديد. حاول بعد دقيقة.'));
     }
   };
 
@@ -137,7 +138,7 @@ function VerifyOtpContent() {
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
             </svg>
-            جاري التحقق...
+            جارٍ التحقق…
           </div>
         ) : (
           <button
@@ -157,7 +158,7 @@ function VerifyOtpContent() {
 
 export default function VerifyOtpPage() {
   return (
-    <Suspense fallback={<div className="text-center py-10">جاري التحميل...</div>}>
+    <Suspense fallback={<div className="text-center py-10">جارٍ التحميل…</div>}>
       <VerifyOtpContent />
     </Suspense>
   );

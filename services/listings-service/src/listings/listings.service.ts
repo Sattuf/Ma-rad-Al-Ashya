@@ -139,12 +139,19 @@ export class ListingsService {
     const page = toPositiveInt(query.page, 1);
     const limit = Math.min(toPositiveInt(query.limit, DEFAULT_PAGE_SIZE), MAX_PAGE_SIZE);
 
-    const qb = this.listingsRepository
-      .createQueryBuilder('listing')
-      .leftJoinAndSelect('listing.images', 'images')
-      .where('listing.status = :status', { status });
+    const qb = this.listingsRepository.createQueryBuilder('listing').leftJoinAndSelect('listing.images', 'images');
+    // A lookup by id (deal history, dashboards) must also find listings that sold since;
+    // browsing without ids shows active listings only. Deleted listings never appear.
+    if (query.ids !== undefined && !PUBLIC_STATUSES.includes(query.status)) {
+      qb.where('listing.status IN (:...statuses)', { statuses: PUBLIC_STATUSES });
+    } else {
+      qb.where('listing.status = :status', { status });
+    }
 
-    if (categoryId) qb.andWhere('listing.categoryId = :categoryId', { categoryId });
+    // A parent category includes its subcategories (the catalogue is a two-level tree).
+    if (categoryId) {
+      qb.andWhere('listing.categoryId IN (SELECT c.id FROM categories c WHERE c.id = :categoryId OR c.parent_id = :categoryId)', { categoryId });
+    }
     if (userId) qb.andWhere('listing.userId = :userId', { userId });
     if (query.ids !== undefined) qb.andWhere(ids.length ? 'listing.id IN (:...ids)' : '1 = 0', { ids });
     if (search) qb.andWhere("listing.title ILIKE :search ESCAPE '\\'", { search: `%${escapeLike(search)}%` });

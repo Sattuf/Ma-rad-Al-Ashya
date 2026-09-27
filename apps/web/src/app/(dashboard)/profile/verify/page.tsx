@@ -1,5 +1,6 @@
 'use client';
 
+import { errorMessage } from '@/lib/errors';
 import React, { useState } from 'react';
 import { useKycStatus } from '@/hooks/useKycStatus';
 import { identityApi } from '@/lib/api/identity';
@@ -19,10 +20,10 @@ export default function VerifyIdentityPage() {
       if (response.verification_url) {
         window.open(response.verification_url, '_blank');
       } else {
-        setError('تعذر الحصول على رابط التوثيق. يرجى المحاولة مرة أخرى.');
+        setError('تعذّر تجهيز رابط التوثيق. حاول مجدداً.');
       }
     } catch (err: any) {
-      setError(err.response?.data?.message || 'حدث خطأ أثناء بدء عملية التوثيق.');
+      setError(errorMessage(err, 'تعذّر بدء توثيق الهوية. حاول مجدداً.'));
     } finally {
       setIsStarting(false);
     }
@@ -78,7 +79,7 @@ export default function VerifyIdentityPage() {
           {isLoading ? (
             <div className="flex flex-col items-center gap-4">
               <Loader2 className="w-10 h-10 text-primary animate-spin" />
-              <p className="text-gray-500">جاري التحقق من حالة التوثيق...</p>
+              <p className="text-gray-500">جارٍ التحقق من حالة التوثيق…</p>
             </div>
           ) : (
             <>
@@ -87,7 +88,7 @@ export default function VerifyIdentityPage() {
                   <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mb-4">
                     <CheckCircle2 className="w-10 h-10 text-green-600" />
                   </div>
-                  <h2 className="text-2xl font-bold text-gray-900">تم توثيق حسابك بنجاح!</h2>
+                  <h2 className="text-2xl font-bold text-gray-900">وُثّقت هويتك</h2>
                   <p className="text-gray-500 max-w-md">
                     شكراً لك. لقد تم التحقق من هويتك بنجاح ويمكنك الآن الاستفادة من كافة ميزات المنصة كبائع موثّق.
                   </p>
@@ -102,9 +103,9 @@ export default function VerifyIdentityPage() {
                   <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mb-4">
                     <XCircle className="w-10 h-10 text-red-600" />
                   </div>
-                  <h2 className="text-2xl font-bold text-gray-900">فشل توثيق الهوية</h2>
+                  <h2 className="text-2xl font-bold text-gray-900">لم نتمكّن من توثيق هويتك</h2>
                   <p className="text-gray-500 max-w-md">
-                    عذراً، لم نتمكن من التحقق من هويتك. يرجى التأكد من وضوح الصورة وصلاحية المستند المرفق والمحاولة مرة أخرى.
+                    غالباً السبب صورة غير واضحة أو وثيقة منتهية. صوّر الوثيقة في إضاءة جيدة دون انعكاس، وتأكد من صلاحيتها، ثم حاول مجدداً.
                   </p>
                   <button 
                     onClick={handleStartVerification}
@@ -122,12 +123,12 @@ export default function VerifyIdentityPage() {
                   <div className="w-20 h-20 bg-primary-soft rounded-full flex items-center justify-center mb-4">
                     <Loader2 className="w-10 h-10 text-primary animate-spin" />
                   </div>
-                  <h2 className="text-2xl font-bold text-gray-900">جاري التحقق من هويتك</h2>
+                  <h2 className="text-2xl font-bold text-gray-900">جارٍ التحقق من هويتك</h2>
                   <p className="text-gray-500 max-w-md mb-2">
-                    يرجى إكمال خطوات التوثيق في النافذة الجديدة. سيتم تحديث هذه الصفحة تلقائياً فور الانتهاء.
+                    أكمل الخطوات في النافذة التي فُتحت. ستتحدّث هذه الصفحة وحدها عند الانتهاء.
                   </p>
                   <div className="p-4 bg-amber-50 rounded-lg border border-amber-100 text-amber-800 text-sm max-w-md">
-                    ملاحظة: يرجى عدم إغلاق هذه الصفحة حتى تكتمل عملية التوثيق.
+                    أبقِ هذه الصفحة مفتوحة حتى يكتمل التوثيق.
                   </div>
                   <button 
                     onClick={handleStartVerification}
@@ -163,7 +164,7 @@ export default function VerifyIdentityPage() {
                     {isStarting ? (
                       <>
                         <Loader2 className="w-5 h-5 animate-spin" />
-                        جاري تجهيز الرابط...
+                        جارٍ تجهيز الرابط…
                       </>
                     ) : (
                       'بدء التوثيق الآن'

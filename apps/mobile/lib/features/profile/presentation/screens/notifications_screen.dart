@@ -82,7 +82,7 @@ class NotificationsScreen extends ConsumerWidget {
                   ),
                   const Divider(height: 1, indent: 70, endIndent: 20),
                   _buildSwitchTile(
-                    title: 'حالة المعاملات',
+                    title: 'تحديثات الصفقات',
                     subtitle: 'تحديثات حول عمليات البيع والشراء والدفع.',
                     icon: Icons.receipt_long_outlined,
                     value: user.notificationTransactions,

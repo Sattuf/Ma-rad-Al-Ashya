@@ -20,14 +20,28 @@ class PromotionPlan {
     required this.features,
   });
 
+  /// Display copy only (same as the web, apps/web/src/lib/api/promotions.ts). Price,
+  /// duration and boost always come from listings-service: GET /promotions/plans →
+  /// [{id, price, boost_multiplier, duration_days}].
+  static const Map<String, List<String>> _copy = {
+    'basic': ['أساسي', 'يرفع ترتيب إعلانك في نتائج البحث.'],
+    'featured': ['مميّز', 'دفعة أقوى في نتائج البحث لمدة أطول.'],
+    'premium': ['ذهبي', 'أعلى أولوية في نتائج البحث لأطول مدة.'],
+  };
+
   factory PromotionPlan.fromJson(Map<String, dynamic> json) {
+    final id = json['id'] as String;
+    final rawPrice = json['price'];
+    final days = (json['duration_days'] ?? json['durationDays'] ?? 0) as num;
+    final boost = (json['boost_multiplier'] ?? json['boostMultiplier'] ?? 1) as num;
     return PromotionPlan(
-      id: json['id'] as String,
-      name: json['name'] as String,
-      price: (json['price'] as num).toDouble(),
-      durationDays: json['durationDays'] as int? ?? json['duration_days'] as int? ?? 0,
-      description: json['description'] as String? ?? '',
-      features: (json['features'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
+      id: id,
+      name: json['name'] as String? ?? _copy[id]?[0] ?? id,
+      price: rawPrice is num ? rawPrice.toDouble() : double.tryParse('$rawPrice') ?? 0,
+      durationDays: days.toInt(),
+      description: json['description'] as String? ?? _copy[id]?[1] ?? '',
+      features: (json['features'] as List<dynamic>?)?.map((e) => e.toString()).toList() ??
+          ['ترتيب أعلى ×$boost في نتائج البحث', 'لمدة ${days.toInt()} يوماً', 'دفع آمن عبر Stripe'],
     );
   }
 
@@ -101,36 +115,15 @@ class PromotionsRepository {
   Future<List<PromotionPlan>> getPlans() async {
     try {
       final response = await _apiClient.dio.get('/promotions/plans');
-      final List data = response.data['data'] ?? response.data;
-      return data.map((json) => PromotionPlan.fromJson(json)).toList();
+      // The server answers a plain list; some older deployments wrapped it in {data}.
+      final raw = response.data;
+      final List data = raw is Map ? (raw['data'] as List? ?? const []) : raw as List;
+      return data.map((json) => PromotionPlan.fromJson(Map<String, dynamic>.from(json as Map))).toList();
     } catch (e) {
-      // Fallback plans
-      return [
-        PromotionPlan(
-          id: 'basic',
-          name: 'أساسي (Basic)',
-          price: 49,
-          durationDays: 7,
-          description: 'ترقية الإعلان ووضعه في مقدمة القائمة لمدة 7 أيام.',
-          features: ['ظهور متقدم في نتائج البحث', 'علامة تمييز بسيطة', 'دعم فني عادي'],
-        ),
-        PromotionPlan(
-          id: 'featured',
-          name: 'مميز (Featured)',
-          price: 99,
-          durationDays: 14,
-          description: 'وضع الإعلان في قائمة العقارات المميزة مع فرصة تصفح أعلى بـ 3 أضعاف.',
-          features: ['ظهور في قسم العقارات المميزة', 'شارة "مروّج 🚀" بارزة', 'إحصائيات متقدمة للمشاهدات', 'دعم فني سريع'],
-        ),
-        PromotionPlan(
-          id: 'premium',
-          name: 'ذهبي (Premium)',
-          price: 199,
-          durationDays: 30,
-          description: 'أقصى درجات الظهور والتفاعل. يثبت الإعلان في الصفحة الرئيسية مع ترويج مكثف.',
-          features: ['تثبيت في أعلى الصفحة الرئيسية', 'شارة "مروّج 🚀" ذهبية براقة', 'تنبيهات للمشتركين المهتمين', 'دعم فني على مدار الساعة', 'تقارير أسبوعية مفصلة'],
-        ),
-      ];
+      // No fallback: showing a price the server would not charge is worse than an error.
+      // The screen shows the error with a retry.
+      debugPrint('getPlans failed: $e');
+      rethrow;
     }
   }
 

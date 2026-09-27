@@ -1,3 +1,4 @@
+import 'package:marad_mobile/core/utils/errors.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -77,12 +78,12 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
       );
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم إضافة الإعلان بنجاح')));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('نُشر إعلانك.')));
         context.pop();
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('خطأ: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userMessage(e, 'تعذّر نشر الإعلان. لم يُحفظ شيء؛ راجع البيانات وحاول مجدداً.'))));
       }
     } finally {
       if (mounted) {
@@ -191,7 +192,7 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
 
             TextFormField(
               controller: _priceController,
-              decoration: const InputDecoration(labelText: 'السعر (ريال)', border: OutlineInputBorder()),
+              decoration: const InputDecoration(labelText: 'السعر (دولار أمريكي)', border: OutlineInputBorder()),
               keyboardType: TextInputType.number,
               validator: (val) => val == null || val.isEmpty ? 'مطلوب' : null,
             ),

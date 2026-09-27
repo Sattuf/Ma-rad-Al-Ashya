@@ -12,6 +12,7 @@ import { useCategories } from '@/hooks/useCategories';
 import { Alert, Button, Card, Input } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { formatPrice } from '@/types/listing';
+import { errorMessage } from '@/lib/errors';
 
 // Mirrors listings-service limits (CreateListingDto, image upload pipe).
 const MAX_IMAGES = 10;
@@ -105,16 +106,13 @@ export default function CreateListingPage() {
         await listingsApi.uploadImage(listing.id, photo.file);
       }
       router.push(`/listings/${listing.id}`);
-    } catch (err: any) {
-      const serverMessage = err?.response?.data?.message;
+    } catch (err) {
       setPhase({
         kind: 'error',
         listingId,
         message: listingId
-          ? 'نُشر الإعلان لكن تعذّر رفع بعض الصور. يمكنك إضافتها من صفحة تعديل الإعلان.'
-          : Array.isArray(serverMessage)
-            ? serverMessage.join('، ')
-            : serverMessage ?? 'تعذّر نشر الإعلان الآن. لم يُحفظ شيء، حاول مجدداً.',
+          ? `نُشر الإعلان، لكن تعذّر رفع بعض الصور (${errorMessage(err, 'رُفض الملف')}) يمكنك إضافتها من صفحة تعديل الإعلان.`
+          : errorMessage(err, 'تعذّر نشر الإعلان. لم يُحفظ شيء؛ راجع البيانات وحاول مجدداً.'),
       });
     }
   };

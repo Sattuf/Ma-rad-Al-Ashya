@@ -1,3 +1,5 @@
+import 'package:marad_mobile/core/utils/errors.dart';
+import 'package:marad_mobile/core/utils/money.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -28,11 +30,11 @@ class _TransactionDetailScreenState extends ConsumerState<TransactionDetailScree
       await repo.confirmTransaction(widget.id);
       ref.invalidate(transactionDetailProvider(widget.id));
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تم تأكيد المعاملة بنجاح'), backgroundColor: Colors.green),
+        const SnackBar(content: Text('أكّدتَ الصفقة.'), backgroundColor: Colors.green),
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('خطأ: $e'), backgroundColor: Colors.red),
+        SnackBar(content: Text(userMessage(e, 'تعذّر تأكيد الصفقة. حاول مجدداً.')), backgroundColor: Colors.red),
       );
     } finally {
       setState(() => _isUpdating = false);
@@ -44,11 +46,11 @@ class _TransactionDetailScreenState extends ConsumerState<TransactionDetailScree
     final bool? confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('إلغاء المعاملة'),
+        title: const Text('إلغاء الصفقة'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('هل أنت متأكد من إلغاء هذه المعاملة؟'),
+            const Text('هل أنت متأكد من إلغاء هذه الصفقة؟'),
             const SizedBox(height: 16),
             TextField(
               controller: reasonController,
@@ -68,7 +70,7 @@ class _TransactionDetailScreenState extends ConsumerState<TransactionDetailScree
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('إلغاء المعاملة'),
+            child: const Text('إلغاء الصفقة'),
           ),
         ],
       ),
@@ -82,11 +84,11 @@ class _TransactionDetailScreenState extends ConsumerState<TransactionDetailScree
       await repo.cancelTransaction(widget.id, reason: reasonController.text);
       ref.invalidate(transactionDetailProvider(widget.id));
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تم الإلغاء بنجاح'), backgroundColor: Colors.orange),
+        const SnackBar(content: Text('أُلغيت الصفقة.'), backgroundColor: Colors.orange),
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('خطأ: $e'), backgroundColor: Colors.red),
+        SnackBar(content: Text(userMessage(e, 'تعذّر إلغاء الصفقة. حاول مجدداً.')), backgroundColor: Colors.red),
       );
     } finally {
       setState(() => _isUpdating = false);
@@ -113,12 +115,12 @@ class _TransactionDetailScreenState extends ConsumerState<TransactionDetailScree
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('تفاصيل المعاملة'),
+        title: const Text('تفاصيل الصفقة'),
         centerTitle: true,
       ),
       body: state.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, stack) => Center(child: Text('خطأ: $err')),
+        error: (err, stack) => Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(userMessage(err, 'تعذّر فتح الصفقة. حاول مجدداً.'), textAlign: TextAlign.center))),
         data: (transaction) {
           final isSeller = transaction.sellerId == currentUserId;
           final isBuyer = transaction.buyerId == currentUserId;
@@ -173,7 +175,7 @@ class _TransactionDetailScreenState extends ConsumerState<TransactionDetailScree
                           children: [
                             Text(listingTitle, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                             const SizedBox(height: 8),
-                            Text('$listingPrice ر.س', style: TextStyle(fontSize: 16, color: Theme.of(context).primaryColor)),
+                            Text(formatPrice(num.tryParse('$listingPrice') ?? 0, '${transaction.listing?['currency'] ?? 'USD'}'), style: TextStyle(fontSize: 16, color: Theme.of(context).primaryColor)),
                           ],
                         ),
                       ),
@@ -185,7 +187,7 @@ class _TransactionDetailScreenState extends ConsumerState<TransactionDetailScree
                 
                 // Stepper
                 if (!isCancelled) ...[
-                  const Text('حالة المعاملة', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const Text('حالة الصفقة', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 12),
                   Stepper(
                     physics: const NeverScrollableScrollPhysics(),
@@ -237,7 +239,7 @@ class _TransactionDetailScreenState extends ConsumerState<TransactionDetailScree
                       children: [
                         const Icon(Icons.cancel, color: Colors.red, size: 48),
                         const SizedBox(height: 8),
-                        const Text('المعاملة ملغاة', style: TextStyle(color: Colors.red, fontSize: 18, fontWeight: FontWeight.bold)),
+                        const Text('الصفقة ملغاة', style: TextStyle(color: Colors.red, fontSize: 18, fontWeight: FontWeight.bold)),
                         if (transaction.cancelReason != null && transaction.cancelReason!.isNotEmpty)
                           Padding(
                             padding: const EdgeInsets.only(top: 8),
@@ -278,7 +280,7 @@ class _TransactionDetailScreenState extends ConsumerState<TransactionDetailScree
                   TextButton(
                     onPressed: _cancelTransaction,
                     style: TextButton.styleFrom(foregroundColor: Colors.red),
-                    child: const Text('إلغاء المعاملة'),
+                    child: const Text('إلغاء الصفقة'),
                   ),
                 ],
 

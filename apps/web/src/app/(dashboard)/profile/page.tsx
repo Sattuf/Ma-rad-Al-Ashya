@@ -1,5 +1,6 @@
 'use client';
 
+import { ErrorState } from '@/components/ui';
 import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -16,6 +17,7 @@ type UserProfile = Profile & {
 export default function ProfilePage() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<unknown>(null);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -23,7 +25,7 @@ export default function ProfilePage() {
         const data = await userApi.getProfile();
         setProfile(data);
       } catch (error) {
-        console.error('Failed to fetch profile', error);
+        setLoadError(error);
       } finally {
         setLoading(false);
       }
@@ -41,11 +43,7 @@ export default function ProfilePage() {
   }
 
   if (!profile) {
-    return (
-      <div className="text-center py-20 text-gray-500">
-        لم يتم العثور على بيانات المستخدم.
-      </div>
-    );
+    return <ErrorState error={loadError} title="تعذّر تحميل ملفك الشخصي" onRetry={() => window.location.reload()} />;
   }
 
   return (

@@ -8,6 +8,7 @@ import { useCategories } from '@/hooks/useCategories';
 import { ListingCard } from '@/components/ListingCard';
 import { Button, Card, EmptyState, ErrorState, Input, Skeleton } from '@/components/ui';
 import type { ListingsQuery } from '@/types/listing';
+import { trackEvent } from '@/lib/analytics';
 
 type Filters = { search: string; categoryId: string; minPrice: string; maxPrice: string };
 const EMPTY: Filters = { search: '', categoryId: '', minPrice: '', maxPrice: '' };
@@ -55,6 +56,7 @@ export default function ListingsPage() {
     const fromUrl = readUrl();
     setDraft(fromUrl);
     setApplied(fromUrl);
+    if (fromUrl.search.trim()) trackEvent('search', { searchQuery: fromUrl.search.trim() });
   }, []);
 
   const hasFilters = JSON.stringify(applied) !== JSON.stringify(EMPTY);
@@ -63,6 +65,7 @@ export default function ListingsPage() {
     setApplied(draft);
     writeUrl(draft);
     setFiltersOpen(false);
+    if (draft.search.trim()) trackEvent('search', { searchQuery: draft.search.trim(), categoryId: draft.categoryId || undefined });
   };
   const reset = () => {
     setDraft(EMPTY);
@@ -141,7 +144,7 @@ export default function ListingsPage() {
 
           {error && listings.length === 0 ? (
             <Card>
-              <ErrorState title="تعذّر تحميل الإعلانات" onRetry={retry} />
+              <ErrorState error={error} title="تعذّر تحميل الإعلانات" onRetry={retry} />
             </Card>
           ) : isLoading ? (
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">

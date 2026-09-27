@@ -111,7 +111,7 @@ export default function HomePage() {
           </div>
           {latest.error ? (
             <Card>
-              <ErrorState title="تعذّر تحميل الإعلانات" onRetry={latest.retry} />
+              <ErrorState error={latest.error} title="تعذّر تحميل الإعلانات" onRetry={latest.retry} />
             </Card>
           ) : !latest.isLoading && latest.listings.length === 0 ? (
             <Card>

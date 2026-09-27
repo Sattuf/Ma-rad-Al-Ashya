@@ -52,6 +52,7 @@ export default function ListingDetailPage() {
       <main className="container mx-auto px-4 py-16">
         <Card>
           <ErrorState
+            error={error}
             title={notFound ? 'هذا الإعلان غير متاح' : 'تعذّر تحميل الإعلان'}
             description={notFound ? 'ربما باعه صاحبه أو حذفه. تصفّح إعلانات أخرى مشابهة.' : undefined}
             onRetry={notFound ? undefined : () => mutate()}

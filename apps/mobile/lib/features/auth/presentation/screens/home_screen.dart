@@ -1,3 +1,4 @@
+import 'package:marad_mobile/core/utils/money.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -252,7 +253,7 @@ class _HorizontalSuggestedListingCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '${listing.price} ريال',
+                    formatPrice(listing.price, listing.currency),
                     style: TextStyle(
                       fontSize: 13,
                       color: Theme.of(context).primaryColor,

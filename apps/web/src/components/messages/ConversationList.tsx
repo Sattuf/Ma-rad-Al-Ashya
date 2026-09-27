@@ -83,7 +83,7 @@ export function ConversationList({ selectedId, onSelect }: ConversationListProps
             ))}
           </div>
         ) : error && conversations.length === 0 ? (
-          <ErrorState title="تعذّر تحميل المحادثات" onRetry={() => mutate()} />
+          <ErrorState error={error} title="تعذّر تحميل المحادثات" onRetry={() => mutate()} />
         ) : conversations.length === 0 ? (
           <EmptyState
             icon={<MessageSquare className="h-6 w-6" aria-hidden />}

@@ -32,10 +32,10 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function Failed({ what, retry }: { what: string; retry: () => void }) {
+function Failed({ what, error, retry }: { what: string; error: unknown; retry: () => void }) {
   return (
     <div className="rounded-card border border-line bg-surface">
-      <ErrorState title={`تعذّر تحميل ${what}`} description="بقية اللوحة تعمل؛ هذا القسم وحده متأثر." onRetry={retry} />
+      <ErrorState error={error} title={`تعذّر تحميل ${what}`} onRetry={retry} />
     </div>
   );
 }
@@ -117,7 +117,7 @@ export default function AdminDashboardPage() {
             }
           />
         ) : moderation.error ? (
-          <Failed what="البلاغات" retry={() => moderation.mutate()} />
+          <Failed what="البلاغات" error={moderation.error} retry={() => moderation.mutate()} />
         ) : (
           <Skeleton className="h-36" />
         )}
@@ -125,7 +125,7 @@ export default function AdminDashboardPage() {
         {users.data ? (
           <StatTile label="مستخدمون جدد · 7 أيام" value={users.data.signupsLast7Days} previous={users.data.signupsPrevious7Days} trend={users.data.signupsDaily} />
         ) : users.error ? (
-          <Failed what="المستخدمين" retry={() => users.mutate()} />
+          <Failed what="المستخدمين" error={users.error} retry={() => users.mutate()} />
         ) : (
           <Skeleton className="h-36" />
         )}
@@ -138,7 +138,7 @@ export default function AdminDashboardPage() {
             trend={listings.data.listings.createdDaily}
           />
         ) : listings.error ? (
-          <Failed what="الإعلانات" retry={() => listings.mutate()} />
+          <Failed what="الإعلانات" error={listings.error} retry={() => listings.mutate()} />
         ) : (
           <Skeleton className="h-36" />
         )}
@@ -146,7 +146,7 @@ export default function AdminDashboardPage() {
         {deals.data ? (
           <StatTile label="صفقات مكتملة · 7 أيام" value={deals.data.completedLast7Days} previous={deals.data.completedPrevious7Days} trend={deals.data.completedDaily} />
         ) : deals.error ? (
-          <Failed what="الصفقات" retry={() => deals.mutate()} />
+          <Failed what="الصفقات" error={deals.error} retry={() => deals.mutate()} />
         ) : (
           <Skeleton className="h-36" />
         )}
@@ -163,7 +163,7 @@ export default function AdminDashboardPage() {
               <TrendChart series={reportSeries} />
             </ChartCard>
           ) : moderation.error ? (
-            <Failed what="اتجاه البلاغات" retry={() => moderation.mutate()} />
+            <Failed what="اتجاه البلاغات" error={moderation.error} retry={() => moderation.mutate()} />
           ) : (
             <Skeleton className="h-80" />
           )}
@@ -202,7 +202,7 @@ export default function AdminDashboardPage() {
               )}
             </ChartCard>
           ) : listings.error ? (
-            <Failed what="الأقسام" retry={() => listings.mutate()} />
+            <Failed what="الأقسام" error={listings.error} retry={() => listings.mutate()} />
           ) : (
             <Skeleton className="h-80" />
           )}
@@ -290,7 +290,7 @@ export default function AdminDashboardPage() {
                 <p className="mt-1 text-xs text-fg-subtle">{fmt.int(fraud.data.highRiskSignals7d)} إشارة بدرجة خطورة 0٫7 فأعلى</p>
               </Link>
             ) : fraud.error ? (
-              <Failed what="مؤشرات الاحتيال" retry={() => fraud.mutate()} />
+              <Failed what="مؤشرات الاحتيال" error={fraud.error} retry={() => fraud.mutate()} />
             ) : (
               <Skeleton className="h-28" />
             )}

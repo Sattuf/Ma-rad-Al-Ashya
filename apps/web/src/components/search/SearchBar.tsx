@@ -30,7 +30,7 @@ export function SearchBar() {
     e.preventDefault();
     if (query.trim()) {
       setIsOpen(false);
-      router.push(`/search?q=${encodeURIComponent(query.trim())}`);
+      router.push(`/listings?search=${encodeURIComponent(query.trim())}`);
     }
   };
 

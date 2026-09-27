@@ -1,5 +1,6 @@
 'use client';
 
+import { errorMessage } from '@/lib/errors';
 import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -44,7 +45,7 @@ export default function LoginPage() {
       setAuth(res.user, res.tokens.access_token);
       router.replace(safeNext(new URLSearchParams(window.location.search).get('next')));
     } catch (err: any) {
-      setError(err.response?.data?.message || 'حدث خطأ غير متوقع أثناء تسجيل الدخول');
+      setError(errorMessage(err, 'تعذّر تسجيل الدخول. تأكد من البيانات وحاول مجدداً.'));
     }
   };
 
@@ -66,7 +67,7 @@ export default function LoginPage() {
           type="text"
           autoComplete="username"
           dir="ltr"
-          placeholder="example@mail.com أو +966..."
+          placeholder="البريد أو رقم الهاتف مع رمز الدولة"
           error={errors.identifier?.message}
         />
 

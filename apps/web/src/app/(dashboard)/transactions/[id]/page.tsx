@@ -1,242 +1,235 @@
 'use client';
 
-import { useState, use } from 'react';
-import { useTransaction } from '@/hooks/useTransactions';
+import { use, useState } from 'react';
+import Link from 'next/link';
+import { Check, ImageOff, ShieldCheck, Star } from 'lucide-react';
+import { useDealDetails, useTransaction } from '@/hooks/useTransactions';
 import { transactionsApi } from '@/lib/api/transactions';
 import { useAuthStore } from '@/lib/store/auth-store';
-import { Check, X, Star, AlertCircle } from 'lucide-react';
+import { Alert, Badge, Button, Card, ErrorState, Skeleton } from '@/components/ui';
+import { cn } from '@/lib/cn';
+import { dealStatusLabel } from '@/lib/deals';
+import { errorMessage } from '@/lib/errors';
+import { coverImage, formatPrice } from '@/types/listing';
 
 const STEPS = [
-  { id: 'pending_seller', title: 'تأكيد البائع' },
-  { id: 'pending_buyer', title: 'تأكيد المشتري' },
-  { id: 'completed', title: 'مكتمل' },
-];
+  { id: 'pending_seller', title: 'يؤكد البائع' },
+  { id: 'pending_buyer', title: 'يستلم المشتري ويؤكد' },
+  { id: 'completed', title: 'تمّت الصفقة' },
+] as const;
 
-export default function TransactionDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const resolvedParams = use(params);
-  const { transaction, isLoading, mutate } = useTransaction(resolvedParams.id);
-  const { user } = useAuthStore();
-  const [isConfirming, setIsConfirming] = useState(false);
-  const [isCancelling, setIsCancelling] = useState(false);
-  
+export default function DealDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
+  const me = useAuthStore((s) => s.user?.id);
+  const { transaction: deal, isLoading, error, mutate } = useTransaction(id);
+  const { listings, people } = useDealDetails(deal ? [deal] : [], me);
+
+  const [busy, setBusy] = useState<'confirm' | 'cancel' | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
   const [rating, setRating] = useState(0);
-  const [hoveredRating, setHoveredRating] = useState(0);
   const [comment, setComment] = useState('');
-  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
-  const [reviewError, setReviewError] = useState('');
+  const [reviewState, setReviewState] = useState<{ kind: 'idle' | 'sending' | 'sent' } | { kind: 'error'; message: string }>({ kind: 'idle' });
 
-  if (isLoading) return <div className="p-8 text-center text-gray-500 animate-pulse">جاري التحميل...</div>;
-  if (!transaction) return <div className="p-8 text-center text-red-500">المعاملة غير موجودة.</div>;
+  if (isLoading) {
+    return (
+      <main className="container mx-auto flex max-w-3xl flex-col gap-4 px-4 py-8">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-28" />
+        <Skeleton className="h-40" />
+      </main>
+    );
+  }
+  if (error || !deal) {
+    return (
+      <main className="container mx-auto max-w-3xl px-4 py-16">
+        <Card>
+          <ErrorState error={error} title="تعذّر فتح الصفقة" onRetry={() => mutate()} />
+        </Card>
+      </main>
+    );
+  }
 
-  const isSeller = user?.id === transaction.sellerId;
-  const isBuyer = user?.id === transaction.buyerId;
+  const role = deal.sellerId === me ? 'seller' : 'buyer';
+  const listing = listings?.get(deal.listingId);
+  const other = people?.get(role === 'buyer' ? deal.sellerId : deal.buyerId);
+  const status = dealStatusLabel(deal.status, role);
+  const stepIndex = STEPS.findIndex((s) => s.id === deal.status);
+  const canConfirm = (deal.status === 'pending_seller' && role === 'seller') || (deal.status === 'pending_buyer' && role === 'buyer');
+  const canCancel = deal.status === 'pending_seller' || deal.status === 'pending_buyer';
+  const image = listing ? coverImage(listing) : null;
 
-  const currentStepIndex = transaction.status === 'cancelled' 
-    ? -1 
-    : STEPS.findIndex(s => s.id === transaction.status);
-
-  const canConfirm = 
-    (transaction.status === 'pending_seller' && isSeller) ||
-    (transaction.status === 'pending_buyer' && isBuyer);
-
-  const canCancel = transaction.status !== 'completed' && transaction.status !== 'cancelled';
-  
-  const showReviewForm = transaction.status === 'completed' && !transaction.hasReviewed; // Assumes hasReviewed or we can check if they reviewed
-
-  const handleConfirm = async () => {
+  const act = async (kind: 'confirm' | 'cancel') => {
+    setBusy(kind);
+    setActionError(null);
     try {
-      setIsConfirming(true);
-      await transactionsApi.confirmTransaction(transaction.id);
-      mutate();
-    } catch (error) {
-      console.error(error);
-      alert('حدث خطأ أثناء التأكيد');
+      if (kind === 'confirm') await transactionsApi.confirmTransaction(deal.id);
+      else await transactionsApi.cancelTransaction(deal.id);
+      setConfirmingCancel(false);
+      await mutate();
+    } catch (err) {
+      setActionError(errorMessage(err, kind === 'confirm' ? 'تعذّر تأكيد الصفقة. حاول مجدداً.' : 'تعذّر إلغاء الصفقة. حاول مجدداً.'));
     } finally {
-      setIsConfirming(false);
-    }
-  };
-
-  const handleCancel = async () => {
-    try {
-      setIsCancelling(true);
-      await transactionsApi.cancelTransaction(transaction.id);
-      mutate();
-    } catch (error) {
-      console.error(error);
-      alert('حدث خطأ أثناء الإلغاء');
-    } finally {
-      setIsCancelling(false);
+      setBusy(null);
     }
   };
 
   const submitReview = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (rating === 0) {
-      setReviewError('يرجى اختيار تقييم');
+    if (!rating) {
+      setReviewState({ kind: 'error', message: 'اختر عدد النجوم أولاً.' });
       return;
     }
+    setReviewState({ kind: 'sending' });
     try {
-      setIsSubmittingReview(true);
-      setReviewError('');
-      await transactionsApi.createReview(transaction.id, rating, comment);
-      mutate();
-      // Optionally show a success message
-    } catch (error: any) {
-      console.error(error);
-      setReviewError(error.response?.data?.message || 'حدث خطأ أثناء تقديم التقييم');
-    } finally {
-      setIsSubmittingReview(false);
+      await transactionsApi.createReview(deal.id, rating, comment.trim() || undefined);
+      setReviewState({ kind: 'sent' });
+    } catch (err) {
+      setReviewState({ kind: 'error', message: errorMessage(err, 'تعذّر نشر تقييمك. حاول مجدداً.') });
     }
   };
 
+  const nextStepHint =
+    deal.status === 'pending_seller'
+      ? role === 'seller'
+        ? 'أكّد أنك ما زلت تبيع هذه السلعة، ثم اتفق مع المشتري على موعد ومكان التسليم.'
+        : 'بانتظار تأكيد البائع. يمكنك مراسلته لترتيب الموعد.'
+      : deal.status === 'pending_buyer'
+        ? role === 'buyer'
+          ? 'بعد أن تستلم السلعة وتفحصها، أكّد الاستلام لإتمام الصفقة.'
+          : 'بانتظار أن يستلم المشتري السلعة ويؤكد.'
+        : null;
+
   return (
-    <div className="max-w-3xl mx-auto p-4 sm:p-6 lg:p-8 space-y-8" dir="rtl">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">تفاصيل المعاملة</h1>
-        <p className="mt-1 text-sm text-gray-500">رقم: {transaction.id}</p>
-      </div>
+    <main className="container mx-auto flex max-w-3xl flex-col gap-6 px-4 py-8">
+      <nav aria-label="مسار التنقل" className="text-sm text-fg-muted">
+        <Link href="/transactions" className="hover:text-primary">صفقاتي</Link> <span aria-hidden>/</span> <span className="text-fg">تفاصيل الصفقة</span>
+      </nav>
 
-      {/* Stepper */}
-      <div className="bg-surface p-6 shadow sm:rounded-lg">
-        {transaction.status === 'cancelled' ? (
-          <div className="text-center text-red-600 font-bold p-4 bg-red-50 rounded-md flex items-center justify-center gap-2">
-            <AlertCircle className="w-5 h-5" />
-            تم إلغاء هذه المعاملة
-          </div>
+      <Card className="flex items-center gap-4 p-5">
+        {image ? (
+          <img src={image} alt="" className="h-20 w-20 shrink-0 rounded-control object-cover" />
         ) : (
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center" aria-hidden="true">
-              <div className="w-full border-t border-gray-300" />
-            </div>
-            <div className="relative flex justify-between">
-              {STEPS.map((step, stepIdx) => {
-                const isActive = stepIdx === currentStepIndex;
-                const isCompleted = stepIdx < currentStepIndex || transaction.status === 'completed';
-                return (
-                  <div key={step.id} className="flex flex-col items-center bg-surface px-2">
-                    <span className={`h-8 w-8 rounded-full flex items-center justify-center ring-4 ring-white ${
-                      isCompleted ? 'bg-primary text-on-primary' : isActive ? 'bg-primary text-on-primary ring-brand-100' : 'bg-gray-200 text-gray-500'
-                    }`}>
-                      {isCompleted ? <Check className="w-5 h-5" /> : <span>{stepIdx + 1}</span>}
-                    </span>
-                    <span className={`mt-2 text-sm font-medium ${isActive ? 'text-primary' : isCompleted ? 'text-primary' : 'text-gray-500'}`}>
-                      {step.title}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          <span className="flex h-20 w-20 shrink-0 items-center justify-center rounded-control bg-surface-muted text-fg-subtle">
+            <ImageOff className="h-6 w-6" aria-hidden />
+          </span>
         )}
-      </div>
-
-      {/* Details */}
-      <div className="bg-surface shadow sm:rounded-lg overflow-hidden">
-        <div className="px-4 py-5 sm:px-6 flex items-center gap-4">
-          {transaction.listing?.images?.[0] && (
-             <img src={transaction.listing.images[0]} alt="" className="w-16 h-16 rounded object-cover" />
-          )}
-          <div>
-            <h3 className="text-lg leading-6 font-medium text-gray-900">{transaction.listing?.title}</h3>
-            <p className="mt-1 max-w-2xl text-sm text-gray-500">السعر: {transaction.listing?.price} ريال</p>
-          </div>
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate text-lg font-semibold text-fg">
+            {listing ? <Link href={`/listings/${listing.id}`} className="hover:text-primary">{listing.title}</Link> : listings ? 'إعلان محذوف' : '…'}
+          </h1>
+          {listing && <p className="font-bold text-primary">{formatPrice(listing.price, listing.currency)}</p>}
+          <p className="text-sm text-fg-muted">
+            {role === 'buyer' ? 'البائع' : 'المشتري'}:{' '}
+            {other ? <Link href={`/users/${other.id}`} className="hover:text-primary">{other.name || 'مستخدم'}</Link> : '…'}
+          </p>
         </div>
-        <div className="border-t border-gray-200 px-4 py-5 sm:p-0">
-          <dl className="sm:divide-y sm:divide-gray-200">
-            <div className="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-              <dt className="text-sm font-medium text-gray-500">البائع</dt>
-              <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{transaction.seller?.name}</dd>
-            </div>
-            <div className="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-              <dt className="text-sm font-medium text-gray-500">المشتري</dt>
-              <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{transaction.buyer?.name}</dd>
-            </div>
-          </dl>
-        </div>
-      </div>
+        <Badge tone={status.tone}>{status.label}</Badge>
+      </Card>
 
-      {/* Actions */}
-      {(canConfirm || canCancel) && (
-        <div className="flex gap-4 items-center justify-end">
-          {canCancel && (
-            <button
-              onClick={handleCancel}
-              disabled={isCancelling}
-              className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-surface hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-            >
-              <X className="ms-2 -me-1 h-5 w-5 text-gray-400" aria-hidden="true" />
-              إلغاء المعاملة
-            </button>
-          )}
-          {canConfirm && (
-            <button
-              onClick={handleConfirm}
-              disabled={isConfirming}
-              className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-on-primary bg-primary hover:bg-primary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-focus-ring"
-            >
-              <Check className="ms-2 -me-1 h-5 w-5" aria-hidden="true" />
-              تأكيد المعاملة
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Review Form */}
-      {showReviewForm && (
-        <div className="bg-surface shadow sm:rounded-lg p-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">تقييم تجربتك</h3>
-          <form onSubmit={submitReview} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">التقييم</label>
-              <div className="flex items-center gap-1">
-                {[1, 2, 3, 4, 5].map((star) => (
-                  <button
-                    type="button"
-                    key={star}
-                    onClick={() => setRating(star)}
-                    onMouseEnter={() => setHoveredRating(star)}
-                    onMouseLeave={() => setHoveredRating(0)}
-                    className="focus:outline-none transition-transform hover:scale-110"
+      {deal.status === 'cancelled' ? (
+        <Alert tone="danger">
+          أُلغيت هذه الصفقة{deal.cancelledBy ? (deal.cancelledBy === me ? ' بطلب منك' : ` بطلب من ${role === 'buyer' ? 'البائع' : 'المشتري'}`) : ''}.
+          {deal.cancelReason && ` السبب: ${deal.cancelReason}`}
+        </Alert>
+      ) : (
+        <Card className="p-5">
+          <ol className="grid grid-cols-3 gap-2" aria-label="مراحل الصفقة">
+            {STEPS.map((step, i) => {
+              const done = i < stepIndex || deal.status === 'completed';
+              const current = i === stepIndex && deal.status !== 'completed';
+              return (
+                <li key={step.id} aria-current={current ? 'step' : undefined} className="flex flex-col items-center gap-2 text-center">
+                  <span
+                    className={cn(
+                      'flex h-8 w-8 items-center justify-center rounded-pill text-sm font-semibold',
+                      done ? 'bg-primary text-on-primary' : current ? 'bg-primary-soft text-on-primary-soft ring-2 ring-primary' : 'bg-surface-muted text-fg-muted',
+                    )}
                   >
-                    <Star
-                      className={`h-8 w-8 ${
-                        star <= (hoveredRating || rating)
-                          ? 'text-yellow-400 fill-current'
-                          : 'text-gray-300'
-                      }`}
-                    />
-                  </button>
-                ))}
+                    {done ? <Check className="h-4 w-4" aria-hidden /> : i + 1}
+                  </span>
+                  <span className={cn('text-sm', current ? 'font-semibold text-fg' : 'text-fg-muted')}>{step.title}</span>
+                </li>
+              );
+            })}
+          </ol>
+          {nextStepHint && <p className="mt-4 text-center text-sm text-fg-muted">{nextStepHint}</p>}
+        </Card>
+      )}
+
+      {actionError && <Alert tone="danger">{actionError}</Alert>}
+
+      {(canConfirm || canCancel) && (
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          {canCancel &&
+            (confirmingCancel ? (
+              <div role="alertdialog" aria-label="تأكيد الإلغاء" className="flex flex-wrap items-center gap-2">
+                <span className="text-sm text-fg">إلغاء الصفقة نهائياً؟</span>
+                <Button variant="danger" size="sm" loading={busy === 'cancel'} onClick={() => act('cancel')}>نعم، ألغِ الصفقة</Button>
+                <Button variant="ghost" size="sm" onClick={() => setConfirmingCancel(false)}>تراجع</Button>
               </div>
-            </div>
-            <div>
-              <label htmlFor="comment" className="block text-sm font-medium text-gray-700 mb-1">
-                تعليق (اختياري)
-              </label>
-              <textarea
-                id="comment"
-                rows={3}
-                className="shadow-sm focus:ring-focus-ring focus:border-primary block w-full sm:text-sm border-gray-300 rounded-md"
-                placeholder="كيف كانت تجربتك؟"
-                maxLength={500}
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-              />
-              <p className="mt-2 text-sm text-gray-500 text-end" dir="ltr">
-                {comment.length} / 500
-              </p>
-            </div>
-            {reviewError && <p className="text-sm text-red-600">{reviewError}</p>}
-            <button
-              type="submit"
-              disabled={isSubmittingReview}
-              className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-on-primary bg-primary hover:bg-primary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-focus-ring w-full sm:w-auto"
-            >
-              {isSubmittingReview ? 'جاري الإرسال...' : 'إرسال التقييم'}
-            </button>
-          </form>
+            ) : (
+              <Button variant="secondary" onClick={() => setConfirmingCancel(true)} disabled={busy !== null}>إلغاء الصفقة</Button>
+            ))}
+          {canConfirm && (
+            <Button loading={busy === 'confirm'} onClick={() => act('confirm')} disabled={busy === 'cancel'}>
+              <Check className="h-4 w-4" aria-hidden /> {role === 'seller' ? 'أؤكد البيع' : 'استلمت السلعة'}
+            </Button>
+          )}
         </div>
       )}
-    </div>
+
+      {deal.status !== 'completed' && deal.status !== 'cancelled' && (
+        <p className="flex items-start gap-2 text-sm text-fg-muted">
+          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
+          للأمان: التقيا في مكان عام، وافحص السلعة قبل الدفع، ولا تحوّل أي مبلغ مقدماً.
+        </p>
+      )}
+
+      {deal.status === 'completed' && (
+        <Card className="p-5">
+          {reviewState.kind === 'sent' ? (
+            <p role="status" className="text-center text-fg">شكراً! نُشر تقييمك ويساعد الآخرين على الثقة.</p>
+          ) : (
+            <form onSubmit={submitReview} className="flex flex-col gap-4">
+              <h2 className="font-semibold text-fg">قيّم {role === 'buyer' ? 'البائع' : 'المشتري'}</h2>
+              <fieldset>
+                <legend className="mb-2 text-sm text-fg-muted">كيف كانت تجربتك؟</legend>
+                <div className="flex gap-1" role="radiogroup" aria-label="عدد النجوم">
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      role="radio"
+                      aria-checked={rating === n}
+                      aria-label={`${n} من 5`}
+                      onClick={() => setRating(n)}
+                      className="inline-flex h-11 w-11 items-center justify-center rounded-control focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+                    >
+                      <Star className={cn('h-7 w-7', n <= rating ? 'fill-current text-warning' : 'text-line-strong')} aria-hidden />
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
+              <div className="flex flex-col gap-1">
+                <label htmlFor="comment" className="text-sm font-medium text-fg">تعليق (اختياري)</label>
+                <textarea
+                  id="comment"
+                  rows={3}
+                  maxLength={500}
+                  value={comment}
+                  onChange={(e) => setComment(e.target.value)}
+                  placeholder="هل كانت السلعة كما في الوصف؟ هل كان التواصل سهلاً؟"
+                  className="rounded-control border border-line bg-surface px-4 py-3 text-fg placeholder:text-fg-subtle focus:outline-none focus:ring-2 focus:ring-focus-ring"
+                />
+                <p className="text-end text-xs text-fg-subtle">{comment.length} / 500</p>
+              </div>
+              {reviewState.kind === 'error' && <Alert tone="danger">{reviewState.message}</Alert>}
+              <Button type="submit" loading={reviewState.kind === 'sending'} className="self-start">نشر التقييم</Button>
+            </form>
+          )}
+        </Card>
+      )}
+    </main>
   );
 }

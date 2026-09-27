@@ -34,7 +34,7 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> with Si
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('المعاملات'),
+        title: const Text('صفقاتي'),
         centerTitle: true,
         bottom: TabBar(
           controller: _tabController,
@@ -92,7 +92,7 @@ class _TransactionsList extends ConsumerWidget {
     }
 
     if (state.transactions.isEmpty) {
-      return const Center(child: Text('لا توجد معاملات بعد'));
+      return const Center(child: Text('لا توجد صفقات بعد.'));
     }
 
     return RefreshIndicator(

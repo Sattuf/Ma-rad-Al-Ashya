@@ -1,5 +1,6 @@
 'use client';
 
+import { errorMessage } from '@/lib/errors';
 import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -72,7 +73,7 @@ export default function RegisterPage() {
       setAuth(res.user, res.tokens.access_token);
       router.push('/');
     } catch (err: any) {
-      setError(err.response?.data?.message || 'حدث خطأ أثناء إنشاء الحساب');
+      setError(errorMessage(err, 'تعذّر إنشاء الحساب. راجع البيانات وحاول مجدداً.'));
     }
   };
 
@@ -152,7 +153,7 @@ export default function RegisterPage() {
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
-              جاري إنشاء الحساب...
+              جارٍ إنشاء الحساب…
             </span>
           ) : (
             'إنشاء حساب'

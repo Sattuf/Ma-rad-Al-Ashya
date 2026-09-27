@@ -1,5 +1,6 @@
 'use client';
 
+import { errorMessage } from '@/lib/errors';
 import React, { useEffect, useState } from 'react';
 import { fraudApi } from '@/lib/api/fraud';
 import { useParams, useRouter } from 'next/navigation';
@@ -14,6 +15,8 @@ export default function FraudUserDetailsPage() {
   const [riskData, setRiskData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [reason, setReason] = useState('');
+  const [actionResult, setActionResult] = useState<{ ok: boolean; text: string } | null>(null);
 
   useEffect(() => {
     if (!userId) return;
@@ -31,31 +34,28 @@ export default function FraudUserDetailsPage() {
     fetchRisk();
   }, [userId]);
 
-  const handleAction = async (actionType: string) => {
+  const handleAction = async (actionType: 'flag' | 'lock') => {
+    if (!reason.trim()) {
+      setActionResult({ ok: false, text: 'اكتب سبب الإجراء أولاً؛ يُحفظ في سجل المراجعة.' });
+      return;
+    }
+    setActionLoading(actionType);
+    setActionResult(null);
     try {
-      setActionLoading(actionType);
-      const reason = window.prompt(`الرجاء إدخال سبب الإجراء (${actionType}):`);
-      if (!reason) {
-        setActionLoading(null);
-        return;
-      }
-      
-      await fraudApi.takeAction(userId, actionType, reason);
-      alert(actionType === 'lock' ? 'تم إيقاف الحساب.' : 'سُجّل الحساب كمشبوه.');
-      
-      // Refresh data
-      const data = await fraudApi.getRiskDetails(userId);
-      setRiskData(data);
-    } catch (error: any) {
+      await fraudApi.takeAction(userId, actionType, reason.trim());
+      setActionResult({ ok: true, text: actionType === 'lock' ? 'أُوقف الحساب، ولن يستطيع صاحبه تسجيل الدخول.' : 'سُجّل الحساب كمشبوه وسيبقى تحت المراقبة.' });
+      setReason('');
+      setRiskData(await fraudApi.getRiskDetails(userId));
+    } catch (err) {
       // The server only answers 2xx when the action really happened.
-      alert(`لم يُنفَّذ الإجراء: ${error?.response?.data?.detail ?? 'تعذّر الاتصال بالخادم'}`);
+      setActionResult({ ok: false, text: errorMessage(err, 'لم يُنفَّذ الإجراء. حاول مجدداً.') });
     } finally {
       setActionLoading(null);
     }
   };
 
   if (loading) {
-    return <div className="p-8 text-center text-white">جاري التحميل...</div>;
+    return <div className="p-8 text-center text-white">جارٍ التحميل…</div>;
   }
 
   if (!riskData) {
@@ -136,6 +136,21 @@ export default function FraudUserDetailsPage() {
       {/* Actions */}
       <div className="bg-gray-950 rounded-xl border border-gray-800 p-6">
         <h2 className="text-lg font-semibold text-white mb-4">الإجراءات المتاحة</h2>
+        <label htmlFor="action-reason" className="mb-1 block text-sm text-gray-300">سبب الإجراء (مطلوب)</label>
+        <textarea
+          id="action-reason"
+          rows={2}
+          maxLength={500}
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          placeholder="مثال: عشرة إعلانات متطابقة خلال ساعة من أجهزة مختلفة."
+          className="mb-4 w-full rounded-lg border border-gray-700 bg-gray-900 p-3 text-sm text-gray-100"
+        />
+        {actionResult && (
+          <p role={actionResult.ok ? 'status' : 'alert'} className={`mb-4 rounded-lg p-3 text-sm ${actionResult.ok ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
+            {actionResult.text}
+          </p>
+        )}
         <div className="flex flex-wrap gap-4">
           <button
             onClick={() => handleAction('flag')}

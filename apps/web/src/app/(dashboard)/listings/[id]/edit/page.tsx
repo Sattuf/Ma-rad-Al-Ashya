@@ -112,7 +112,7 @@ export default function EditListingPage() {
     return (
       <main className="mx-auto max-w-2xl px-4 py-8">
         <Card>
-          <ErrorState title="تعذّر تحميل الإعلان" onRetry={() => mutate()} />
+          <ErrorState error={error} title="تعذّر تحميل الإعلان" onRetry={() => mutate()} />
         </Card>
       </main>
     );

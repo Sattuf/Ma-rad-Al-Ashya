@@ -1,4 +1,4 @@
-import { Injectable, ConflictException, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, ConflictException, BadRequestException, NotFoundException, BadGatewayException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { MoreThan, Repository } from 'typeorm';
 import { Report } from './entities/report.entity';
@@ -11,8 +11,12 @@ import { firstValueFrom } from 'rxjs';
 import { internalHeaders } from '../common/security';
 import { TtlCache, dailySeries, windowStart } from '../common/stats';
 
+const REVIEW_STATUSES = ['pending', 'reviewed', 'resolved', 'dismissed'];
+const REVIEW_ACTIONS = ['none', 'warning', 'listing_removed', 'user_suspended', 'user_banned'];
+
 @Injectable()
 export class ReportsService {
+  private readonly logger = new Logger(ReportsService.name);
   private readonly statsCache = new TtlCache<Awaited<ReturnType<ReportsService['computeAdminStats']>>>(30_000);
 
   constructor(
@@ -127,47 +131,61 @@ export class ReportsService {
   }
 
   async reviewReport(id: string, reviewDto: any, adminId: string) {
+    const status = reviewDto?.status;
+    const action = reviewDto?.action_taken ?? 'none';
+    if (!REVIEW_STATUSES.includes(status)) throw new BadRequestException('Invalid status');
+    if (!REVIEW_ACTIONS.includes(action)) throw new BadRequestException('Invalid action');
+
     const report = await this.reportsRepository.findOne({ where: { id } });
     if (!report) throw new NotFoundException('Report not found');
 
-    report.status = reviewDto.status;
-    report.action_taken = reviewDto.action_taken;
-    report.admin_note = reviewDto.admin_note;
+    // Apply the enforcement first: a review recorded as "listing removed" while the
+    // listing is still online would mislead the moderator and the reporter.
+    await this.applyAction(report, action);
+
+    const wasPending = report.status === 'pending';
+    report.status = status;
+    report.action_taken = action;
+    report.admin_note = typeof reviewDto.admin_note === 'string' ? reviewDto.admin_note.slice(0, 2000) : report.admin_note;
     report.reviewed_by = adminId;
     report.reviewed_at = new Date();
-
     const saved = await this.reportsRepository.save(report);
 
-    // Decrement pending count if resolved/dismissed
-    if (reviewDto.status === 'resolved' || reviewDto.status === 'dismissed') {
+    // Only a pending → closed transition leaves the queue (re-reviews must not drift the count).
+    if (wasPending && (status === 'resolved' || status === 'dismissed')) {
       const count = await this.reportCountsRepository.findOne({
-        where: { target_type: report.target_type, target_id: report.target_id }
+        where: { target_type: report.target_type, target_id: report.target_id },
       });
       if (count && count.pending_count > 0) {
         count.pending_count -= 1;
         await this.reportCountsRepository.save(count);
       }
     }
-
-    // Trigger HTTP actions
-    if (reviewDto.action_taken === 'listing_removed' && report.target_type === 'listing') {
-      const listingsUrl = process.env.LISTINGS_SERVICE_URL || 'http://listings-service:3002';
-      try {
-        await firstValueFrom(this.httpService.put(`${listingsUrl}/listings/${report.target_id}/status`, { status: 'deleted' }, { headers: internalHeaders(), timeout: 5000 }));
-      } catch(e) {
-        console.error('Failed to remove listing:', e.message);
-      }
-    } else if ((reviewDto.action_taken === 'user_suspended' || reviewDto.action_taken === 'user_banned') && report.target_type === 'user') {
-      const usersUrl = process.env.USERS_SERVICE_URL || 'http://users-service:3007';
-      const userStatus = reviewDto.action_taken === 'user_suspended' ? 'suspended' : 'banned';
-      try {
-        await firstValueFrom(this.httpService.put(`${usersUrl}/users/${report.target_id}/status`, { status: userStatus }, { headers: internalHeaders(), timeout: 5000 }));
-      } catch(e) {
-        console.error('Failed to update user status:', e.message);
-      }
-    }
-
     return saved;
+  }
+
+  private async applyAction(report: Report, action: string) {
+    let request: { url: string; body: { status: string }; what: string } | null = null;
+    if (action === 'listing_removed' && report.target_type === 'listing') {
+      const listingsUrl = process.env.LISTINGS_SERVICE_URL || 'http://listings-service:3002';
+      request = { url: `${listingsUrl}/listings/${report.target_id}/status`, body: { status: 'deleted' }, what: 'إزالة الإعلان' };
+    } else if ((action === 'user_suspended' || action === 'user_banned') && report.target_type === 'user') {
+      const usersUrl = process.env.USERS_SERVICE_URL || 'http://users-service:3007';
+      request = {
+        url: `${usersUrl}/users/${report.target_id}/status`,
+        body: { status: action === 'user_suspended' ? 'suspended' : 'banned' },
+        what: action === 'user_suspended' ? 'إيقاف الحساب' : 'حظر الحساب',
+      };
+    } else if (action !== 'none' && action !== 'warning') {
+      throw new BadRequestException('هذا الإجراء لا يناسب نوع البلاغ');
+    }
+    if (!request) return;
+    try {
+      await firstValueFrom(this.httpService.put(request.url, request.body, { headers: internalHeaders(), timeout: 5000 }));
+    } catch (e) {
+      this.logger.error(`Moderation action failed for report ${report.id}: ${e.message}`);
+      throw new BadGatewayException(`تعذّر ${request.what} الآن، ولم تُحفظ المراجعة. حاول مجدداً.`);
+    }
   }
 
   /**

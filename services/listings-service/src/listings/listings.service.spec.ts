@@ -189,6 +189,8 @@ describe('ListingsService', () => {
       await service.findAll({ ids: `${id},not-a-uuid,${id}` });
 
       expect(qb.andWhere).toHaveBeenCalledWith('listing.id IN (:...ids)', { ids: [id] });
+      // Deal history needs sold/expired listings too, never deleted ones.
+      expect(qb.where).toHaveBeenCalledWith('listing.status IN (:...statuses)', { statuses: expect.not.arrayContaining([ListingStatus.DELETED]) });
     });
 
     it('returns nothing (not everything) when ids are all invalid', async () => {
@@ -198,6 +200,16 @@ describe('ListingsService', () => {
       await service.findAll({ ids: "1' OR '1'='1" });
 
       expect(qb.andWhere).toHaveBeenCalledWith('1 = 0', { ids: [] });
+    });
+
+    it('includes subcategories when filtering by a parent category', async () => {
+      const qb = queryBuilder();
+      mockListingRepository.createQueryBuilder.mockReturnValue(qb);
+      const categoryId = '3f2b8c1e-8a1d-4c55-9a7e-0b6f1f0e2d11';
+
+      await service.findAll({ categoryId });
+
+      expect(qb.andWhere).toHaveBeenCalledWith(expect.stringContaining('c.parent_id = :categoryId'), { categoryId });
     });
 
     it('ignores non-uuid category and user filters instead of failing in Postgres', async () => {

@@ -7,6 +7,7 @@ import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { ArrowRight, AlertTriangle, User, FileText, CheckCircle, Eye } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { errorMessage } from '@/lib/errors';
 
 export default function AdminReportDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
@@ -21,6 +22,7 @@ export default function AdminReportDetailPage({ params }: { params: Promise<{ id
   const [adminNote, setAdminNote] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
 
   useEffect(() => {
     adminApi.getReport(resolvedParams.id)
@@ -40,6 +42,7 @@ export default function AdminReportDetailPage({ params }: { params: Promise<{ id
     
     setIsSubmitting(true);
     setSuccessMsg('');
+    setErrorMsg('');
     
     try {
       await adminApi.reviewReport(report.id, {
@@ -47,13 +50,12 @@ export default function AdminReportDetailPage({ params }: { params: Promise<{ id
         actionTaken,
         adminNote: adminNote.trim() || undefined
       });
-      setSuccessMsg('تم تحديث حالة البلاغ بنجاح');
+      setSuccessMsg('حُفظت المراجعة، ونُفّذ الإجراء المختار.');
       // Refresh
       const updated = await adminApi.getReport(resolvedParams.id);
       setReport(updated);
     } catch (err) {
-      console.error(err);
-      alert('حدث خطأ أثناء تحديث البلاغ');
+      setErrorMsg(errorMessage(err, 'تعذّر حفظ المراجعة. لم يتغيّر شيء؛ حاول مجدداً.'));
     } finally {
       setIsSubmitting(false);
     }
@@ -149,8 +151,13 @@ export default function AdminReportDetailPage({ params }: { params: Promise<{ id
             <h2 className="text-xl font-bold text-white">المراجعة والإجراء</h2>
           </div>
 
+          {errorMsg && (
+            <div role="alert" className="mb-6 rounded-lg border border-danger bg-danger-soft p-4 text-danger">
+              {errorMsg}
+            </div>
+          )}
           {successMsg && (
-            <div className="mb-6 p-4 bg-brand-600/10 border border-brand-600/20 rounded-lg flex items-center gap-3 text-primary">
+            <div role="status" className="mb-6 p-4 bg-brand-600/10 border border-brand-600/20 rounded-lg flex items-center gap-3 text-primary">
               <CheckCircle size={20} />
               <span>{successMsg}</span>
             </div>
@@ -202,7 +209,7 @@ export default function AdminReportDetailPage({ params }: { params: Promise<{ id
               disabled={isSubmitting}
               className="w-full py-3 bg-primary hover:bg-primary text-on-primary rounded-lg font-medium transition-colors flex justify-center items-center gap-2 disabled:opacity-70"
             >
-              {isSubmitting ? 'جاري الحفظ...' : 'حفظ الإجراء'}
+              {isSubmitting ? 'جارٍ الحفظ…' : 'حفظ الإجراء'}
             </button>
           </form>
         </div>

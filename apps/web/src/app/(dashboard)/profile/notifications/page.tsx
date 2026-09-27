@@ -1,5 +1,7 @@
 'use client';
 
+import { Alert } from '@/components/ui';
+import { errorMessage } from '@/lib/errors';
 import React, { useEffect, useState } from 'react';
 import { Bell, Smartphone, Mail, AlertCircle, Loader2 } from 'lucide-react';
 import { userApi, type NotificationSettings } from '@/lib/api/users';
@@ -20,6 +22,7 @@ export default function NotificationsPage() {
   
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState<keyof NotificationSettings | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -27,7 +30,7 @@ export default function NotificationsPage() {
         const profile = await userApi.getProfile();
         setSettings(profile.notifications);
       } catch (error) {
-        console.error('Failed to fetch profile', error);
+        setNotice(errorMessage(error, 'تعذّر تحميل إعداداتك الحالية.'));
       } finally {
         setLoading(false);
       }
@@ -45,7 +48,7 @@ export default function NotificationsPage() {
     try {
       await userApi.updateNotifications({ [key]: newValue });
     } catch (error) {
-      console.error('Failed to update notifications', error);
+      setNotice(errorMessage(error, 'لم يُحفظ التغيير. حاول مجدداً.'));
       // Revert on failure
       setSettings((prev) => ({ ...prev, [key]: !newValue }));
     } finally {
@@ -65,8 +68,9 @@ export default function NotificationsPage() {
     <div className="bg-surface rounded-3xl shadow-sm border border-gray-100 p-8">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900">إعدادات الإشعارات</h1>
-        <p className="text-gray-500 mt-1">تحكم في كيفية تلقيك للإشعارات والتنبيهات</p>
+        <p className="text-gray-500 mt-1">اختر ما يصلك من تنبيهات.</p>
       </div>
+      {notice && <Alert tone="danger" className="mb-6">{notice}</Alert>}
 
       <div className="space-y-6">
         {CATEGORIES.map(({ key, title, description, icon: Icon }) => (
