@@ -1,0 +1,27 @@
+# اختبارات الحمل (k6) — تُشغَّل يدوياً على بيئة staging، ولا تُشغَّل أبداً على الإنتاج.
+name: "Load tests"
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "Staging base URL (e.g. https://staging.example.com)"
+        required: true
+      scenario:
+        description: "Scenario"
+        type: choice
+        options: [listings-browse-load.js, search-load.js, auth-load.js]
+        default: listings-browse-load.js
+
+jobs:
+  k6:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: grafana/setup-k6-action@v1
+      - name: Run ${{ inputs.scenario }}
+        # Inputs go through env vars, never straight into the script (injection-safe).
+        env:
+          BASE_URL: ${{ inputs.base_url }}
+          SCENARIO: ${{ inputs.scenario }}
+        run: k6 run -e BASE_URL="$BASE_URL" "infra/load-tests/$SCENARIO"

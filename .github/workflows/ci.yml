@@ -1,5 +1,6 @@
 # معرض الأشياء — CI Pipeline
-# يعمل عند كل Push و Pull Request على الفروع الرئيسية
+# يعمل عند كل Push على الفروع الرئيسية وعند كل Pull Request.
+# استراتيجية الاختبار: docs/TESTING_STRATEGY.md
 
 name: "معرض الأشياء — CI"
 
@@ -7,16 +8,36 @@ on:
   push:
     branches: [main, develop]
   pull_request:
-    branches: [main, develop]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   # ─────────────────────────────────────────────
-  # Job 1: فحص واختبار خدمات Node.js
+  # حارس الأسرار: يمنع عودة الأسرار الافتراضية المسرّبة
   # ─────────────────────────────────────────────
-  lint-and-test-node:
-    name: "Node.js — ${{ matrix.service }}"
+  secrets-guard:
+    name: "Security — no default secrets"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fail on known leaked default secrets
+        run: |
+          pattern="your-secret-key|access_secret_key_12345|refresh_secret_key_67890|supersecretkey|marad-internal-secret-for-webhooks|secret123|dev-jwt-secret-change-in-production"
+          if git grep -nE "$pattern" -- ':!*.spec.ts' ':!*test*' ':!docs/**' ':!.github/**'; then
+            echo "::error::A known leaked default secret is back in the code"
+            exit 1
+          fi
+
+  # ─────────────────────────────────────────────
+  # خدمات Node ضمن مساحة العمل (workspace) — فحص الأنواع + اختبارات الوحدة
+  # ─────────────────────────────────────────────
+  node-workspace:
+    name: "Node — ${{ matrix.service }}"
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         service:
           - api-gateway
@@ -26,120 +47,146 @@ jobs:
           - messaging-service
           - transactions-service
           - identity-service
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js 20
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
-
-      - name: Install dependencies
+          cache: npm
+      - name: Install (workspace root)
         run: npm ci
+      - name: Typecheck
+        run: npx tsc --noEmit -p tsconfig.build.json
+        working-directory: services/${{ matrix.service }}
+      - name: Unit tests
+        run: npx jest --ci
         working-directory: services/${{ matrix.service }}
 
-      - name: Run linter (ESLint)
-        run: npm run lint
+  # خدمات لها ملف قفل خاص بها (خارج مساحة العمل)
+  node-standalone:
+    name: "Node — ${{ matrix.service }}"
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [users-service, moderation-service]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install
+        run: npm ci --legacy-peer-deps
         working-directory: services/${{ matrix.service }}
-        continue-on-error: true # قد لا يكون إعداد ESLint مكتملاً بعد
-
-      - name: Run tests
-        run: npm test
+      - name: Typecheck
+        run: npx tsc --noEmit -p tsconfig.build.json
+        working-directory: services/${{ matrix.service }}
+      - name: Unit tests
+        run: npx jest --ci
         working-directory: services/${{ matrix.service }}
 
   # ─────────────────────────────────────────────
-  # Job 2: فحص واختبار خدمات Python
+  # اختبارات التكامل على Postgres و Redis حقيقيين
   # ─────────────────────────────────────────────
-  lint-and-test-python:
+  integration:
+    name: "Integration — Postgres + Redis"
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: marad
+          POSTGRES_PASSWORD: marad
+          POSTGRES_DB: marad_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U marad" --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgres://marad:marad@localhost:5432/marad_test
+      REDIS_URL: redis://localhost:6379
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: auth-service (Redis atomicity, OTP brute force)
+        run: npm run test:int
+        working-directory: services/auth-service
+      - name: listings-service (pagination, LIKE escaping, view sync)
+        run: npm run test:int
+        working-directory: services/listings-service
+
+  # ─────────────────────────────────────────────
+  # خدمات Python
+  # ─────────────────────────────────────────────
+  python:
     name: "Python — ${{ matrix.service }}"
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        service:
-          - fraud-service
-          - personalization-service
-
+        service: [fraud-service, personalization-service]
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Python 3.11
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
+          cache: pip
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip install -r requirements.txt pytest httpx
         working-directory: services/${{ matrix.service }}
-
-      - name: Run linter (Ruff)
-        run: |
-          pip install ruff
-          ruff check .
-        working-directory: services/${{ matrix.service }}
-        continue-on-error: true # قد لا يكون إعداد Ruff مكتملاً بعد
-
-      - name: Run tests (pytest)
-        run: pytest
+      - name: Tests
+        run: python -m pytest -q
         working-directory: services/${{ matrix.service }}
 
   # ─────────────────────────────────────────────
-  # Job 3: تحليل واختبار تطبيق Flutter
+  # تطبيق Next.js
   # ─────────────────────────────────────────────
-  flutter-analyze:
+  web:
+    name: "Next.js — Web App"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Typecheck
+        run: npx tsc --noEmit
+        working-directory: apps/web
+      - name: Unit tests
+        run: npx jest --ci
+        working-directory: apps/web
+      - name: Build
+        run: npm run build
+        working-directory: apps/web
+
+  # ─────────────────────────────────────────────
+  # تطبيق Flutter
+  # ─────────────────────────────────────────────
+  flutter:
     name: "Flutter — Mobile App"
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Flutter 3.29.3
-        uses: subosito/flutter-action@v2
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
         with:
           flutter-version: "3.29.3"
           channel: stable
-
-      - name: Install dependencies
-        run: flutter pub get
+      - run: flutter pub get
         working-directory: apps/mobile
-
-      - name: Analyze code
-        run: flutter analyze
+      - name: Analyze
+        run: flutter analyze --no-fatal-infos
         working-directory: apps/mobile
-        continue-on-error: true # قد تظهر تحذيرات في المرحلة المبكرة
-
-      - name: Run tests
+        continue-on-error: true # يُزال بعد تنظيف التحذيرات الحالية (docs/TESTING_STRATEGY.md)
+      - name: Tests
         run: flutter test
         working-directory: apps/mobile
-
-  # ─────────────────────────────────────────────
-  # Job 4: بناء تطبيق Next.js
-  # ─────────────────────────────────────────────
-  nextjs-build:
-    name: "Next.js — Web App"
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js 20
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Install dependencies
-        run: npm ci
-        working-directory: apps/web
-
-      - name: Run linter
-        run: npm run lint
-        working-directory: apps/web
-        continue-on-error: true # قد لا يكون إعداد ESLint مكتملاً بعد
-
-      - name: Build application
-        run: npm run build
-        working-directory: apps/web

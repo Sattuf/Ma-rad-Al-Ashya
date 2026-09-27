@@ -10,7 +10,8 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
-    "lint": "eslint \"{src,test}/**/*.ts\""
+    "lint": "eslint \"{src,test}/**/*.ts\"",
+    "test:int": "jest --config jest.int.config.js --runInBand"
   },
   "dependencies": {
     "@nestjs/common": "^10.4.0",
