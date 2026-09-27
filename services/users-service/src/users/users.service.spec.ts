@@ -81,4 +81,19 @@ describe('UsersService', () => {
     mockUsersRepository.update.mockResolvedValueOnce({ affected: 0 });
     await expect(service.updateStatus('missing', 'suspended')).rejects.toThrow(NotFoundException);
   });
+
+  it('public profile never exposes contact details or tokens', async () => {
+    mockUsersRepository.findOne.mockResolvedValueOnce({
+      id: 'user-1',
+      email: 'private@example.com',
+      full_name: 'Public Name',
+      fcm_token: 'secret-token',
+      notification_messages: true,
+    });
+    const result = await service.getPublicProfile('user-1');
+    expect(result).not.toHaveProperty('email');
+    expect(result).not.toHaveProperty('fcm_token');
+    expect(result).not.toHaveProperty('notification_messages');
+    expect(result.full_name).toBe('Public Name');
+  });
 });

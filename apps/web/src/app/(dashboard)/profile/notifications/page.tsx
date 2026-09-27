@@ -2,19 +2,20 @@
 
 import React, { useEffect, useState } from 'react';
 import { Bell, Smartphone, Mail, AlertCircle, Loader2 } from 'lucide-react';
-import { userApi } from '@/lib/api/users';
+import { userApi, type NotificationSettings } from '@/lib/api/users';
 
-interface NotificationSettings {
-  emailNotifications: boolean;
-  pushNotifications: boolean;
-  smsNotifications: boolean;
-}
+// The categories users-service stores (notification_messages/listings/transactions).
+const CATEGORIES: { key: keyof NotificationSettings; title: string; description: string; icon: typeof Bell }[] = [
+  { key: 'messages', title: 'الرسائل', description: 'عندما يراسلك مشترٍ أو بائع بشأن إعلان.', icon: Mail },
+  { key: 'transactions', title: 'الصفقات', description: 'عند طلب شراء، أو تأكيد، أو إلغاء صفقة تخصك.', icon: Smartphone },
+  { key: 'listings', title: 'الإعلانات', description: 'تحديثات إعلاناتك: انتهاء المدة، البلاغات، والتفاعل.', icon: Bell },
+];
 
 export default function NotificationsPage() {
   const [settings, setSettings] = useState<NotificationSettings>({
-    emailNotifications: true,
-    pushNotifications: true,
-    smsNotifications: false,
+    messages: true,
+    listings: true,
+    transactions: true,
   });
   
   const [loading, setLoading] = useState(true);
@@ -23,11 +24,8 @@ export default function NotificationsPage() {
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const data = await userApi.getProfile();
-        const user = data.user || data;
-        if (user.notifications) {
-          setSettings(user.notifications);
-        }
+        const profile = await userApi.getProfile();
+        setSettings(profile.notifications);
       } catch (error) {
         console.error('Failed to fetch profile', error);
       } finally {
@@ -71,122 +69,49 @@ export default function NotificationsPage() {
       </div>
 
       <div className="space-y-6">
-        {/* Email Notifications */}
-        <div className="flex items-start justify-between p-5 rounded-2xl border border-gray-100 hover:border-brand-100 bg-gray-50/50 transition-colors">
-          <div className="flex gap-4">
-            <div className="p-3 bg-surface rounded-xl shadow-sm text-primary shrink-0 h-fit">
-              <Mail className="w-6 h-6" />
+        {CATEGORIES.map(({ key, title, description, icon: Icon }) => (
+          <div
+            key={key}
+            className="flex items-start justify-between p-5 rounded-2xl border border-gray-100 bg-gray-50/50 transition-colors"
+          >
+            <div className="flex gap-4">
+              <div className="p-3 bg-surface rounded-xl shadow-sm text-primary shrink-0 h-fit">
+                <Icon className="w-6 h-6" aria-hidden />
+              </div>
+              <div>
+                <h3 id={`notif-${key}`} className="font-semibold text-gray-900 text-lg mb-1">{title}</h3>
+                <p className="text-gray-500 text-sm leading-relaxed">{description}</p>
+              </div>
             </div>
-            <div>
-              <h3 className="font-semibold text-gray-900 text-lg mb-1">إشعارات البريد الإلكتروني</h3>
-              <p className="text-gray-500 text-sm leading-relaxed">
-                تلقي تحديثات حول حسابك، نشاطك، والعروض الخاصة عبر البريد الإلكتروني.
-              </p>
-            </div>
-          </div>
-          <div className="pt-2 pe-2">
-            <button
-              onClick={() => handleToggle('emailNotifications')}
-              disabled={updating === 'emailNotifications'}
-              className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600/50 ${
-                settings.emailNotifications ? 'bg-primary' : 'bg-gray-200'
-              } disabled:opacity-50`}
-              role="switch"
-              aria-checked={settings.emailNotifications}
-            >
-              <span
-                aria-hidden="true"
-                className={`pointer-events-none flex items-center justify-center h-6 w-6 transform rounded-full bg-surface shadow-sm ring-0 transition duration-200 ease-in-out ${
-                  settings.emailNotifications ? '-translate-x-5' : 'translate-x-0'
-                }`}
+            <div className="pt-2 pe-2">
+              <button
+                onClick={() => handleToggle(key)}
+                disabled={updating === key}
+                className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring ${
+                  settings[key] ? 'bg-primary' : 'bg-gray-300'
+                } disabled:opacity-50`}
+                role="switch"
+                aria-checked={settings[key]}
+                aria-labelledby={`notif-${key}`}
               >
-                {updating === 'emailNotifications' && (
-                  <Loader2 className="w-3 h-3 text-primary animate-spin" />
-                )}
-              </span>
-            </button>
-          </div>
-        </div>
-
-        {/* Push Notifications */}
-        <div className="flex items-start justify-between p-5 rounded-2xl border border-gray-100 hover:border-brand-100 bg-gray-50/50 transition-colors">
-          <div className="flex gap-4">
-            <div className="p-3 bg-surface rounded-xl shadow-sm text-primary shrink-0 h-fit">
-              <Bell className="w-6 h-6" />
-            </div>
-            <div>
-              <h3 className="font-semibold text-gray-900 text-lg mb-1">إشعارات التطبيق (Push)</h3>
-              <p className="text-gray-500 text-sm leading-relaxed">
-                تلقي تنبيهات فورية على جهازك حول الرسائل الجديدة والتحديثات المهمة.
-              </p>
+                <span
+                  aria-hidden="true"
+                  className={`pointer-events-none flex items-center justify-center h-6 w-6 transform rounded-full bg-surface shadow-sm ring-0 transition duration-200 ease-in-out ${
+                    settings[key] ? '-translate-x-5' : 'translate-x-0'
+                  }`}
+                >
+                  {updating === key && <Loader2 className="w-3 h-3 text-primary animate-spin" />}
+                </span>
+              </button>
             </div>
           </div>
-          <div className="pt-2 pe-2">
-            <button
-              onClick={() => handleToggle('pushNotifications')}
-              disabled={updating === 'pushNotifications'}
-              className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600/50 ${
-                settings.pushNotifications ? 'bg-primary' : 'bg-gray-200'
-              } disabled:opacity-50`}
-              role="switch"
-              aria-checked={settings.pushNotifications}
-            >
-              <span
-                aria-hidden="true"
-                className={`pointer-events-none flex items-center justify-center h-6 w-6 transform rounded-full bg-surface shadow-sm ring-0 transition duration-200 ease-in-out ${
-                  settings.pushNotifications ? '-translate-x-5' : 'translate-x-0'
-                }`}
-              >
-                {updating === 'pushNotifications' && (
-                  <Loader2 className="w-3 h-3 text-primary animate-spin" />
-                )}
-              </span>
-            </button>
-          </div>
-        </div>
-
-        {/* SMS Notifications */}
-        <div className="flex items-start justify-between p-5 rounded-2xl border border-gray-100 hover:border-brand-100 bg-gray-50/50 transition-colors">
-          <div className="flex gap-4">
-            <div className="p-3 bg-surface rounded-xl shadow-sm text-primary shrink-0 h-fit">
-              <Smartphone className="w-6 h-6" />
-            </div>
-            <div>
-              <h3 className="font-semibold text-gray-900 text-lg mb-1">الرسائل النصية (SMS)</h3>
-              <p className="text-gray-500 text-sm leading-relaxed">
-                تلقي رسائل نصية قصيرة للتنبيهات العاجلة والأمان (مثل رموز التحقق).
-              </p>
-            </div>
-          </div>
-          <div className="pt-2 pe-2">
-            <button
-              onClick={() => handleToggle('smsNotifications')}
-              disabled={updating === 'smsNotifications'}
-              className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600/50 ${
-                settings.smsNotifications ? 'bg-primary' : 'bg-gray-200'
-              } disabled:opacity-50`}
-              role="switch"
-              aria-checked={settings.smsNotifications}
-            >
-              <span
-                aria-hidden="true"
-                className={`pointer-events-none flex items-center justify-center h-6 w-6 transform rounded-full bg-surface shadow-sm ring-0 transition duration-200 ease-in-out ${
-                  settings.smsNotifications ? '-translate-x-5' : 'translate-x-0'
-                }`}
-              >
-                {updating === 'smsNotifications' && (
-                  <Loader2 className="w-3 h-3 text-primary animate-spin" />
-                )}
-              </span>
-            </button>
-          </div>
-        </div>
+        ))}
       </div>
 
       <div className="mt-8 p-4 bg-brand-50/50 rounded-2xl border border-brand-100 flex items-start gap-3">
         <AlertCircle className="w-5 h-5 text-primary shrink-0 mt-0.5" />
         <p className="text-sm text-primary leading-relaxed">
-          ملاحظة: بعض الإشعارات الهامة المتعلقة بأمان حسابك لا يمكن تعطيلها.
+          رسائل الأمان (مثل رموز التحقق وتسجيل الدخول من جهاز جديد) تصلك دائماً ولا يمكن إيقافها.
         </p>
       </div>
     </div>

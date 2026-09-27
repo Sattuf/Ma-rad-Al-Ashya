@@ -74,45 +74,29 @@ class _PromoteListingScreenState extends ConsumerState<PromoteListingScreen> {
       final repo = ref.read(promotionsRepositoryProvider);
       final paymentIntent = await repo.createPaymentIntent(widget.listingId, _selectedPlan!);
       final clientSecret = paymentIntent['clientSecret'] as String? ?? '';
-      final isMock = paymentIntent['isMock'] as bool? ?? false;
 
       bool isSuccess = false;
 
-      if (isMock || clientSecret.startsWith('mock_secret')) {
-        final mockResult = await _showMockPaymentDialog(_selectedPlan!);
-        isSuccess = mockResult ?? false;
-      } else {
-        try {
-          await Stripe.instance.initPaymentSheet(
-            paymentSheetParameters: SetupPaymentSheetParameters(
-              paymentIntentClientSecret: clientSecret,
-              merchantDisplayName: 'معرض الأشياء',
-              style: ThemeMode.light,
-            ),
-          );
-          await Stripe.instance.presentPaymentSheet();
-          isSuccess = true;
-        } catch (e) {
-          if (e is StripeException) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('فشلت عملية الدفع: ${e.error.localizedMessage}')),
-            );
-          } else {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('حدث خطأ غير متوقع أثناء الدفع: $e')),
-            );
-          }
-        }
+      try {
+        await Stripe.instance.initPaymentSheet(
+          paymentSheetParameters: SetupPaymentSheetParameters(
+            paymentIntentClientSecret: clientSecret,
+            merchantDisplayName: 'معرض الأشياء',
+            style: ThemeMode.system,
+          ),
+        );
+        await Stripe.instance.presentPaymentSheet();
+        isSuccess = true;
+      } catch (e) {
+        if (!mounted) return;
+        final message = e is StripeException
+            ? 'لم تكتمل عملية الدفع ولم يُخصم أي مبلغ. ${e.error.localizedMessage ?? ''}'
+            : 'تعذّر إتمام الدفع الآن. لم يُخصم أي مبلغ، حاول مجدداً.';
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
       }
 
       if (isSuccess) {
-        // Save the promotion locally
-        await repo.saveLocalPromotion(
-          widget.listingId,
-          _selectedPlan!.id,
-          _selectedPlan!.durationDays,
-        );
-
+        // The server activates the promotion from Stripe's webhook; refresh from the API.
         // Invalidate promotions providers to refresh data
         ref.invalidate(myPromotionsProvider);
 
@@ -129,7 +113,7 @@ class _PromoteListingScreenState extends ConsumerState<PromoteListingScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('فشل إنشاء عملية الدفع: $e')),
+          const SnackBar(content: Text('تعذّر الاتصال ببوابة الدفع الآن. حاول بعد قليل.')),
         );
       }
     } finally {

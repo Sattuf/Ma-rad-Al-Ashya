@@ -13,9 +13,7 @@ import { userApi } from '@/lib/api/users';
 
 const profileSchema = z.object({
   name: z.string().min(2, 'الاسم يجب أن يكون أكثر من حرفين'),
-  email: z.string().email('البريد الإلكتروني غير صحيح'),
-  phone: z.string().min(9, 'رقم الهاتف قصير جداً'),
-  location: z.string().optional(),
+  location: z.string().max(100, 'اسم المدينة طويل جداً').optional(),
 });
 
 type ProfileFormValues = z.infer<typeof profileSchema>;
@@ -27,6 +25,7 @@ export default function EditProfilePage() {
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [email, setEmail] = useState('');
 
   const {
     register,
@@ -40,12 +39,10 @@ export default function EditProfilePage() {
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const data = await userApi.getProfile();
-        const user = data.user || data;
-        setValue('name', user.name || '');
-        setValue('email', user.email || '');
-        setValue('phone', user.phone || '');
-        setValue('location', user.location || '');
+        const user = await userApi.getProfile();
+        setValue('name', user.name);
+        setValue('location', user.location);
+        setEmail(user.email);
         if (user.avatar) setAvatarPreview(user.avatar);
       } catch (error) {
         console.error('Failed to fetch profile', error);
@@ -98,7 +95,7 @@ export default function EditProfilePage() {
       // Upload avatar first if changed
       if (avatarFile) {
         const formData = new FormData();
-        formData.append('avatar', avatarFile);
+        formData.append('file', avatarFile);
         await userApi.uploadAvatar(formData);
       }
 
@@ -177,27 +174,18 @@ export default function EditProfilePage() {
           </div>
 
           <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700">البريد الإلكتروني</label>
+            <label htmlFor="account-email" className="block text-sm font-medium text-gray-700">البريد الإلكتروني</label>
             <input
-              {...register('email')}
-              type="email"
-              className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-brand-600/20 focus:border-primary transition-colors outline-none text-gray-900"
-              placeholder="example@domain.com"
+              id="account-email"
+              value={email}
+              readOnly
+              aria-describedby="account-email-hint"
+              className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-100 text-gray-600 cursor-not-allowed"
               dir="ltr"
             />
-            {errors.email && <p className="text-red-500 text-sm mt-1">{errors.email.message}</p>}
-          </div>
-
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700">رقم الهاتف</label>
-            <input
-              {...register('phone')}
-              type="tel"
-              className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-brand-600/20 focus:border-primary transition-colors outline-none text-gray-900 text-start"
-              placeholder="+966 5X XXX XXXX"
-              dir="ltr"
-            />
-            {errors.phone && <p className="text-red-500 text-sm mt-1">{errors.phone.message}</p>}
+            <p id="account-email-hint" className="text-xs text-gray-500">
+              البريد ورقم الهاتف مرتبطان بتسجيل الدخول، ويتطلب تغييرهما التحقق منهما.
+            </p>
           </div>
 
           <div className="space-y-2">

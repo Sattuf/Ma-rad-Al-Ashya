@@ -134,20 +134,14 @@ class PromotionsRepository {
     }
   }
 
+  /// Creates the Stripe PaymentIntent on listings-service. No offline fallback: a promotion
+  /// exists only after Stripe confirms the payment (server webhook).
   Future<Map<String, dynamic>> createPaymentIntent(String listingId, PromotionPlan plan) async {
-    try {
-      final response = await _apiClient.dio.post(
-        '/promotions/payment-intent',
-        data: {'listingId': listingId, 'planId': plan.id},
-      );
-      return response.data;
-    } catch (e) {
-      // Fallback mock client secret
-      return {
-        'clientSecret': 'mock_secret_${listingId}_${plan.id}_${DateTime.now().millisecondsSinceEpoch}',
-        'isMock': true,
-      };
-    }
+    final response = await _apiClient.dio.post(
+      '/promotions/create-payment-intent',
+      data: {'listingId': listingId, 'plan': plan.id},
+    );
+    return {'clientSecret': response.data['client_secret'] as String};
   }
 
   Future<List<Promotion>> getLocalPromotions() async {

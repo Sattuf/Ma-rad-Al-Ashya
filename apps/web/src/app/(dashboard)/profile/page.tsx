@@ -4,21 +4,14 @@ import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Edit2, Mail, Phone, MapPin, Calendar, ShieldCheck, Star } from 'lucide-react';
-import { userApi } from '@/lib/api/users';
+import { userApi, type Profile } from '@/lib/api/users';
 
-interface UserProfile {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  avatar: string;
-  role: string;
-  location: string;
-  createdAt: string;
+type UserProfile = Profile & {
+  phone?: string;
+  role?: string;
   rating?: number;
   ratingCount?: number;
-  is_identity_verified?: boolean;
-}
+};
 
 export default function ProfilePage() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -28,8 +21,7 @@ export default function ProfilePage() {
     const fetchProfile = async () => {
       try {
         const data = await userApi.getProfile();
-        // Adjust depending on the actual API response structure
-        setProfile(data.user || data);
+        setProfile(data);
       } catch (error) {
         console.error('Failed to fetch profile', error);
       } finally {
@@ -93,7 +85,7 @@ export default function ProfilePage() {
           <div className="flex items-center gap-2 text-gray-500 text-sm mb-3">
             <ShieldCheck className="w-4 h-4 text-green-500" />
             <span>{profile.role === 'admin' ? 'مدير النظام' : 'مستخدم'}</span>
-            {profile.is_identity_verified ? (
+            {profile.isIdentityVerified ? (
               <span className="inline-flex items-center gap-1 bg-green-50 text-green-700 px-2 py-0.5 rounded-full text-xs font-bold border border-green-200">
                 <ShieldCheck className="w-3 h-3" />
                 موثّق ✓

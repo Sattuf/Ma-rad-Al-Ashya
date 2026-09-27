@@ -1,4 +1,4 @@
-import { Controller, Get, Put, Post, Delete, Body, UseGuards, Request, UploadedFile, UseInterceptors, Param, Query, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Put, Post, Delete, Body, UseGuards, Request, UploadedFile, UseInterceptors, Param, Query, BadRequestException, ParseUUIDPipe } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody, ApiParam } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UsersService } from './users.service';
@@ -97,5 +97,23 @@ export class UsersInternalController {
   async verifyUser(@Param('id') id: string) {
     await this.usersService.verifyUser(id);
     return { success: true };
+  }
+}
+
+/**
+ * Public profile shown on listing and seller pages. Registered after the other controllers
+ * so fixed paths (profile, favorites…) win, and it exposes only non-sensitive fields:
+ * never email, phone, FCM token or notification settings.
+ */
+@ApiTags('users')
+@Controller()
+export class UsersPublicController {
+  constructor(private readonly usersService: UsersService) {}
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Public profile of a user' })
+  @ApiParam({ name: 'id', type: 'string' })
+  getPublicProfile(@Param('id', ParseUUIDPipe) id: string) {
+    return this.usersService.getPublicProfile(id);
   }
 }

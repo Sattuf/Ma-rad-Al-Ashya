@@ -40,13 +40,12 @@ export const listingsApi = {
     return response.data;
   },
 
-  uploadImage: async (file: File): Promise<{ url: string }> => {
+  /** Images are attached to an existing listing (max 10, 5MB, png/jpeg). */
+  uploadImage: async (listingId: string, file: File): Promise<{ imageUrl: string; thumbnailUrl: string }> => {
     const formData = new FormData();
     formData.append('file', file);
-    const response = await api.post('/upload', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
+    const response = await api.post(`/listings/${listingId}/images`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
     });
     return response.data;
   },

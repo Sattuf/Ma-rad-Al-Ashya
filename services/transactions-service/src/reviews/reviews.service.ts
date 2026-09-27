@@ -82,6 +82,11 @@ export class ReviewsService {
     }
   }
 
+  async getRatingSummary(userId: string) {
+    const summary = await this.summaryRepo.findOne({ where: { user_id: userId } });
+    return summary || { user_id: userId, total_reviews: 0, average_rating: 0 };
+  }
+
   async getUserReviews(userId: string, rawPage: number, rawLimit: number) {
     const { page, limit } = clampPagination(rawPage, rawLimit);
     const summary = await this.summaryRepo.findOne({ where: { user_id: userId } });

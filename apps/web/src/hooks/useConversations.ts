@@ -1,19 +1,17 @@
 import useSWRInfinite from 'swr/infinite';
-import { api } from '@/lib/api/auth';
+import { fetchMessagingPage, pageQuery } from './messagingPage';
 import { Conversation } from '@/types/message';
-
-const fetcher = (url: string) => api.get(url).then(res => res.data);
 
 export const useConversations = () => {
   const getKey = (pageIndex: number, previousPageData: any) => {
     if (previousPageData && !previousPageData.hasMore) return null; // reached the end
-    return `/conversations?page=${pageIndex + 1}&limit=20`; // API endpoint
+    return `/conversations?${pageQuery(pageIndex)}`;
   };
 
   const { data, error, size, setSize, mutate } = useSWRInfinite<{
     data: Conversation[];
     hasMore: boolean;
-  }>(getKey, fetcher);
+  }>(getKey, fetchMessagingPage);
 
   const conversations = data ? data.flatMap(page => page.data) : [];
   const isLoadingInitialData = !data && !error;

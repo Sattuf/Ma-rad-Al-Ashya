@@ -3,7 +3,8 @@
 import { useState, use, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useListingDetail } from '@/hooks/useListings';
-import { promotionsApi, PromotionPlan, saveLocalPromotion } from '@/lib/api/promotions';
+import { promotionsApi, PromotionPlan } from '@/lib/api/promotions';
+import { Alert } from '@/components/ui';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { Check, CreditCard, Sparkles, ShieldCheck, ArrowRight, Loader2 } from 'lucide-react';
@@ -48,14 +49,12 @@ function StripeCheckoutForm({
     if (error) {
       setErrorMessage(error.message || 'حدث خطأ غير متوقع أثناء الدفع.');
       setIsProcessing(false);
-    } else if (paymentIntent && paymentIntent.status === 'succeeded') {
-      // Save local promotion just to update UI for this demo/local environment
-      saveLocalPromotion(listingId, plan.id, plan.durationDays);
+    } else if (paymentIntent && ['succeeded', 'processing'].includes(paymentIntent.status)) {
+      // The promotion is activated server-side by the Stripe webhook.
       onSuccess();
     } else {
-      // If redirected or other status
-      saveLocalPromotion(listingId, plan.id, plan.durationDays);
-      onSuccess();
+      setErrorMessage('لم تكتمل عملية الدفع. لم يُخصم أي مبلغ، يمكنك المحاولة مجدداً.');
+      setIsProcessing(false);
     }
   };
 
@@ -85,162 +84,6 @@ function StripeCheckoutForm({
   );
 }
 
-function MockCheckoutForm({ 
-  listingId, 
-  plan, 
-  onSuccess 
-}: { 
-  listingId: string; 
-  plan: PromotionPlan; 
-  onSuccess: () => void 
-}) {
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [cardNumber, setCardNumber] = useState('');
-  const [expiry, setExpiry] = useState('');
-  const [cvc, setCvc] = useState('');
-  const [name, setName] = useState('');
-  const [error, setError] = useState<string | null>(null);
-
-  const handleCardNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
-    const matches = value.match(/\d{4,16}/g);
-    const match = (matches && matches[0]) || '';
-    const parts = [];
-
-    for (let i = 0, len = match.length; i < len; i += 4) {
-      parts.push(match.substring(i, i + 4));
-    }
-
-    if (parts.length > 0) {
-      setCardNumber(parts.join(' '));
-    } else {
-      setCardNumber(value);
-    }
-  };
-
-  const handleExpiryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value.replace(/[^0-9]/gi, '');
-    if (value.length >= 2) {
-      setExpiry(`${value.slice(0, 2)}/${value.slice(2, 4)}`);
-    } else {
-      setExpiry(value);
-    }
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-
-    if (!cardNumber || cardNumber.length < 16) {
-      setError('يرجى إدخال رقم بطاقة صالح');
-      return;
-    }
-    if (!expiry || expiry.length < 5) {
-      setError('يرجى إدخال تاريخ انتهاء صالح');
-      return;
-    }
-    if (!cvc || cvc.length < 3) {
-      setError('يرجى إدخال رمز التحقق (CVC) صالح');
-      return;
-    }
-    if (!name) {
-      setError('يرجى إدخال اسم حامل البطاقة');
-      return;
-    }
-
-    setIsProcessing(true);
-    setTimeout(() => {
-      saveLocalPromotion(listingId, plan.id, plan.durationDays);
-      setIsProcessing(false);
-      onSuccess();
-    }, 1800);
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="bg-amber-50 border border-amber-200 text-amber-800 p-3 rounded-lg text-xs mb-4">
-        ⚠️ <strong>وضع التجربة:</strong> يرجى استخدام أي بطاقة دفع تجريبية (مثال: 4242 4242 4242 4242).
-      </div>
-
-      <div className="space-y-2">
-        <label className="block text-sm font-medium text-gray-700">اسم حامل البطاقة</label>
-        <input
-          type="text"
-          required
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="محمد أحمد"
-          className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-start"
-        />
-      </div>
-
-      <div className="space-y-2">
-        <label className="block text-sm font-medium text-gray-700">رقم البطاقة</label>
-        <div className="relative">
-          <input
-            type="text"
-            required
-            maxLength={19}
-            value={cardNumber}
-            onChange={handleCardNumberChange}
-            placeholder="4242 4242 4242 4242"
-            className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary ltr text-end"
-          />
-          <CreditCard className="absolute start-3 top-3.5 text-gray-400" size={18} />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <label className="block text-sm font-medium text-gray-700">تاريخ الانتهاء</label>
-          <input
-            type="text"
-            required
-            maxLength={5}
-            value={expiry}
-            onChange={handleExpiryChange}
-            placeholder="MM/YY"
-            className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-center ltr"
-          />
-        </div>
-        <div className="space-y-2">
-          <label className="block text-sm font-medium text-gray-700">رمز التحقق (CVC)</label>
-          <input
-            type="password"
-            required
-            maxLength={4}
-            value={cvc}
-            onChange={(e) => setCvc(e.target.value.replace(/[^0-9]/gi, ''))}
-            placeholder="•••"
-            className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-center ltr"
-          />
-        </div>
-      </div>
-
-      {error && (
-        <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
-          {error}
-        </div>
-      )}
-
-      <button
-        type="submit"
-        disabled={isProcessing}
-        className="w-full bg-primary hover:bg-primary/95 text-white py-3 px-4 rounded-xl font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-primary/20"
-      >
-        {isProcessing ? (
-          <>
-            <Loader2 className="animate-spin" size={20} />
-            <span>جاري معالجة الدفع التجريبي...</span>
-          </>
-        ) : (
-          <span>دفع {plan.price} ر.س وتفعيل الترويج (تجريبي)</span>
-        )}
-      </button>
-    </form>
-  );
-}
-
 export default function PromoteListingPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
   const router = useRouter();
@@ -250,7 +93,7 @@ export default function PromoteListingPage({ params }: { params: Promise<{ id: s
   const [plans, setPlans] = useState<PromotionPlan[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<PromotionPlan | null>(null);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
-  const [isMock, setIsMock] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
   const [isPlansLoading, setIsPlansLoading] = useState(true);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
 
@@ -282,11 +125,13 @@ export default function PromoteListingPage({ params }: { params: Promise<{ id: s
   const handleProceedToPayment = async () => {
     if (!selectedPlan) return;
     try {
+      setPaymentError(null);
       const res = await promotionsApi.createPaymentIntent(listingId, selectedPlan);
       setClientSecret(res.clientSecret);
-      setIsMock(!!res.isMock);
-    } catch (error) {
-      alert('حدث خطأ أثناء الاتصال ببوابة الدفع.');
+    } catch (error: any) {
+      setPaymentError(
+        error?.response?.data?.message ?? 'تعذّر الاتصال ببوابة الدفع الآن. لم يُخصم أي مبلغ، حاول بعد قليل.',
+      );
     }
   };
 
@@ -425,6 +270,7 @@ export default function PromoteListingPage({ params }: { params: Promise<{ id: s
             {/* Selected Plan Details or Stripe Element Container */}
             {selectedPlan && (
               <div className="bg-surface rounded-2xl p-6 border border-gray-100 shadow-sm space-y-6">
+                {paymentError && <Alert tone="danger">{paymentError}</Alert>}
                 {!clientSecret ? (
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
@@ -452,14 +298,7 @@ export default function PromoteListingPage({ params }: { params: Promise<{ id: s
                       </button>
                     </div>
 
-                    {isMock ? (
-                      <MockCheckoutForm 
-                        listingId={listingId} 
-                        plan={selectedPlan} 
-                        onSuccess={handleSuccess} 
-                      />
-                    ) : (
-                      <Elements 
+                    <Elements 
                         stripe={stripePromise} 
                         options={{ 
                           clientSecret,
@@ -481,7 +320,7 @@ export default function PromoteListingPage({ params }: { params: Promise<{ id: s
                           onSuccess={handleSuccess} 
                         />
                       </Elements>
-                    )}
+                    
                   </div>
                 )}
               </div>

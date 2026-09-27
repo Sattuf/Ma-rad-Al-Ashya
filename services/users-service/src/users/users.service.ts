@@ -35,6 +35,19 @@ export class UsersService {
     return user;
   }
 
+  async getPublicProfile(userId: string) {
+    const user = await this.getProfile(userId);
+    return {
+      id: user.id,
+      full_name: user.full_name,
+      bio: user.bio,
+      city: user.city,
+      avatar_url: user.avatar_url,
+      is_identity_verified: user.is_identity_verified,
+      created_at: user.created_at,
+    };
+  }
+
   async updateProfile(userId: string, updateProfileDto: UpdateProfileDto): Promise<User> {
     const user = await this.getProfile(userId);
     Object.assign(user, updateProfileDto);

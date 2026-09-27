@@ -26,7 +26,7 @@ describe('ProxyController (e2e)', () => {
     });
     await new Promise<void>((resolve) => upstream.listen(0, resolve));
     const base = `http://127.0.0.1:${(upstream.address() as AddressInfo).port}`;
-    for (const name of ['AUTH', 'LISTINGS', 'USERS', 'SEARCH', 'IDENTITY', 'FRAUD', 'MESSAGING']) {
+    for (const name of ['AUTH', 'LISTINGS', 'USERS', 'SEARCH', 'IDENTITY', 'FRAUD', 'MESSAGING', 'TRANSACTIONS']) {
       process.env[`${name}_SERVICE_URL`] = base;
     }
 
@@ -103,6 +103,19 @@ describe('ProxyController (e2e)', () => {
     expect(seen[0].url).toBe('/search/suggestions?q=a%26b');
     await request(app.getHttpServer()).get('/api/v1/listings/caf%C3%A9');
     expect(seen[1].url).toBe('/listings/caf%C3%A9');
+  });
+
+  it('routes user reviews to transactions-service with the full path', async () => {
+    const id = '11111111-1111-4111-8111-111111111111';
+    await request(app.getHttpServer()).get(`/api/v1/users/${id}/reviews?page=2`);
+    expect(seen[0].url).toBe(`/users/${id}/reviews?page=2`);
+    expect(seen[0].headers['x-gateway-service']).toBe('transactions-service');
+  });
+
+  it('still strips the prefix for other users routes', async () => {
+    await request(app.getHttpServer()).get('/api/v1/users/profile');
+    expect(seen[0].url).toBe('/profile');
+    expect(seen[0].headers['x-gateway-service']).toBe('users-service');
   });
 
   it('never forwards x-internal-secret from clients', async () => {

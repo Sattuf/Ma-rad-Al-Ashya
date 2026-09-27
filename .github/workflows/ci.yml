@@ -18,10 +18,17 @@ jobs:
   # حارس الأسرار: يمنع عودة الأسرار الافتراضية المسرّبة
   # ─────────────────────────────────────────────
   secrets-guard:
-    name: "Security — no default secrets"
+    name: "Static checks — secrets, contracts, shared code"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Every web/mobile API call has a matching server route
+        run: node scripts/check-contracts.mjs
+      - name: Shared security/database helpers are identical in every service
+        run: node scripts/check-shared-copies.mjs
       - name: Fail on known leaked default secrets
         run: |
           pattern="your-secret-key|access_secret_key_12345|refresh_secret_key_67890|supersecretkey|marad-internal-secret-for-webhooks|secret123|dev-jwt-secret-change-in-production"

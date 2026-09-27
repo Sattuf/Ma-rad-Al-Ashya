@@ -18,41 +18,6 @@ export interface Promotion {
   endDate: string;
 }
 
-const STORAGE_KEY = 'marad_promoted_listings';
-
-// Helper to get local promotions from localStorage
-const getLocalPromotions = (): Promotion[] => {
-  if (typeof window === 'undefined') return [];
-  const stored = localStorage.getItem(STORAGE_KEY);
-  if (!stored) return [];
-  try {
-    return JSON.parse(stored);
-  } catch (e) {
-    return [];
-  }
-};
-
-// Helper to save a local promotion
-export const saveLocalPromotion = (listingId: string, planId: string, durationDays: number): Promotion => {
-  const promotions = getLocalPromotions();
-  const startDate = new Date();
-  const endDate = new Date();
-  endDate.setDate(startDate.getDate() + durationDays);
-
-  const newPromo: Promotion = {
-    id: `promo_${Math.random().toString(36).substr(2, 9)}`,
-    listingId,
-    planId,
-    status: 'active',
-    startDate: startDate.toISOString(),
-    endDate: endDate.toISOString(),
-  };
-
-  promotions.push(newPromo);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(promotions));
-  return newPromo;
-};
-
 export const promotionsApi = {
   getPlans: async (): Promise<PromotionPlan[]> => {
     try {
@@ -89,35 +54,17 @@ export const promotionsApi = {
     }
   },
 
-  createPaymentIntent: async (listingId: string, plan: PromotionPlan): Promise<{ clientSecret: string; isMock?: boolean }> => {
-    try {
-      const response = await api.post('/promotions/payment-intent', { listingId, planId: plan.id });
-      return response.data;
-    } catch (error) {
-      console.warn('Backend API for payment-intent failed or not available, using mock client secret');
-      // Return a simulated client secret for the frontend fallback
-      return {
-        clientSecret: `mock_secret_${listingId}_${plan.id}_${Date.now()}`,
-        isMock: true,
-      };
-    }
+  /**
+   * Creates the Stripe PaymentIntent on listings-service. There is deliberately no fallback:
+   * a promotion only exists once Stripe confirms the payment (webhook) — never client-side.
+   */
+  createPaymentIntent: async (listingId: string, plan: PromotionPlan): Promise<{ clientSecret: string }> => {
+    const response = await api.post('/promotions/create-payment-intent', { listingId, plan: plan.id });
+    return { clientSecret: response.data.client_secret };
   },
 
   getMyPromotions: async (): Promise<Promotion[]> => {
-    try {
-      const response = await api.get('/promotions/my');
-      const apiPromos = response.data || [];
-      const localPromos = getLocalPromotions();
-      // Combine API promotions and local promotions, avoiding duplicates
-      const allPromos = [...apiPromos];
-      localPromos.forEach(lp => {
-        if (!allPromos.some(ap => ap.listingId === lp.listingId)) {
-          allPromos.push(lp);
-        }
-      });
-      return allPromos;
-    } catch (error) {
-      return getLocalPromotions();
-    }
+    const response = await api.get('/promotions/my');
+    return response.data || [];
   },
 };

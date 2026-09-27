@@ -13,7 +13,7 @@ import { HttpService } from '@nestjs/axios';
 import { Request, Response } from 'express';
 import { firstValueFrom } from 'rxjs';
 import { ApiTags, ApiOperation, ApiParam } from '@nestjs/swagger';
-import { BLOCKED_ROUTES, SERVICES_CONFIG, ServiceConfig } from './services.config';
+import { BLOCKED_ROUTES, ROUTE_OVERRIDES, SERVICES_CONFIG, ServiceConfig } from './services.config';
 import { ResponseCacheService } from '../cache/response-cache.service';
 
 const UPSTREAM_TIMEOUT_MS = parseInt(process.env.UPSTREAM_TIMEOUT_MS || '15000', 10);
@@ -114,17 +114,23 @@ export class ProxyController {
   }
 
   private async proxyRequest(servicePrefix: string, rawPath: string, req: Request, res: Response) {
-    const service = this.serviceMap.get(servicePrefix);
+    const pathSegments = sanitizePath(rawPath ?? '');
+    if (pathSegments === null) {
+      throw new HttpException({ statusCode: HttpStatus.BAD_REQUEST, message: 'مسار غير صالح — Invalid path' }, HttpStatus.BAD_REQUEST);
+    }
+
+    // Some public paths belong to a different service than their prefix suggests
+    // (e.g. /users/:id/reviews lives in transactions-service); those keep their full path.
+    const clientPath = '/' + [servicePrefix, ...pathSegments].join('/');
+    const override = ROUTE_OVERRIDES.find((o) => o.pattern.test(clientPath));
+    const service = override
+      ? SERVICES_CONFIG.find((s) => s.name === override.service)
+      : this.serviceMap.get(servicePrefix);
     if (!service) {
       throw new HttpException({ statusCode: HttpStatus.NOT_FOUND, message: 'المسار غير موجود — Not found' }, HttpStatus.NOT_FOUND);
     }
 
-    const segments = sanitizePath(rawPath ?? '');
-    if (segments === null) {
-      throw new HttpException({ statusCode: HttpStatus.BAD_REQUEST, message: 'مسار غير صالح — Invalid path' }, HttpStatus.BAD_REQUEST);
-    }
-
-    if (service.stripPrefix === false) segments.unshift(service.prefix);
+    const segments = override || service.stripPrefix === false ? [servicePrefix, ...pathSegments] : pathSegments;
     // Decoded form is what the upstream router will see, so the blocklist checks that;
     // the URL we send re-encodes every segment so nothing is decoded twice.
     const forwardedPath = '/' + segments.join('/');

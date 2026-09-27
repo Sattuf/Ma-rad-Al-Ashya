@@ -2,7 +2,7 @@ import { api } from './auth';
 
 export const transactionsApi = {
   createTransaction: async (listingId: string, sellerId: string) => {
-    const response = await api.post('/transactions', { listingId, sellerId });
+    const response = await api.post('/transactions', { listing_id: listingId, seller_id: sellerId });
     return response.data;
   },
 

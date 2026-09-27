@@ -169,6 +169,7 @@ export class ReportsService {
 
   async getAdminStats() {
     const pending_reports = await this.reportsRepository.count({ where: { status: 'pending' } });
+    const total_reports = await this.reportsRepository.count();
     
     const today = new Date();
     today.setHours(0,0,0,0);
@@ -190,6 +191,6 @@ export class ReportsService {
       take: 5,
     });
 
-    return { pending_reports, reports_today, resolved_today, top_reported_listings, top_reported_users };
+    return { pending_reports, total_reports, reports_today, resolved_today, top_reported_listings, top_reported_users };
   }
 }

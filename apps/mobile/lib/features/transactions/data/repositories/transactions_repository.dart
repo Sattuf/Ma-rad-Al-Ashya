@@ -78,7 +78,8 @@ class TransactionsRepository {
         'limit': limit,
       },
     );
-    final List data = response.data['data'] ?? response.data;
+    // transactions-service returns { summary, reviews }.
+    final List data = response.data['reviews'] ?? const [];
     return data.map((json) => Review.fromJson(json)).toList();
   }
   

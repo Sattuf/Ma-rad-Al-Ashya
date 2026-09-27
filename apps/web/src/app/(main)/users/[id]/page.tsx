@@ -54,7 +54,7 @@ export default function UserProfilePage({ params }: { params: Promise<{ id: stri
       <div className="bg-surface p-6 shadow sm:rounded-lg flex flex-col sm:flex-row items-center sm:items-start gap-6">
         <div className="flex-shrink-0">
           {user.avatar ? (
-            <img src={user.avatar} alt={user.fullName} className="h-24 w-24 rounded-full object-cover" />
+            <img src={user.avatar} alt={user.name} className="h-24 w-24 rounded-full object-cover" />
           ) : (
             <div className="h-24 w-24 rounded-full bg-gray-200 flex items-center justify-center">
               <User className="h-12 w-12 text-gray-500" />
@@ -63,7 +63,7 @@ export default function UserProfilePage({ params }: { params: Promise<{ id: stri
         </div>
         <div className="flex-1 text-center sm:text-start">
           <div className="flex items-center gap-2 flex-wrap justify-center sm:justify-start">
-            <h1 className="text-2xl font-bold text-gray-900">{user.fullName || user.name}</h1>
+            <h1 className="text-2xl font-bold text-gray-900">{user.name}</h1>
             {user.is_identity_verified && (
               <span className="inline-flex items-center gap-1 bg-green-50 text-green-700 px-2 py-0.5 rounded-full text-xs font-bold border border-green-200">
                 بائع موثّق ✓

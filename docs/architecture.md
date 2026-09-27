@@ -203,41 +203,52 @@ graph LR
 
 ---
 
-## ملكية قواعد البيانات — Database Ownership
+## ملكية البيانات — Data Ownership
 
-كل خدمة تمتلك مجموعة محددة من الجداول أو مخازن البيانات:
+> المصدر الرسمي: رأس الملف `db/migrations/0001_baseline.sql`. **فقط المالك يكتب**؛ غيره يمر عبر واجهة المالك.
 
-```mermaid
-graph LR
-    subgraph PostgreSQL["🐘 PostgreSQL"]
-        UsersTable["users"]
-        ListingsTable["listings"]
-        CategoriesTable["categories"]
-        ListingImagesTable["listing_images"]
-        TransactionsTable["transactions"]
-        ReviewsTable["reviews"]
-    end
+| الخدمة | المخزن | الجداول / المجموعات |
+|--------|--------|---------------------|
+| `auth-service` | PostgreSQL | `users` (أعمدة الهوية: الهاتف، البريد، كلمة المرور، الدور، الحالة، OAuth) |
+| `users-service` | PostgreSQL | `users` (أعمدة الملف الشخصي والإشعارات فقط) + Redis (المفضلة) |
+| `listings-service` | PostgreSQL + Redis | `categories`, `listings`, `listing_images`, `promotions` + عدّادات المشاهدات |
+| `transactions-service` | PostgreSQL | `transactions`, `reviews`, `user_rating_summary` |
+| `moderation-service` | PostgreSQL + Redis (Bull) | `reports`, `report_counts` |
+| `identity-service` | PostgreSQL | `kyc_verifications`, `kyc_audit_logs` (بيانات مشفّرة بـ KMS) |
+| `search-service` | Elasticsearch + PostgreSQL | فهرس `marad_listings` + `ab_test_results` |
+| `messaging-service` | MongoDB + Redis | `conversations`, `messages` + الحضور |
+| `fraud-service` | PostgreSQL + MongoDB | `fraud_signals` (كتابة) |
+| `personalization-service` | MongoDB + Redis + ES | `user_events` (كتابة) + قراءة الفهرس |
 
-    AuthService["auth-service"] -->|owner| UsersTable
-    ListingsService["listings-service"] -->|owner| ListingsTable
-    ListingsService -->|owner| CategoriesTable
-    ListingsService -->|owner| ListingImagesTable
-    TransactionsService["transactions-service"] -->|owner| TransactionsTable
-    TransactionsService -->|owner| ReviewsTable
+**الترحيلات:** ملف SQL مرقّم في `db/migrations/NNNN_وصف.sql`، يطبّقه `db/migrate.mjs` (مع checksum وقفل استشاري وتنفيذ كل ملف في transaction). في Docker تعمل خدمة `migrate` مرة واحدة قبل أي خدمة تستخدم Postgres. في CI يُطبَّق كل شيء على قاعدة فارغة مرتين، ثم يتحقق `scripts/check-entity-schema.ts` من أن كل عمود في كيانات TypeORM موجود بنوع متوافق.
 
-    FraudService["fraud-service"] -.->|read-only| PostgreSQL
-    PersonalizationService["personalization-service"] -.->|read-only| PostgreSQL
-```
+---
 
-| الخدمة | مخزن البيانات | الوصول |
-|--------|--------------|--------|
-| `auth-service` | PostgreSQL — `users` | قراءة وكتابة (Owner) |
-| `listings-service` | PostgreSQL — `listings`, `categories`, `listing_images` | قراءة وكتابة (Owner) |
-| `search-service` | Elasticsearch | قراءة وكتابة (Owner) |
-| `messaging-service` | MongoDB + Redis | قراءة وكتابة (Owner) |
-| `transactions-service` | PostgreSQL — `transactions`, `reviews` | قراءة وكتابة (Owner) |
-| `fraud-service` | PostgreSQL | قراءة فقط |
-| `personalization-service` | PostgreSQL + Redis | قراءة فقط (PG) + تخزين مؤقت (Redis) |
+## التوجيه عبر البوابة — Gateway Routing
+
+`/api/v1/{prefix}/...` → الخدمة حسب `services/api-gateway/src/proxy/services.config.ts`:
+
+| الآلية | الغرض |
+|--------|-------|
+| `stripPrefix: false` | للخدمات التي تركّب متحكماتها تحت نفس الاسم (`@Controller('listings')`) |
+| `ROUTE_OVERRIDES` | مسار عام تملكه خدمة أخرى: `/users/:id/reviews` → transactions-service |
+| `BLOCKED_ROUTES` | مسارات داخلية لا تُعرض للعامة أبداً (دفاع إضافي فوق `INTERNAL_SECRET`) |
+| `cacheableRoutes` | كاش Redis قصير للقراءات المجهولة على مسارات القوائم فقط |
+
+**العقود:** `scripts/check-contracts.mjs` يستخرج كل استدعاء من الويب والجوال، ويمرره عبر خريطة البوابة، ويتحقق من وجود مسار مطابق (NestJS/FastAPI) — يعمل في CI.
+
+---
+
+## الأمان بين الخدمات — Service Security Model
+
+| الاتجاه | الآلية |
+|---------|--------|
+| عميل → خدمة | JWT (HS256) يصدره auth-service؛ كل خدمة تتحقق من التوقيع بـ `JWT_ACCESS_SECRET` (`common/security.ts`) |
+| خدمة → خدمة | ترويسة `x-internal-secret` تُقارن بزمن ثابت (`InternalGuard`)؛ البوابة لا تمررها من العملاء |
+| مزوّد خارجي → خدمة | توقيع HMAC على الجسم الخام (Stripe، Didit) |
+| مدير | دور `admin` داخل JWT (`AdminGuard`) |
+
+الملفات المشتركة (`common/security.ts`, `common/database.ts`) منسوخة في كل خدمة لأن سياق بناء Docker هو مجلد الخدمة؛ `scripts/check-shared-copies.mjs` يمنع اختلاف النسخ.
 
 ---
 
@@ -251,13 +262,9 @@ graph LR
 
 ---
 
-## ملاحظات معمارية
+## قرارات معمارية — Architecture Decisions
 
-> [!IMPORTANT]
-> كل خدمة مستقلة تمامًا ولها قاعدة بيانات خاصة (أو مجموعة جداول خاصة). لا تتواصل الخدمات مباشرة مع بعضها، بل عبر API Gateway.
-
-> [!NOTE]
-> خدمات Python (fraud-service و personalization-service) تعمل كخدمات مساندة وتقرأ فقط من قاعدة البيانات. لا تقوم بأي عمليات كتابة مباشرة.
-
-> [!TIP]
-> في المراحل القادمة، يمكن إضافة Message Broker (مثل RabbitMQ أو Kafka) للتواصل غير المتزامن بين الخدمات عند الحاجة.
+1. **قاعدة Postgres واحدة بملكية جداول صارمة** بدلاً من قاعدة لكل خدمة: أبسط تشغيلياً في هذه المرحلة؛ الحدود تُفرض بالملكية الموثّقة ومراجعة الكود. الانتقال لقواعد منفصلة ممكن لاحقاً لأن لا خدمة تنفّذ JOIN على جداول غيرها.
+2. **الاتصال المتزامن بين الخدمات مؤقت:** الفهرسة والإشعارات وتحليل الاحتيال تُستدعى HTTP الآن (بلا انتظار حيث أمكن). المرحلة 2: جدول Outbox + طابور (BullMQ) حتى لا يضيع أي حدث.
+3. **نسخ الملفات المشتركة بدل حزمة workspace:** إلى أن تنتقل صور Docker للبناء من جذر المستودع (عندها تصبح `packages/common`).
+4. **HS256 بسر مشترك:** مقبول داخل شبكة خاصة؛ المرحلة 4: RS256 بحيث لا تملك الخدمات إلا المفتاح العام.

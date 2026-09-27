@@ -36,6 +36,15 @@ export const BLOCKED_ROUTES: { service: string; method: string; pattern: RegExp 
   { service: 'fraud-service', method: '*', pattern: /^\/fraud\/(device|transaction)(\/|$)/i },
 ];
 
+/**
+ * Public paths served by another service than their prefix: forwarded with the full path.
+ * Matched against the client path after /api/v1.
+ */
+export const ROUTE_OVERRIDES: { pattern: RegExp; service: string }[] = [
+  // Reviews and ratings are owned by transactions-service but read under the user.
+  { pattern: /^\/users\/[^/]+\/(reviews|rating-summary)\/?$/i, service: 'transactions-service' },
+];
+
 export const SERVICES_CONFIG: ServiceConfig[] = [
   {
     name: 'auth-service',
