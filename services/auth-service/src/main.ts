@@ -5,8 +5,10 @@ import { ValidationPipe, Logger } from '@nestjs/common';
 
 import * as Sentry from '@sentry/node';
 import { SentryExceptionFilter } from './filters/sentry-exception.filter';
+import { assertRequiredSecrets, corsOrigins, isProduction } from './common/security';
 
 async function bootstrap() {
+  assertRequiredSecrets('JWT_ACCESS_SECRET', 'JWT_REFRESH_SECRET', 'INTERNAL_SECRET');
   const app = await NestFactory.create(AppModule);
   
   Sentry.init({
@@ -17,7 +19,7 @@ async function bootstrap() {
 
   // Enable CORS
   app.enableCors({
-    origin: '*',
+    origin: corsOrigins(),
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
   });
@@ -46,8 +48,10 @@ async function bootstrap() {
     })
     .build();
     
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, document);
+  if (!isProduction()) {
+    const document = SwaggerModule.createDocument(app, config);
+    SwaggerModule.setup('api/docs', app, document);
+  }
 
   const port = process.env.PORT ?? 3001;
   await app.listen(port);

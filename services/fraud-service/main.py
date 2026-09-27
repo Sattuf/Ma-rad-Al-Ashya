@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from database import connect_to_mongo, close_mongo_connection, connect_to_postgres, close_postgres_connection
 
 from routers import device, transaction, risk, admin
+from security import require_secret
 
 import os
 import sentry_sdk
@@ -12,6 +13,8 @@ sentry_sdk.init(dsn=os.getenv("SENTRY_DSN"), traces_sample_rate=0.1)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    require_secret("JWT_ACCESS_SECRET")
+    require_secret("INTERNAL_SECRET")
     await connect_to_mongo()
     await connect_to_postgres()
     yield

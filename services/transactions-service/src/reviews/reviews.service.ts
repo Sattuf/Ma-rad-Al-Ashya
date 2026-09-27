@@ -5,6 +5,7 @@ import { Review } from './entities/review.entity';
 import { UserRatingSummary } from './entities/user-rating-summary.entity';
 import { CreateReviewDto } from './dto/review.dto';
 import { Transaction, TransactionStatus } from '../transactions/entities/transaction.entity';
+import { clampPagination } from '../transactions/transactions.service';
 
 @Injectable()
 export class ReviewsService {
@@ -81,7 +82,8 @@ export class ReviewsService {
     }
   }
 
-  async getUserReviews(userId: string, page: number, limit: number) {
+  async getUserReviews(userId: string, rawPage: number, rawLimit: number) {
+    const { page, limit } = clampPagination(rawPage, rawLimit);
     const summary = await this.summaryRepo.findOne({ where: { user_id: userId } });
     const reviews = await this.reviewRepo.find({
       where: { reviewee_id: userId },

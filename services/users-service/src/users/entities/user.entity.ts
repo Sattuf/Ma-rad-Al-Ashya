@@ -41,6 +41,10 @@ export class User {
   @Column({ default: false })
   is_identity_verified: boolean;
 
+  // Column owned by auth-service (enum user_status); written here by moderation actions.
+  @Column({ type: 'varchar', default: 'active', select: false })
+  status: string;
+
   @Column({ type: 'timestamp', nullable: true })
   identity_verified_at: Date;
 }

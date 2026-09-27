@@ -1,8 +1,9 @@
 fastapi
 uvicorn[standard]
-motor
+motor==3.3.1
+pymongo==4.6.3
 redis
-elasticsearch
+elasticsearch[async]>=8.15,<9
 python-jose[cryptography]
 scikit-learn
 numpy

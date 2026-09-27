@@ -6,8 +6,10 @@ import * as express from 'express';
 
 import * as Sentry from '@sentry/node';
 import { SentryExceptionFilter } from './filters/sentry-exception.filter';
+import { assertRequiredSecrets, corsOrigins, isProduction } from './common/security';
 
 async function bootstrap() {
+  assertRequiredSecrets('JWT_ACCESS_SECRET', 'INTERNAL_SECRET');
   const app = await NestFactory.create(AppModule, { bodyParser: false });
   
   Sentry.init({
@@ -15,6 +17,7 @@ async function bootstrap() {
     tracesSampleRate: 0.1,
   });
   app.useGlobalFilters(new SentryExceptionFilter());
+  app.enableCors({ origin: corsOrigins() });
   
   app.use('/promotions/webhook', express.raw({ type: 'application/json' }));
   app.use(express.json());
@@ -28,8 +31,10 @@ async function bootstrap() {
     .setVersion('1.0')
     .addBearerAuth()
     .build();
-  const documentFactory = () => SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, documentFactory);
+  if (!isProduction()) {
+    const documentFactory = () => SwaggerModule.createDocument(app, config);
+    SwaggerModule.setup('api/docs', app, documentFactory);
+  }
 
   await app.listen(process.env.PORT ?? 3002);
 }

@@ -7,6 +7,7 @@ import { DiditService } from './didit.service';
 import { KmsService } from './kms.service';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
+import { internalHeaders } from '../common/security';
 
 @Injectable()
 export class KycService {
@@ -56,13 +57,15 @@ export class KycService {
     return { status: verifications[0].status };
   }
 
-  async handleWebhook(body: any, signature: string, ipAddress?: string) {
-    // Real implementation would verify the signature here
-    // Verify signature logic...
+  /** Called only after the controller verified the vendor's HMAC signature. */
+  async handleWebhook(body: any, ipAddress?: string) {
+    const sessionId = body?.session_id;
+    const status = body?.status;
+    if (typeof sessionId !== 'string' || typeof status !== 'string' || status.length > 50) {
+      this.logger.warn('Webhook with missing session or status ignored');
+      return;
+    }
 
-    const sessionId = body.session_id;
-    const status = body.status;
-    
     const verification = await this.kycVerificationRepo.findOne({ where: { session_id: sessionId } });
     if (!verification) {
       this.logger.warn(`Webhook received for unknown session: ${sessionId}`);
@@ -95,7 +98,8 @@ export class KycService {
     };
   }
 
-  async decryptData(sessionId: string) {
+  async decryptData(sessionId: string, adminId: string) {
+    if (typeof sessionId !== 'string') throw new NotFoundException('Session not found');
     const verification = await this.kycVerificationRepo.findOne({ where: { session_id: sessionId } });
     if (!verification || !verification.encrypted_data) {
       throw new NotFoundException('Data not found or not encrypted');
@@ -103,7 +107,7 @@ export class KycService {
 
     const decrypted = await this.kmsService.decrypt(verification.encrypted_data, verification.kms_key_id);
     
-    await this.logAudit(verification.user_id, 'KYC_DATA_DECRYPTED', { sessionId }, 'admin');
+    await this.logAudit(verification.user_id, 'KYC_DATA_DECRYPTED', { sessionId, adminId }, 'admin');
 
     return decrypted;
   }
@@ -112,7 +116,7 @@ export class KycService {
     try {
       const usersServiceUrl = process.env.USERS_SERVICE_URL || 'http://users-service:3007';
       await firstValueFrom(
-        this.httpService.put(`${usersServiceUrl}/users/${userId}/verify`, {})
+        this.httpService.put(`${usersServiceUrl}/users/${userId}/verify`, {}, { headers: internalHeaders(), timeout: 5000 })
       );
       this.logger.log(`Notified users service to verify user: ${userId}`);
     } catch (error) {

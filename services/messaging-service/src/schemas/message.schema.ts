@@ -1,6 +1,8 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 
+export const MAX_MESSAGE_LENGTH = 2000;
+
 @Schema({ timestamps: true })
 export class Message extends Document {
   @Prop({ type: Types.ObjectId, ref: 'Conversation', required: true })
@@ -9,7 +11,7 @@ export class Message extends Document {
   @Prop({ required: true })
   senderId: string;
 
-  @Prop({ required: true })
+  @Prop({ required: true, maxlength: MAX_MESSAGE_LENGTH })
   content: string;
 
   @Prop()
@@ -26,3 +28,6 @@ export class Message extends Document {
 }
 
 export const MessageSchema = SchemaFactory.createForClass(Message);
+// Conversation history (newest first) and unread lookups
+MessageSchema.index({ conversationId: 1, createdAt: -1 });
+MessageSchema.index({ conversationId: 1, isRead: 1, senderId: 1 });

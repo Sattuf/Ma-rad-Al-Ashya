@@ -1,4 +1,4 @@
-import { Controller, Get, Put, Post, Delete, Body, UseGuards, Request, UploadedFile, UseInterceptors, Param, Query, UnauthorizedException } from '@nestjs/common';
+import { Controller, Get, Put, Post, Delete, Body, UseGuards, Request, UploadedFile, UseInterceptors, Param, Query, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody, ApiParam } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UsersService } from './users.service';
@@ -6,6 +6,9 @@ import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UpdateNotificationsDto } from './dto/update-notifications.dto';
 import { UpdateFcmTokenDto } from './dto/update-fcm-token.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { InternalGuard } from '../common/security';
+
+const ALLOWED_USER_STATUSES = ['active', 'suspended', 'banned'];
 
 @ApiTags('users')
 @Controller()
@@ -72,6 +75,7 @@ export class UsersController {
 
 @ApiTags('internal')
 @Controller()
+@UseGuards(InternalGuard)
 export class UsersInternalController {
   constructor(private readonly usersService: UsersService) {}
 
@@ -79,10 +83,9 @@ export class UsersInternalController {
   @ApiOperation({ summary: 'Internal: Update user status' })
   @ApiParam({ name: 'id', type: 'string' })
   @ApiBody({ schema: { properties: { status: { type: 'string', enum: ['active', 'suspended', 'banned'] } } } })
-  async updateStatus(@Param('id') id: string, @Request() req, @Body() body: { status: string }) {
-    const internalSecret = req.headers['x-internal-secret'];
-    if (internalSecret !== (process.env.INTERNAL_SECRET || 'marad-internal-secret-for-webhooks')) {
-      throw new UnauthorizedException('Invalid internal secret');
+  async updateStatus(@Param('id') id: string, @Body() body: { status: string }) {
+    if (!ALLOWED_USER_STATUSES.includes(body?.status)) {
+      throw new BadRequestException('Invalid status');
     }
     await this.usersService.updateStatus(id, body.status);
     return { success: true };
@@ -92,7 +95,6 @@ export class UsersInternalController {
   @ApiOperation({ summary: 'Internal: Verify user identity' })
   @ApiParam({ name: 'id', type: 'string' })
   async verifyUser(@Param('id') id: string) {
-    // In real app we might also check for internal secret here
     await this.usersService.verifyUser(id);
     return { success: true };
   }

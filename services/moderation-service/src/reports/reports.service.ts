@@ -8,6 +8,7 @@ import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
+import { internalHeaders } from '../common/security';
 
 @Injectable()
 export class ReportsService {
@@ -148,18 +149,16 @@ export class ReportsService {
     // Trigger HTTP actions
     if (reviewDto.action_taken === 'listing_removed' && report.target_type === 'listing') {
       const listingsUrl = process.env.LISTINGS_SERVICE_URL || 'http://listings-service:3002';
-      const secret = process.env.INTERNAL_SECRET || 'marad-internal-secret-for-webhooks';
       try {
-        await firstValueFrom(this.httpService.put(`${listingsUrl}/listings/${report.target_id}/status`, { status: 'deleted' }, { headers: { 'x-internal-secret': secret } }));
+        await firstValueFrom(this.httpService.put(`${listingsUrl}/listings/${report.target_id}/status`, { status: 'deleted' }, { headers: internalHeaders(), timeout: 5000 }));
       } catch(e) {
         console.error('Failed to remove listing:', e.message);
       }
     } else if ((reviewDto.action_taken === 'user_suspended' || reviewDto.action_taken === 'user_banned') && report.target_type === 'user') {
       const usersUrl = process.env.USERS_SERVICE_URL || 'http://users-service:3007';
-      const secret = process.env.INTERNAL_SECRET || 'marad-internal-secret-for-webhooks';
       const userStatus = reviewDto.action_taken === 'user_suspended' ? 'suspended' : 'banned';
       try {
-        await firstValueFrom(this.httpService.put(`${usersUrl}/users/${report.target_id}/status`, { status: userStatus }, { headers: { 'x-internal-secret': secret } }));
+        await firstValueFrom(this.httpService.put(`${usersUrl}/users/${report.target_id}/status`, { status: userStatus }, { headers: internalHeaders(), timeout: 5000 }));
       } catch(e) {
         console.error('Failed to update user status:', e.message);
       }

@@ -9,7 +9,10 @@ import { PrometheusModule } from '@willsoto/nestjs-prometheus';
 @Module({
   imports: [
     PrometheusModule.register(),
-    MongooseModule.forRoot(process.env.MONGO_URI || 'mongodb://localhost:27017/messaging'),
+    MongooseModule.forRoot(
+      process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://localhost:27017/marad_messaging',
+      { maxPoolSize: parseInt(process.env.MONGO_POOL_MAX || '20', 10), serverSelectionTimeoutMS: 5000 },
+    ),
     MessagingModule,
   ],
   controllers: [AppController],

@@ -4,6 +4,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { User } from './entities/user.entity';
 import { StorageService } from '../storage/storage.service';
 import { NotFoundException } from '@nestjs/common';
+import { HttpService } from '@nestjs/axios';
 
 describe('UsersService', () => {
   let service: UsersService;
@@ -21,6 +22,7 @@ describe('UsersService', () => {
     mockUsersRepository = {
       findOne: jest.fn().mockResolvedValue(mockUser),
       save: jest.fn().mockImplementation((user) => Promise.resolve(user)),
+      update: jest.fn().mockResolvedValue({ affected: 1 }),
     };
 
     mockStorageService = {
@@ -37,6 +39,10 @@ describe('UsersService', () => {
         {
           provide: StorageService,
           useValue: mockStorageService,
+        },
+        {
+          provide: HttpService,
+          useValue: { post: jest.fn() },
         },
       ],
     }).compile();
@@ -64,5 +70,15 @@ describe('UsersService', () => {
   it('should throw NotFoundException if user not found', async () => {
     mockUsersRepository.findOne.mockResolvedValueOnce(null);
     await expect(service.getProfile('unknown-id')).rejects.toThrow(NotFoundException);
+  });
+
+  it('persists moderation status changes to the status column', async () => {
+    await service.updateStatus('user-1', 'banned');
+    expect(mockUsersRepository.update).toHaveBeenCalledWith({ id: 'user-1' }, { status: 'banned' });
+  });
+
+  it('reports unknown users when changing status', async () => {
+    mockUsersRepository.update.mockResolvedValueOnce({ affected: 0 });
+    await expect(service.updateStatus('missing', 'suspended')).rejects.toThrow(NotFoundException);
   });
 });

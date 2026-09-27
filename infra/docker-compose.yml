@@ -9,6 +9,9 @@
 #   docker compose -f infra/docker-compose.yml --profile ai up -d        → + Fraud + Personalization
 #   docker compose -f infra/docker-compose.yml --profile all up -d       → كل شيء
 
+# الأسرار تُقرأ من infra/.env (انسخ infra/.env.example) — Secrets come from infra/.env.
+# There are deliberately no defaults: every service refuses to start without them.
+
 services:
 
   # ============================================================================
@@ -24,7 +27,7 @@ services:
       POSTGRES_PASSWORD: marad_dev_password
       POSTGRES_DB: marad_db
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ../services/listings-service/migrations:/docker-entrypoint-initdb.d:ro
@@ -45,7 +48,7 @@ services:
       MONGO_INITDB_ROOT_PASSWORD: marad_dev_password
       MONGO_INITDB_DATABASE: marad_messaging
     ports:
-      - "27017:27017"
+      - "127.0.0.1:27017:27017"
     volumes:
       - mongodb_data:/data/db
     networks:
@@ -62,7 +65,7 @@ services:
     restart: unless-stopped
     command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
     networks:
@@ -85,8 +88,8 @@ services:
       - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
       - cluster.name=marad-search
     ports:
-      - "9200:9200"
-      - "9300:9300"
+      - "127.0.0.1:9200:9200"
+      - "127.0.0.1:9300:9300"
     volumes:
       - es_data:/usr/share/elasticsearch/data
     networks:
@@ -102,7 +105,7 @@ services:
     container_name: marad-localstack
     profiles: ["identity", "all"]
     ports:
-      - "4566:4566"
+      - "127.0.0.1:4566:4566"
     environment:
       - SERVICES=kms
       - DEFAULT_REGION=me-south-1
@@ -140,7 +143,7 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     volumes:
       - ../services/api-gateway/src:/app/src:delegated
     depends_on:
@@ -160,13 +163,16 @@ services:
     restart: unless-stopped
     command: npm run start:dev
     environment:
+      - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET:?set JWT_ACCESS_SECRET in infra/.env}
+      - INTERNAL_SECRET=${INTERNAL_SECRET:?set INTERNAL_SECRET in infra/.env}
       - PORT=3001
       - NODE_ENV=development
       - DATABASE_URL=postgresql://marad_user:marad_dev_password@postgres:5432/marad_db
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - JWT_SECRET=dev-jwt-secret-change-in-production
-      - JWT_EXPIRATION=7d
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:?set JWT_REFRESH_SECRET in infra/.env}
+      - OTP_MOCK_ENABLED=true
+      - FRAUD_SERVICE_URL=http://fraud-service:8001
     volumes:
       - ../services/auth-service/src:/app/src:delegated
     depends_on:
@@ -186,16 +192,21 @@ services:
     restart: unless-stopped
     command: npm run start:dev
     environment:
+      - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET:?set JWT_ACCESS_SECRET in infra/.env}
+      - INTERNAL_SECRET=${INTERNAL_SECRET:?set INTERNAL_SECRET in infra/.env}
       - PORT=3002
       - NODE_ENV=development
       - DATABASE_URL=postgresql://marad_user:marad_dev_password@postgres:5432/marad_db
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - ELASTICSEARCH_NODE=http://elasticsearch:9200
+      - SEARCH_SERVICE_URL=http://search-service:3003
+      - TRANSACTIONS_SERVICE_URL=http://transactions-service:3005
+      - PERSONALIZATION_SERVICE_URL=http://personalization-service:8002
       - S3_BUCKET=marad-listings-images
       - S3_REGION=me-south-1
-      - STRIPE_SECRET_KEY=sk_test_mock_secret_key
-      - STRIPE_WEBHOOK_SECRET=whsec_mock_webhook_secret
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}
     volumes:
       - ../services/listings-service/src:/app/src:delegated
     depends_on:
@@ -216,6 +227,8 @@ services:
     profiles: ["search", "all"]
     command: npm run start:dev
     environment:
+      - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET:?set JWT_ACCESS_SECRET in infra/.env}
+      - INTERNAL_SECRET=${INTERNAL_SECRET:?set INTERNAL_SECRET in infra/.env}
       - PORT=3003
       - NODE_ENV=development
       - ELASTICSEARCH_NODE=http://elasticsearch:9200
@@ -240,13 +253,15 @@ services:
     restart: unless-stopped
     command: npm run start:dev
     environment:
+      - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET:?set JWT_ACCESS_SECRET in infra/.env}
+      - INTERNAL_SECRET=${INTERNAL_SECRET:?set INTERNAL_SECRET in infra/.env}
       - PORT=3004
       - NODE_ENV=development
       - MONGODB_URI=mongodb://marad_user:marad_dev_password@mongodb:27017/marad_messaging?authSource=admin
       - REDIS_HOST=redis
       - REDIS_PORT=6379
     ports:
-      - "3004:3004"
+      - "127.0.0.1:3004:3004"
     volumes:
       - ../services/messaging-service/src:/app/src:delegated
     depends_on:
@@ -266,13 +281,17 @@ services:
     restart: unless-stopped
     command: npm run start:dev
     environment:
+      - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET:?set JWT_ACCESS_SECRET in infra/.env}
+      - INTERNAL_SECRET=${INTERNAL_SECRET:?set INTERNAL_SECRET in infra/.env}
       - PORT=3005
       - NODE_ENV=development
       - DATABASE_URL=postgresql://marad_user:marad_dev_password@postgres:5432/marad_db
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - LISTINGS_SERVICE_URL=http://listings-service:3002
+      - FRAUD_SERVICE_URL=http://fraud-service:8001
     ports:
-      - "3005:3005"
+      - "127.0.0.1:3005:3005"
     volumes:
       - ../services/transactions-service/src:/app/src:delegated
     depends_on:
@@ -293,12 +312,16 @@ services:
     profiles: ["identity", "all"]
     command: npm run start:dev
     environment:
+      - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET:?set JWT_ACCESS_SECRET in infra/.env}
+      - INTERNAL_SECRET=${INTERNAL_SECRET:?set INTERNAL_SECRET in infra/.env}
       - PORT=3006
       - NODE_ENV=development
       - DATABASE_URL=postgresql://marad_user:marad_dev_password@postgres:5432/marad_db
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - DIDIT_API_KEY=dev-didit-api-key
+      - DIDIT_WEBHOOK_SECRET=${DIDIT_WEBHOOK_SECRET:?set DIDIT_WEBHOOK_SECRET in infra/.env}
+      - USERS_SERVICE_URL=http://users-service:3007
       - DIDIT_API_URL=https://api.didit.me
       - AWS_REGION=me-south-1
       - AWS_ACCESS_KEY_ID=test
@@ -325,6 +348,8 @@ services:
     restart: unless-stopped
     command: npm run start:dev
     environment:
+      - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET:?set JWT_ACCESS_SECRET in infra/.env}
+      - INTERNAL_SECRET=${INTERNAL_SECRET:?set INTERNAL_SECRET in infra/.env}
       - PORT=3007
       - NODE_ENV=development
       - DB_HOST=postgres
@@ -334,9 +359,9 @@ services:
       - DB_NAME=marad_db
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - JWT_ACCESS_SECRET=dev-jwt-secret-change-in-production
+      - LISTINGS_SERVICE_URL=http://listings-service:3002
     ports:
-      - "3007:3007"
+      - "127.0.0.1:3007:3007"
     volumes:
       - ../services/users-service/src:/app/src:delegated
     depends_on:
@@ -353,8 +378,10 @@ services:
       dockerfile: Dockerfile
     container_name: marad-moderation-service
     ports:
-      - "3008:3008"
+      - "127.0.0.1:3008:3008"
     environment:
+      - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET:?set JWT_ACCESS_SECRET in infra/.env}
+      - INTERNAL_SECRET=${INTERNAL_SECRET:?set INTERNAL_SECRET in infra/.env}
       - PORT=3008
       - DB_HOST=postgres
       - DB_PORT=5432
@@ -383,13 +410,15 @@ services:
     restart: unless-stopped
     profiles: ["ai", "all"]
     environment:
+      - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET:?set JWT_ACCESS_SECRET in infra/.env}
+      - INTERNAL_SECRET=${INTERNAL_SECRET:?set INTERNAL_SECRET in infra/.env}
       - PORT=8001
       - ENV=development
       - DATABASE_URL=postgresql://marad_user:marad_dev_password@postgres:5432/marad_db
       - REDIS_HOST=redis
       - REDIS_PORT=6379
     ports:
-      - "8001:8001"
+      - "127.0.0.1:8001:8001"
     volumes:
       - ../services/fraud-service/app:/app/app:delegated
     depends_on:
@@ -408,6 +437,8 @@ services:
     restart: unless-stopped
     profiles: ["ai", "all"]
     environment:
+      - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET:?set JWT_ACCESS_SECRET in infra/.env}
+      - INTERNAL_SECRET=${INTERNAL_SECRET:?set INTERNAL_SECRET in infra/.env}
       - PORT=8002
       - ENV=development
       - DATABASE_URL=postgresql://marad_user:marad_dev_password@postgres:5432/marad_db
@@ -415,9 +446,8 @@ services:
       - REDIS_PORT=6379
       - MONGODB_URI=mongodb://marad_user:marad_dev_password@mongodb:27017/marad_db?authSource=admin
       - ELASTICSEARCH_NODE=http://elasticsearch:9200
-      - JWT_ACCESS_SECRET=dev-jwt-secret-change-in-production
     ports:
-      - "8002:8002"
+      - "127.0.0.1:8002:8002"
     volumes:
       - ../services/personalization-service/app:/app/app:delegated
     depends_on:
@@ -440,7 +470,7 @@ services:
     restart: unless-stopped
     profiles: ["monitoring", "all"]
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
@@ -456,10 +486,10 @@ services:
     restart: unless-stopped
     profiles: ["monitoring", "all"]
     ports:
-      - "3100:3000"
+      - "127.0.0.1:3100:3000"
     environment:
       - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in infra/.env}
     volumes:
       - grafana_data:/var/lib/grafana
       - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro

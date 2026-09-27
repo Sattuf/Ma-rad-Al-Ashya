@@ -5,7 +5,7 @@ let socket: Socket | null = null;
 export const getSocket = (): Socket => {
   if (!socket) {
     const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
-    socket = io('http://localhost:3004', {
+    socket = io(process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3004', {
       autoConnect: true,
       reconnection: true,
       transports: ['websocket'],

@@ -6,6 +6,9 @@ export class Conversation extends Document {
   @Prop({ type: [{ type: String }], required: true })
   participants: string[];
 
+  @Prop({ type: String })
+  listingId?: string;
+
   @Prop({ type: Types.ObjectId, ref: 'Message' })
   lastMessage?: Types.ObjectId;
 
@@ -23,3 +26,5 @@ export class Conversation extends Document {
 }
 
 export const ConversationSchema = SchemaFactory.createForClass(Conversation);
+// Inbox query: { participants: userId } sorted by updatedAt
+ConversationSchema.index({ participants: 1, updatedAt: -1 });

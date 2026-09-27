@@ -3,6 +3,10 @@ import {
   ConflictException,
   UnauthorizedException,
   BadRequestException,
+  HttpException,
+  HttpStatus,
+  Logger,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -12,13 +16,29 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { AuthResponseDto } from './dto/auth-response.dto';
-import { User, AuthProvider, UserStatus } from '../users/entities/user.entity';
+import { User, AuthProvider, UserStatus, isBlockedStatus } from '../users/entities/user.entity';
 import * as bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
 import { OAuth2Client } from 'google-auth-library';
+import { internalHeaders, requireSecret } from '../common/security';
+
+const LOGIN_MAX_FAILURES = 5;
+const LOGIN_LOCK_SECONDS = 15 * 60;
+const REFRESH_TTL_SECONDS = 7 * 24 * 3600;
+// Compared against when the user does not exist, so response time does not reveal registered accounts.
+const DUMMY_PASSWORD_HASH = '$2b$12$/FCkfeR4ULkbczjMnwGeveFjV9SRhiegeH7gn7L8RvJ0v2MREQzoi';
+
+export interface OAuthProfile {
+  id: string;
+  email?: string | null;
+  emailVerified?: boolean;
+  displayName?: string;
+  picture?: string | null;
+}
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
   private readonly jwtAccessSecret: string;
   private readonly jwtRefreshSecret: string;
 
@@ -28,8 +48,11 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
   ) {
-    this.jwtAccessSecret = this.configService.get<string>('JWT_ACCESS_SECRET', 'access_secret_key_12345');
-    this.jwtRefreshSecret = this.configService.get<string>('JWT_REFRESH_SECRET', 'refresh_secret_key_67890');
+    this.jwtAccessSecret = requireSecret('JWT_ACCESS_SECRET');
+    this.jwtRefreshSecret = requireSecret('JWT_REFRESH_SECRET');
+    if (this.jwtAccessSecret === this.jwtRefreshSecret) {
+      throw new Error('JWT_ACCESS_SECRET and JWT_REFRESH_SECRET must differ');
+    }
   }
 
   async register(registerDto: RegisterDto, ipAddress: string = ''): Promise<AuthResponseDto> {
@@ -68,12 +91,12 @@ export class AuthService {
     const tokens = await this.generateTokensForUser(user);
 
     // Fire-and-forget fraud check
+    const fraudServiceUrl = this.configService.get<string>('FRAUD_SERVICE_URL', 'http://fraud-service:8001');
+    const fraudHeaders = { 'Content-Type': 'application/json', ...internalHeaders() };
     setImmediate(() => {
-      fetch('http://fraud-service:8001/fraud/device/check', {
+      fetch(`${fraudServiceUrl}/fraud/device/check`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: fraudHeaders,
         body: JSON.stringify({
           fingerprint_hash: fingerprint_hash || null,
           ip_address: ipAddress,
@@ -89,29 +112,36 @@ export class AuthService {
 
   async login(loginDto: LoginDto): Promise<AuthResponseDto> {
     const { identifier, password } = loginDto;
+    const normalizedIdentifier = identifier.trim().toLowerCase();
+    const failuresKey = `login_failures:${normalizedIdentifier}`;
+
+    const failures = parseInt((await this.redisService.get(failuresKey)) ?? '0', 10);
+    if (failures >= LOGIN_MAX_FAILURES) {
+      throw new HttpException(
+        'تم إيقاف تسجيل الدخول مؤقتاً بسبب محاولات خاطئة متكررة. حاول بعد 15 دقيقة',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
 
     let user: User | null = null;
     if (identifier.includes('@')) {
-      user = await this.usersService.findOneByEmail(identifier);
+      user = await this.usersService.findOneByEmail(identifier.trim());
     } else {
-      user = await this.usersService.findOneByPhone(identifier);
+      user = await this.usersService.findOneByPhone(identifier.trim());
     }
 
-    if (!user) {
+    // Always run bcrypt so unknown accounts and social-only accounts take the same time
+    // and return the same message as a wrong password.
+    const isPasswordValid = await bcrypt.compare(password, user?.passwordHash ?? DUMMY_PASSWORD_HASH);
+    if (!user || !user.passwordHash || !isPasswordValid) {
+      await this.redisService.incrWithTtl(failuresKey, LOGIN_LOCK_SECONDS);
       throw new UnauthorizedException('بيانات الدخول غير صحيحة');
     }
 
-    if (user.status === UserStatus.SUSPENDED) {
+    await this.redisService.del(failuresKey);
+
+    if (isBlockedStatus(user.status)) {
       throw new UnauthorizedException('هذا الحساب موقوف حالياً');
-    }
-
-    if (!user.passwordHash) {
-      throw new UnauthorizedException('هذا الحساب مسجل عن طريق تسجيل الدخول الاجتماعي');
-    }
-
-    const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
-    if (!isPasswordValid) {
-      throw new UnauthorizedException('بيانات الدخول غير صحيحة');
     }
 
     const tokens = await this.generateTokensForUser(user);
@@ -139,12 +169,10 @@ export class AuthService {
     if (!tokenExists) {
       // Security Alert: Refresh Token Reuse Detected!
       // Delete all refresh tokens for this user from Redis for safety
-      console.warn(`[SECURITY ALERT] Refresh token reuse detected for user ${userId}. Revoking all tokens.`);
-      
-      // Look up and delete any keys starting with refresh:{userId}:
-      // Since ioredis doesn't have a clean wildcard delete, we can handle it or log out user
-      // A safe way is to delete keys or wait for expiration, but let's try to delete if possible,
-      // or at least log the breach and deny access. We will throw unauthorized.
+      // A rotated (already used) refresh token was presented: assume it was stolen
+      // and revoke every session of this user.
+      this.logger.warn(`Refresh token reuse detected for user ${userId}; revoking all sessions`);
+      await this.redisService.deleteByPattern(`refresh:${userId}:*`);
       throw new UnauthorizedException('تم الكشف عن محاولة استخدام غير مصرح بها. يرجى تسجيل الدخول مجدداً');
     }
 
@@ -152,7 +180,7 @@ export class AuthService {
     await this.redisService.del(redisKey);
 
     const user = await this.usersService.findOneById(userId);
-    if (!user || user.status === UserStatus.SUSPENDED) {
+    if (!user || isBlockedStatus(user.status)) {
       throw new UnauthorizedException('المستخدم غير موجود أو موقوف');
     }
 
@@ -165,15 +193,31 @@ export class AuthService {
     await this.redisService.del(redisKey);
   }
 
+  /** Revokes the session behind a refresh token, if it belongs to this user. Never throws. */
+  async logoutWithRefreshToken(userId: string, refreshToken: string): Promise<void> {
+    try {
+      const payload = await this.jwtService.verifyAsync(refreshToken, { secret: this.jwtRefreshSecret });
+      if (payload?.sub === userId && payload.jti) {
+        await this.logout(userId, payload.jti);
+      }
+    } catch {
+      // Expired or invalid refresh tokens are already unusable.
+    }
+  }
+
   async loginWithoutPassword(user: User): Promise<AuthResponseDto> {
-    if (user.status === UserStatus.SUSPENDED) {
+    if (isBlockedStatus(user.status)) {
       throw new UnauthorizedException('هذا الحساب موقوف حالياً');
     }
     const tokens = await this.generateTokensForUser(user);
     return this.buildAuthResponse(user, tokens);
   }
 
-  async handleOAuth(profile: any, provider: AuthProvider): Promise<AuthResponseDto> {
+  async handleOAuth(profile: OAuthProfile, provider: AuthProvider): Promise<AuthResponseDto> {
+    if (!profile?.id) {
+      throw new UnauthorizedException('ملف تعريف مزود الدخول غير صالح');
+    }
+
     let user: User | null = null;
 
     if (provider === AuthProvider.GOOGLE) {
@@ -183,9 +227,15 @@ export class AuthService {
     }
 
     if (!user) {
-      // Try to match by email
+      // Only link to an existing account when the provider vouches for the email;
+      // otherwise anyone could claim someone else's address and take over the account.
       if (profile.email) {
         user = await this.usersService.findOneByEmail(profile.email);
+        if (user && !profile.emailVerified) {
+          throw new ConflictException(
+            'يوجد حساب مسجل بهذا البريد. سجّل الدخول بطريقتك المعتادة ثم اربط الحساب',
+          );
+        }
         if (user) {
           // Link provider
           const updateData: Partial<User> = {
@@ -208,7 +258,7 @@ export class AuthService {
           avatarUrl: profile.picture || null,
           authProvider: provider,
           status: UserStatus.ACTIVE,
-          isEmailVerified: !!profile.email,
+          isEmailVerified: !!profile.email && !!profile.emailVerified,
         };
 
         if (provider === AuthProvider.GOOGLE) {
@@ -224,68 +274,103 @@ export class AuthService {
     return this.loginWithoutPassword(user);
   }
 
+  /** Client IDs (web, Android, iOS) whose tokens we accept. */
+  private googleClientIds(): string[] {
+    const ids = this.configService.get<string>('GOOGLE_CLIENT_IDS') ?? this.configService.get<string>('GOOGLE_CLIENT_ID') ?? '';
+    return ids.split(',').map((id) => id.trim()).filter(Boolean);
+  }
+
   async verifyGoogleToken(idToken?: string, accessToken?: string): Promise<AuthResponseDto> {
+    const clientIds = this.googleClientIds();
+    if (!clientIds.length) {
+      throw new ServiceUnavailableException('تسجيل الدخول عبر Google غير مفعّل');
+    }
+
+    let profile: OAuthProfile;
     try {
-      let profile;
+      const client = new OAuth2Client();
       if (idToken) {
-        const clientId = this.configService.get<string>('GOOGLE_CLIENT_ID');
-        const client = new OAuth2Client(clientId);
-        const ticket = await client.verifyIdToken({
-          idToken,
-          audience: clientId,
-        });
+        const ticket = await client.verifyIdToken({ idToken, audience: clientIds });
         const payload = ticket.getPayload();
-        if (!payload) throw new BadRequestException('Invalid Google token');
-        
+        if (!payload?.sub) throw new Error('empty payload');
         profile = {
           id: payload.sub,
           email: payload.email,
+          emailVerified: payload.email_verified === true,
           displayName: payload.name,
           picture: payload.picture,
         };
       } else if (accessToken) {
-        const response = await fetch(`https://www.googleapis.com/oauth2/v3/userinfo?access_token=${accessToken}`);
-        if (!response.ok) throw new BadRequestException('Invalid Google access token');
-        const payload = await response.json();
-        
+        // An access token issued to *another* app is still valid at Google, so the
+        // audience must be checked explicitly (token substitution attack).
+        const info = await client.getTokenInfo(accessToken);
+        if (!info.aud || !clientIds.includes(info.aud) || !info.sub) {
+          throw new Error('token audience mismatch');
+        }
+        const response = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        const userInfo = response.ok ? await response.json() : {};
         profile = {
-          id: payload.sub,
-          email: payload.email,
-          displayName: payload.name,
-          picture: payload.picture,
+          id: info.sub,
+          email: info.email,
+          emailVerified: info.email_verified === true,
+          displayName: userInfo.name,
+          picture: userInfo.picture,
         };
       } else {
         throw new BadRequestException('idToken or accessToken is required');
       }
-
-      return this.handleOAuth(profile, AuthProvider.GOOGLE);
     } catch (error) {
+      if (error instanceof BadRequestException) throw error;
+      this.logger.warn(`Google token verification failed: ${error.message}`);
       throw new UnauthorizedException('فشل التحقق من رمز Google');
     }
+
+    return this.handleOAuth(profile, AuthProvider.GOOGLE);
   }
 
   async verifyFacebookToken(accessToken: string): Promise<AuthResponseDto> {
+    const appId = this.configService.get<string>('FACEBOOK_APP_ID');
+    const appSecret = this.configService.get<string>('FACEBOOK_APP_SECRET');
+    if (!appId || !appSecret) {
+      throw new ServiceUnavailableException('تسجيل الدخول عبر Facebook غير مفعّل');
+    }
+
+    let profile: OAuthProfile;
     try {
-      // Use fetch to get user profile from Facebook Graph API
-      const response = await fetch(
-        `https://graph.facebook.com/me?fields=id,name,email,picture&access_token=${accessToken}`
-      );
-      if (!response.ok) {
-        throw new BadRequestException('Invalid Facebook token');
+      // Confirm the token was issued to our app before trusting it.
+      const debugUrl = new URL('https://graph.facebook.com/debug_token');
+      debugUrl.searchParams.set('input_token', accessToken);
+      debugUrl.searchParams.set('access_token', `${appId}|${appSecret}`);
+      const debugRes = await fetch(debugUrl);
+      const debug = debugRes.ok ? (await debugRes.json()).data : null;
+      if (!debug?.is_valid || debug.app_id !== appId || !debug.user_id) {
+        throw new Error('token not issued for this app');
       }
-      const data = await response.json();
-      
-      const profile = {
+
+      const meUrl = new URL('https://graph.facebook.com/me');
+      meUrl.searchParams.set('fields', 'id,name,email,picture');
+      meUrl.searchParams.set('access_token', accessToken);
+      const meRes = await fetch(meUrl);
+      if (!meRes.ok) throw new Error('profile request failed');
+      const data = await meRes.json();
+      if (data.id !== debug.user_id) throw new Error('profile/token user mismatch');
+
+      profile = {
         id: data.id,
         email: data.email,
+        // Facebook does not guarantee the email is verified, so it is never used to link accounts.
+        emailVerified: false,
         displayName: data.name,
         picture: data.picture?.data?.url,
       };
-
-      return this.handleOAuth(profile, AuthProvider.FACEBOOK);
     } catch (error) {
+      this.logger.warn(`Facebook token verification failed: ${error.message}`);
       throw new UnauthorizedException('فشل التحقق من رمز Facebook');
     }
+
+    return this.handleOAuth(profile, AuthProvider.FACEBOOK);
   }
 
   async generateTokensForUser(user: User): Promise<{ access_token: string; refresh_token: string }> {
@@ -316,9 +401,8 @@ export class AuthService {
       },
     );
 
-    // Save refresh token to Redis with TTL (7 days)
     const redisKey = `refresh:${user.id}:${tokenId}`;
-    await this.redisService.set(redisKey, 'valid', 7 * 24 * 3600);
+    await this.redisService.set(redisKey, 'valid', REFRESH_TTL_SECONDS);
 
     return { access_token, refresh_token };
   }

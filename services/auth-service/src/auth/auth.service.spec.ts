@@ -57,6 +57,8 @@ describe('AuthService', () => {
       get: jest.fn(),
       set: jest.fn(),
       del: jest.fn(),
+      incrWithTtl: jest.fn(),
+      deleteByPattern: jest.fn(),
     };
 
     const mockJwtService = {
@@ -146,10 +148,62 @@ describe('AuthService', () => {
           password: 'wrongpassword',
         }),
       ).rejects.toThrow(UnauthorizedException);
+      expect(redisService.incrWithTtl).toHaveBeenCalledWith('login_failures:test@example.com', 900);
+    });
+
+    it('should return the same error for unknown accounts (no user enumeration)', async () => {
+      usersService.findOneByEmail.mockResolvedValue(null);
+      (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+
+      await expect(
+        service.login({ identifier: 'nobody@example.com', password: 'whatever1' }),
+      ).rejects.toThrow(new UnauthorizedException('بيانات الدخول غير صحيحة'));
+      expect(bcrypt.compare).toHaveBeenCalled();
+    });
+
+    it('should block login after too many failures, even with the right password', async () => {
+      redisService.get.mockResolvedValue('5');
+
+      await expect(
+        service.login({ identifier: 'test@example.com', password: 'password123' }),
+      ).rejects.toMatchObject({ status: 429 });
+      expect(usersService.findOneByEmail).not.toHaveBeenCalled();
+    });
+
+    it('should reject banned users after a correct password', async () => {
+      usersService.findOneByEmail.mockResolvedValue({ ...mockUser, status: UserStatus.BANNED });
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+      await expect(
+        service.login({ identifier: 'test@example.com', password: 'password123' }),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+  });
+
+  describe('handleOAuth', () => {
+    it('should not link an existing account through an unverified email', async () => {
+      usersService.findOneByEmail.mockResolvedValue(mockUser);
+      (usersService as any).findOneByFacebookId = jest.fn().mockResolvedValue(null);
+
+      await expect(
+        service.handleOAuth(
+          { id: 'fb-1', email: 'test@example.com', emailVerified: false },
+          AuthProvider.FACEBOOK,
+        ),
+      ).rejects.toThrow(ConflictException);
+      expect(usersService.update).not.toHaveBeenCalled();
     });
   });
 
   describe('refresh', () => {
+    it('should revoke all sessions when a rotated refresh token is reused', async () => {
+      jwtService.verifyAsync.mockResolvedValue({ sub: 'user-uuid-123', jti: 'old-jti' });
+      redisService.get.mockResolvedValue(null);
+
+      await expect(service.refresh({ refresh_token: 'stolen' })).rejects.toThrow(UnauthorizedException);
+      expect(redisService.deleteByPattern).toHaveBeenCalledWith('refresh:user-uuid-123:*');
+    });
+
     it('should refresh tokens successfully and implement rotation', async () => {
       const payload = { sub: 'user-uuid-123', jti: 'token-id-abc' };
       jwtService.verifyAsync.mockResolvedValue(payload);

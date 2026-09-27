@@ -60,26 +60,7 @@ export class AuthController {
   @ApiOperation({ summary: 'تسجيل الخروج — Logout' })
   @ApiResponse({ status: 200, description: 'تم تسجيل الخروج بنجاح' })
   async logout(@Req() req: any, @Body() body: RefreshTokenDto) {
-    const userId = req.user.id;
-    try {
-      // Decode and extract token ID
-      const jwtService = req.jwtService; // if we want to decode, we can decode without verifying secret for deletion,
-      // or we can decode via authService. We'll verify inside AuthService.
-      // Let's pass the refresh token to authService to handle deletion.
-      // Wait, we can add a decode function in jwtService.
-      // We will parse the token manually or use jwtService.
-      // To be safe, let's let AuthService handle the decoding/validation of refresh token for logout.
-      // We can create a method `authService.logout(userId, refresh_token)`
-      // Let's implement that!
-      const payload = req.authInfo || {}; // passport strategy can set authInfo,
-      // or we just decode the token:
-      const jwtDecoded = this.authService['jwtService'].decode(body.refresh_token) as any;
-      if (jwtDecoded && jwtDecoded.sub === userId) {
-        await this.authService.logout(userId, jwtDecoded.jti);
-      }
-    } catch (error) {
-      // Suppress error and return ok
-    }
+    await this.authService.logoutWithRefreshToken(req.user.id, body.refresh_token);
     return { message: 'تم تسجيل الخروج بنجاح' };
   }
 

@@ -15,6 +15,12 @@ export enum UserStatus {
   ACTIVE = 'active',
   SUSPENDED = 'suspended',
   PENDING = 'pending',
+  BANNED = 'banned',
+}
+
+/** Suspended and banned accounts may not sign in or refresh tokens. */
+export function isBlockedStatus(status: UserStatus): boolean {
+  return status === UserStatus.SUSPENDED || status === UserStatus.BANNED;
 }
 
 export enum AuthProvider {

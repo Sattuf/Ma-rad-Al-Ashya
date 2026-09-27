@@ -1,28 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from jose import jwt, JWTError
-import os
+from fastapi import APIRouter, Depends, Query
 from typing import List
 from schemas import FraudSignalResponse, AdminActionRequest
 import database
 from ml.train_anomaly_model import train_model
+from security import verify_admin
 
 router = APIRouter(prefix="/fraud/admin", tags=["Admin"])
-security = HTTPBearer()
-JWT_SECRET = os.getenv("JWT_SECRET", "supersecretkey")
 
-async def verify_admin(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    try:
-        payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=["HS256"], options={"verify_aud": False})
-        role = payload.get("role")
-        if role != "admin":
-            raise HTTPException(status_code=403, detail="Not authorized")
-        return payload
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid token")
 
 @router.get("/signals", response_model=List[FraudSignalResponse])
-async def get_signals(admin: dict = Depends(verify_admin), limit: int = 50):
+async def get_signals(admin: dict = Depends(verify_admin), limit: int = Query(50, ge=1, le=200)):
     async with database.pg_pool.acquire() as conn:
         records = await conn.fetch('''
             SELECT id, user_id, signal_type, description, risk_score, created_at

@@ -6,7 +6,11 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   private redisClient: Redis;
 
   onModuleInit() {
-    this.redisClient = new Redis(process.env.REDIS_URI || 'redis://localhost:6379');
+    const url =
+      process.env.REDIS_URL ||
+      process.env.REDIS_URI ||
+      `redis://${process.env.REDIS_HOST || 'localhost'}:${process.env.REDIS_PORT || '6379'}`;
+    this.redisClient = new Redis(url);
   }
 
   onModuleDestroy() {
@@ -15,7 +19,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
 
   async setUserPresence(userId: string, status: 'online' | 'offline'): Promise<void> {
     if (status === 'online') {
-      await this.redisClient.set(`presence:${userId}`, 'online');
+      // TTL so a crashed instance cannot leave users 'online' forever.
+      await this.redisClient.set(`presence:${userId}`, 'online', 'EX', 3600);
     } else {
       await this.redisClient.del(`presence:${userId}`);
     }

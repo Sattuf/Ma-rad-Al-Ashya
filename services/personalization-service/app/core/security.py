@@ -35,5 +35,5 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
     except JWTError as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Invalid or expired token: {str(e)}",
+            detail="Invalid or expired token",
         )

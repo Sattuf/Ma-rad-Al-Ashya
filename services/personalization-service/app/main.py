@@ -1,12 +1,8 @@
-from fastapi import FastAPI, Depends, Request
+from fastapi import FastAPI
 from datetime import datetime
-from app.models.event import EventCreate
 from app.services.event_service import event_service
 from app.services.recommendation_service import recommendation_service
-from app.core.security import get_current_user
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from jose import jwt
-from app.core.config import settings
+from app.routers import events, recommendations
 import os
 import sentry_sdk
 from prometheus_fastapi_instrumentator import Instrumentator
@@ -21,61 +17,31 @@ app = FastAPI(
 
 Instrumentator().instrument(app).expose(app)
 
-security_scheme = HTTPBearer(auto_error=False)
-
-def get_current_user_optional(credentials: HTTPAuthorizationCredentials = Depends(security_scheme)) -> dict:
-    if not credentials:
-        return {"userId": "anonymous", "email": None, "role": None}
-    token = credentials.credentials
-    try:
-        payload = jwt.decode(
-            token,
-            settings.JWT_ACCESS_SECRET,
-            algorithms=["HS256"]
-        )
-        user_id = payload.get("sub")
-        if not user_id:
-            return {"userId": "anonymous", "email": None, "role": None}
-        return {
-            "userId": user_id,
-            "email": payload.get("email"),
-            "role": payload.get("role")
-        }
-    except Exception:
-        return {"userId": "anonymous", "email": None, "role": None}
+app.include_router(events.router)
+app.include_router(recommendations.router)
 
 @app.on_event("startup")
 async def startup_event():
     await event_service.init_indices()
 
+async def _check(probe) -> str:
+    try:
+        await probe()
+        return "ok"
+    except Exception:
+        return "error"
+
+
 @app.get("/health")
 async def health_check():
+    details = {
+        "mongodb": await _check(lambda: event_service.db.command("ping")),
+        "redis": await _check(event_service.redis_client.ping),
+        "elasticsearch": await _check(recommendation_service.es_client.ping),
+    }
     return {
-        "status": "ok",
+        "status": "ok" if all(v == "ok" for v in details.values()) else "degraded",
         "service": "personalization-service",
         "timestamp": datetime.utcnow().isoformat(),
+        "details": details,
     }
-
-@app.post("/events")
-async def create_event(
-    event: EventCreate,
-    current_user: dict = Depends(get_current_user_optional)
-):
-    user_id = current_user["userId"]
-    saved = await event_service.save_event(
-        user_id=user_id,
-        event_type=event.event_type,
-        listing_id=event.listing_id,
-        category_id=event.category_id,
-        search_query=event.search_query,
-        metadata=event.metadata
-    )
-    return saved
-
-@app.get("/recommendations")
-async def get_recommendations(
-    limit: int = 20,
-    current_user: dict = Depends(get_current_user)
-):
-    user_id = current_user["userId"]
-    return await recommendation_service.get_recommendations(user_id=user_id, limit=limit)

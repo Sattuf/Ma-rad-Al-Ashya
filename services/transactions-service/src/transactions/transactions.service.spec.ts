@@ -27,6 +27,7 @@ describe('TransactionsService', () => {
 
     httpMock = {
       put: jest.fn().mockReturnValue(of({ data: {} })),
+      post: jest.fn().mockReturnValue(of({ data: [{ id: 'l-1', userId: 's-1', status: 'active' }] })),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -42,7 +43,8 @@ describe('TransactionsService', () => {
     // Mock Redis
     (service as any).redis = {
       get: jest.fn(),
-      set: jest.fn(),
+      set: jest.fn().mockResolvedValue('OK'),
+      del: jest.fn(),
     };
   });
 
@@ -57,13 +59,24 @@ describe('TransactionsService', () => {
     });
 
     it('should throw if idempotency key exists', async () => {
-      (service as any).redis.get.mockResolvedValue('existing');
+      (service as any).redis.set.mockResolvedValueOnce(null);
       await expect(service.create('b-1', { listing_id: 'l-1', seller_id: 's-1' }))
         .rejects.toThrow(ConflictException);
     });
 
+    it('should reject when seller does not own the listing', async () => {
+      httpMock.post.mockReturnValueOnce(of({ data: [{ id: 'l-1', userId: 'someone-else', status: 'active' }] }));
+      await expect(service.create('b-1', { listing_id: 'l-1', seller_id: 's-1' }))
+        .rejects.toThrow(BadRequestException);
+    });
+
+    it('should reject when listing is no longer active', async () => {
+      httpMock.post.mockReturnValueOnce(of({ data: [{ id: 'l-1', userId: 's-1', status: 'sold' }] }));
+      await expect(service.create('b-1', { listing_id: 'l-1', seller_id: 's-1' }))
+        .rejects.toThrow(BadRequestException);
+    });
+
     it('should create transaction successfully', async () => {
-      (service as any).redis.get.mockResolvedValue(null);
       const res = await service.create('b-1', { listing_id: 'l-1', seller_id: 's-1' });
       expect(res.id).toBe('tx-1');
       expect(res.status).toBe(TransactionStatus.PENDING_SELLER);

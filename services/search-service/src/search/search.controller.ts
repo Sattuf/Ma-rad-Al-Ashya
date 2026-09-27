@@ -6,7 +6,7 @@ import { RelatedSearchDto } from './dto/related-search.dto';
 import { SuggestionsSearchDto } from './dto/suggestions-search.dto';
 import { SearchQueryDto } from './dto/search-query.dto';
 import { TrackClickDto } from './dto/track-click.dto';
-import { AdminGuard } from '../guards/admin.guard';
+import { AdminGuard, requireSecret, safeEqual } from '../common/security';
 
 @ApiTags('Search')
 @Controller('search')
@@ -91,7 +91,7 @@ export class SearchController {
     @Headers('x-internal-secret') secret: string,
     @Body() body: { action: 'create' | 'update' | 'delete', listing: any }
   ) {
-    if (secret !== (process.env.INTERNAL_SECRET || 'secret123')) {
+    if (!safeEqual(secret, requireSecret('INTERNAL_SECRET'))) {
       throw new UnauthorizedException('Invalid internal secret');
     }
     if (!body.action || !body.listing || !body.listing.id) {
@@ -108,8 +108,7 @@ export class SearchController {
     @Headers('x-internal-secret') secret: string,
     @Body() body: { boost_multiplier: number; expires_at: string }
   ) {
-    const internalSecret = process.env.INTERNAL_SECRET || 'marad-internal-secret-for-webhooks';
-    if (secret !== internalSecret && secret !== 'secret123') {
+    if (!safeEqual(secret, requireSecret('INTERNAL_SECRET'))) {
       throw new UnauthorizedException('Invalid internal secret');
     }
     if (body.boost_multiplier === undefined || !body.expires_at) {

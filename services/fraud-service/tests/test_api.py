@@ -6,9 +6,9 @@ import os
 
 client = TestClient(app)
 
-def get_admin_token():
-    secret = os.getenv("JWT_SECRET", "supersecretkey")
-    return jwt.encode({"sub": "admin", "role": "admin"}, secret, algorithm="HS256")
+def get_admin_token(secret=None, role="admin"):
+    secret = secret or os.environ["JWT_ACCESS_SECRET"]
+    return jwt.encode({"sub": "admin", "role": role}, secret, algorithm="HS256")
 
 def test_health_check():
     response = client.get("/health")
@@ -56,7 +56,7 @@ def test_admin_action_with_token(monkeypatch):
     assert "applied to user" in response.json()["message"]
 
 def test_risk_score(monkeypatch):
-    async def mock_acquire(*args, **kwargs):
+    def mock_acquire(*args, **kwargs):
         class MockConn:
             async def __aenter__(self):
                 return self
@@ -72,8 +72,33 @@ def test_risk_score(monkeypatch):
 
     monkeypatch.setattr("database.pg_pool", MockPool())
     
-    response = client.get("/fraud/risk/u1")
+    headers = {"Authorization": f"Bearer {get_admin_token()}"}
+    response = client.get("/fraud/risk/u1", headers=headers)
     assert response.status_code == 200
     data = response.json()
     assert data["total_risk_score"] == 1.1
     assert data["risk_level"] == "HIGH"
+
+
+def test_admin_rejects_token_signed_with_old_default_secret():
+    headers = {"Authorization": f"Bearer {get_admin_token(secret='supersecretkey')}"}
+    response = client.get("/fraud/admin/dashboard", headers=headers)
+    assert response.status_code == 401
+
+
+def test_admin_rejects_non_admin_role():
+    headers = {"Authorization": f"Bearer {get_admin_token(role='user')}"}
+    response = client.get("/fraud/admin/dashboard", headers=headers)
+    assert response.status_code == 403
+
+
+def test_risk_requires_admin():
+    response = client.get("/fraud/risk/u1")
+    assert response.status_code == 403
+
+
+def test_ingestion_requires_internal_secret():
+    payload = {"user_id": "u1", "ip_address": "127.0.0.1"}
+    assert client.post("/fraud/device/check", json=payload).status_code == 401
+    wrong = {"x-internal-secret": "marad-internal-secret-for-webhooks"}
+    assert client.post("/fraud/device/check", json=payload, headers=wrong).status_code == 401

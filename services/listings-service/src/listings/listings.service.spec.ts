@@ -5,15 +5,22 @@ import { Listing, ListingStatus } from './entities/listing.entity';
 import { ListingImage } from './entities/listing-image.entity';
 import { StorageService } from '../storage/storage.service';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { HttpService } from '@nestjs/axios';
+import { of } from 'rxjs';
 
-jest.mock('ioredis', () => {
-  return jest.fn().mockImplementation(() => ({
-    incr: jest.fn(),
-    keys: jest.fn().mockResolvedValue([]),
-    get: jest.fn(),
-    set: jest.fn(),
-  }));
-});
+const mockRedis = {
+  incr: jest.fn(),
+  keys: jest.fn().mockResolvedValue([]),
+  get: jest.fn(),
+  set: jest.fn(),
+  scan: jest.fn(),
+  getdel: jest.fn(),
+};
+
+jest.mock('ioredis', () => ({
+  __esModule: true,
+  default: jest.fn().mockImplementation(() => mockRedis),
+}));
 
 describe('ListingsService', () => {
   let service: ListingsService;
@@ -37,6 +44,20 @@ describe('ListingsService', () => {
     uploadListingImage: jest.fn(),
   };
 
+  const mockHttpService = {
+    get: jest.fn().mockReturnValue(of({ data: {} })),
+    post: jest.fn().mockReturnValue(of({ data: {} })),
+  };
+
+  const queryBuilder = () => {
+    const qb: any = {};
+    for (const m of ['leftJoinAndSelect', 'where', 'andWhere', 'orderBy', 'addOrderBy', 'skip', 'take']) {
+      qb[m] = jest.fn().mockReturnValue(qb);
+    }
+    qb.getManyAndCount = jest.fn().mockResolvedValue([[{ id: 'l-1' }], 120]);
+    return qb;
+  };
+
   beforeEach(async () => {
 
     const module: TestingModule = await Test.createTestingModule({
@@ -53,6 +74,10 @@ describe('ListingsService', () => {
         {
           provide: StorageService,
           useValue: mockStorageService,
+        },
+        {
+          provide: HttpService,
+          useValue: mockHttpService,
         },
       ],
     }).compile();
@@ -122,6 +147,73 @@ describe('ListingsService', () => {
       mockListingRepository.findOne.mockResolvedValue(listing);
 
       await expect(service.updateStatus('listing-1', 'user-1', ListingStatus.SOLD)).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('findAll', () => {
+    it('caps page size at 50 and only returns active listings by default', async () => {
+      const qb = queryBuilder();
+      mockListingRepository.createQueryBuilder.mockReturnValue(qb);
+
+      const result = await service.findAll({ limit: '10000', page: '3' });
+
+      expect(qb.take).toHaveBeenCalledWith(50);
+      expect(qb.skip).toHaveBeenCalledWith(100);
+      expect(qb.where).toHaveBeenCalledWith('listing.status = :status', { status: ListingStatus.ACTIVE });
+      expect(result.meta).toEqual({ total: 120, page: 3, limit: 50, lastPage: 3 });
+    });
+
+    it('never exposes deleted listings even when asked', async () => {
+      const qb = queryBuilder();
+      mockListingRepository.createQueryBuilder.mockReturnValue(qb);
+
+      await service.findAll({ status: ListingStatus.DELETED });
+
+      expect(qb.where).toHaveBeenCalledWith('listing.status = :status', { status: ListingStatus.ACTIVE });
+    });
+
+    it('treats LIKE wildcards in the search term literally', async () => {
+      const qb = queryBuilder();
+      mockListingRepository.createQueryBuilder.mockReturnValue(qb);
+
+      await service.findAll({ search: '100%_off' });
+
+      expect(qb.andWhere).toHaveBeenCalledWith(expect.stringContaining('ILIKE'), { search: '%100\\%\\_off%' });
+    });
+  });
+
+  describe('deleted listings', () => {
+    it('are not found through the public lookup', async () => {
+      mockListingRepository.findOne.mockResolvedValue({ id: 'l-1', status: ListingStatus.DELETED });
+      await expect(service.findOne('l-1')).rejects.toThrow(NotFoundException);
+    });
+
+    it('cannot be re-activated by their owner', async () => {
+      mockListingRepository.findOne.mockResolvedValue({ id: 'l-1', userId: 'user-1', status: ListingStatus.DELETED });
+      await expect(service.updateStatus('l-1', 'user-1', ListingStatus.ACTIVE)).rejects.toThrow(NotFoundException);
+    });
+
+    it('owners cannot set arbitrary statuses', async () => {
+      await expect(service.updateStatus('l-1', 'user-1', 'hacked' as ListingStatus)).rejects.toThrow(
+        BadRequestException,
+      );
+      await expect(service.updateStatus('l-1', 'user-1', ListingStatus.EXPIRED)).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('syncViews', () => {
+    it('uses SCAN + GETDEL instead of KEYS and flushes counts to Postgres', async () => {
+      (mockListingRepository as any).increment = jest.fn();
+      mockRedis.scan
+        .mockResolvedValueOnce(['7', ['listing:views:a']])
+        .mockResolvedValueOnce(['0', ['listing:views:b']]);
+      mockRedis.getdel.mockResolvedValueOnce('3').mockResolvedValueOnce(null);
+
+      await service.syncViews();
+
+      expect(mockRedis.keys).not.toHaveBeenCalled();
+      expect((mockListingRepository as any).increment).toHaveBeenCalledTimes(1);
+      expect((mockListingRepository as any).increment).toHaveBeenCalledWith({ id: 'a' }, 'viewsCount', 3);
     });
   });
 });
