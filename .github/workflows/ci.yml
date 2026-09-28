@@ -206,10 +206,9 @@ jobs:
         working-directory: apps/mobile
       - run: flutter pub get
         working-directory: apps/mobile
-      - name: Analyze
-        run: flutter analyze --no-fatal-infos
+      - name: Analyze (infos and warnings fail the build)
+        run: flutter analyze
         working-directory: apps/mobile
-        continue-on-error: true # يُزال بعد تنظيف التحذيرات الحالية (docs/TESTING_STRATEGY.md)
       - name: Tests
         run: flutter test
         working-directory: apps/mobile

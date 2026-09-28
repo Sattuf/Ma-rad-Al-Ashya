@@ -107,9 +107,7 @@ class Promotion {
 
 class PromotionsRepository {
   final ApiClient _apiClient = ApiClient();
-  final FlutterSecureStorage _storage = const FlutterSecureStorage(
-    aOptions: AndroidOptions(encryptedSharedPreferences: true),
-  );
+  final FlutterSecureStorage _storage = const FlutterSecureStorage();
   static const String _storageKey = 'marad_promoted_listings';
 
   Future<List<PromotionPlan>> getPlans() async {

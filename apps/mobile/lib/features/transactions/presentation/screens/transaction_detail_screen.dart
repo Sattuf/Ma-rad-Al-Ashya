@@ -8,7 +8,6 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:marad_mobile/features/transactions/data/models/transaction_model.dart';
 import 'package:marad_mobile/features/transactions/presentation/providers/transaction_detail_provider.dart';
 import 'package:marad_mobile/features/transactions/presentation/providers/transactions_provider.dart';
-import 'package:marad_mobile/features/transactions/presentation/utils/transaction_ui_helper.dart';
 import 'package:marad_mobile/features/auth/presentation/providers/auth_provider.dart';
 
 class TransactionDetailScreen extends ConsumerStatefulWidget {
@@ -29,15 +28,17 @@ class _TransactionDetailScreenState extends ConsumerState<TransactionDetailScree
       final repo = ref.read(transactionsRepositoryProvider);
       await repo.confirmTransaction(widget.id);
       ref.invalidate(transactionDetailProvider(widget.id));
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('أكّدتَ الصفقة.'), backgroundColor: Colors.green),
       );
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userMessage(e, 'تعذّر تأكيد الصفقة. حاول مجدداً.')), backgroundColor: Colors.red),
       );
     } finally {
-      setState(() => _isUpdating = false);
+      if (mounted) setState(() => _isUpdating = false);
     }
   }
 
@@ -83,15 +84,17 @@ class _TransactionDetailScreenState extends ConsumerState<TransactionDetailScree
       final repo = ref.read(transactionsRepositoryProvider);
       await repo.cancelTransaction(widget.id, reason: reasonController.text);
       ref.invalidate(transactionDetailProvider(widget.id));
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('أُلغيت الصفقة.'), backgroundColor: Colors.orange),
       );
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userMessage(e, 'تعذّر إلغاء الصفقة. حاول مجدداً.')), backgroundColor: Colors.red),
       );
     } finally {
-      setState(() => _isUpdating = false);
+      if (mounted) setState(() => _isUpdating = false);
     }
   }
 
@@ -143,7 +146,7 @@ class _TransactionDetailScreenState extends ConsumerState<TransactionDetailScree
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
-                      BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))
+                      BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))
                     ]
                   ),
                   child: Row(
@@ -231,7 +234,7 @@ class _TransactionDetailScreenState extends ConsumerState<TransactionDetailScree
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Colors.red.withOpacity(0.1),
+                      color: Colors.red.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: Colors.red),
                     ),

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/repositories/messaging_repository.dart';
 import '../../data/models/conversation_model.dart';
@@ -175,7 +176,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
       final newMessages = state.messages.map((m) => m.id == msgId ? msg : m).toList();
       state = state.copyWith(messages: newMessages);
     } catch (e) {
-      print('Error uploading image: $e');
+      debugPrint('Error uploading image: $e');
       // Remove temp message on error
       state = state.copyWith(messages: state.messages.where((m) => m.id != msgId).toList());
     }
@@ -199,7 +200,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
       await repo.blockConversation(conversationId);
       // Optional: Update conversation list status to blocked
     } catch (e) {
-      print('Error blocking conversation: $e');
+      debugPrint('Error blocking conversation: $e');
     }
   }
 

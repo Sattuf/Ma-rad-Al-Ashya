@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../network/api_client.dart';
@@ -22,7 +23,7 @@ class AnalyticsService {
       },
     ).catchError((e) {
       // Catch errors silently
-      print('Silently caught analytics event tracking error: $e');
+      debugPrint('Silently caught analytics event tracking error: $e');
       return Response(requestOptions: RequestOptions(path: '/events'));
     });
   }

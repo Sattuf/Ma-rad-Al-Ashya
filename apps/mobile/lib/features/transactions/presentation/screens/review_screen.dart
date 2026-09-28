@@ -31,13 +31,13 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
     try {
       final repo = ref.read(transactionsRepositoryProvider);
       await repo.createReview(widget.transactionId, _rating, comment: _commentController.text);
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('تم إرسال التقييم بنجاح'), backgroundColor: Colors.green),
       );
-      if (mounted) {
-        context.pop();
-      }
+      context.pop();
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userMessage(e, 'تعذّر نشر تقييمك. حاول مجدداً.')), backgroundColor: Colors.red),
       );

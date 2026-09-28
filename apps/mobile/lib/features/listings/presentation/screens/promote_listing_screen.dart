@@ -22,48 +22,6 @@ class _PromoteListingScreenState extends ConsumerState<PromoteListingScreen> {
   PromotionPlan? _selectedPlan;
   bool _isLoading = false;
 
-  Future<bool?> _showMockPaymentDialog(PromotionPlan plan) {
-    return showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return Directionality(
-          textDirection: TextDirection.rtl,
-          child: AlertDialog(
-            title: const Text('محاكاة عملية الدفع (Stripe Sandbox)'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('الخطة: ${plan.name}'),
-                const SizedBox(height: 8),
-                Text('السعر: ${formatPrice(plan.price)}'),
-                const SizedBox(height: 16),
-                const Text(
-                  'لقد تم اكتشاف بيئة تجريبية/موجّه محلي. هل ترغب في محاكاة نجاح الدفع؟',
-                  style: TextStyle(fontSize: 14),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: const Text(
-                  'إلغاء',
-                  style: TextStyle(color: Colors.red),
-                ),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                child: const Text('نجاح الدفع'),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
   Future<void> _handlePayment() async {
     if (_selectedPlan == null) return;
     
@@ -187,7 +145,7 @@ class _PromoteListingScreenState extends ConsumerState<PromoteListingScreen> {
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(isSelected ? 0.15 : 0.05),
+                                color: Colors.black.withValues(alpha: isSelected ? 0.15 : 0.05),
                                 blurRadius: isSelected ? 12 : 6,
                                 offset: const Offset(0, 4),
                               ),
@@ -214,7 +172,7 @@ class _PromoteListingScreenState extends ConsumerState<PromoteListingScreen> {
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                                       decoration: BoxDecoration(
-                                        color: isPremium ? Colors.brown.shade900.withOpacity(0.15) : Colors.grey.shade100,
+                                        color: isPremium ? Colors.brown.shade900.withValues(alpha: 0.15) : Colors.grey.shade100,
                                         borderRadius: BorderRadius.circular(20),
                                       ),
                                       child: Text(

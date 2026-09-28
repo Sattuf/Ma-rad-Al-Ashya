@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
 import 'package:marad_mobile/core/network/api_client.dart';
@@ -24,7 +25,7 @@ class MessagingRepository {
       }
       return [];
     } catch (e) {
-      print('Error getting conversations: $e');
+      debugPrint('Error getting conversations: $e');
       return [];
     }
   }
@@ -42,7 +43,7 @@ class MessagingRepository {
       }
       return [];
     } catch (e) {
-      print('Error getting messages: $e');
+      debugPrint('Error getting messages: $e');
       return [];
     }
   }

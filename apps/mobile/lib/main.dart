@@ -24,7 +24,7 @@ void main() async {
       }
     }
   } catch (e) {
-    print('Error loading environment / Stripe configuration: $e');
+    debugPrint('Error loading environment / Stripe configuration: $e');
   }
 
   try {
@@ -33,7 +33,7 @@ void main() async {
       await FCMService().initialize();
     }
   } catch (e) {
-    print('Firebase initialization failed: $e');
+    debugPrint('Firebase initialization failed: $e');
   }
   runApp(const ProviderScope(child: MyApp()));
 }

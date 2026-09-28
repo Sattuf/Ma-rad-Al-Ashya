@@ -53,7 +53,7 @@ class NotificationsScreen extends ConsumerWidget {
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.03),
+                    color: Colors.black.withValues(alpha: 0.03),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
                   ),
@@ -123,7 +123,7 @@ class NotificationsScreen extends ConsumerWidget {
           child: Icon(icon, color: const Color(0xFF0D9488), size: 24),
         ),
         value: value,
-        activeColor: const Color(0xFF0D9488),
+        activeThumbColor: const Color(0xFF0D9488),
         onChanged: onChanged,
       ),
     );

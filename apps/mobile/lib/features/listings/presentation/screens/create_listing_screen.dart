@@ -201,7 +201,7 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
             categoriesAsync.when(
               data: (categories) => DropdownButtonFormField<String>(
                 decoration: const InputDecoration(labelText: 'التصنيف', border: OutlineInputBorder()),
-                value: _selectedCategory,
+                initialValue: _selectedCategory,
                 items: categories.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))).toList(),
                 onChanged: (val) => setState(() => _selectedCategory = val),
               ),
@@ -212,7 +212,7 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
 
             DropdownButtonFormField<String>(
               decoration: const InputDecoration(labelText: 'الحالة', border: OutlineInputBorder()),
-              value: _selectedCondition,
+              initialValue: _selectedCondition,
               items: const [
                 DropdownMenuItem(value: 'new', child: Text('جديد')),
                 DropdownMenuItem(value: 'used', child: Text('مستعمل')),

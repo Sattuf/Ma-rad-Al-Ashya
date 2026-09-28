@@ -156,7 +156,6 @@ class _KycScreenState extends ConsumerState<KycScreen> {
 
       case KycState.sessionCreated:
       case KycState.idle:
-      default:
         return Padding(
           padding: const EdgeInsets.all(24.0),
           child: Column(

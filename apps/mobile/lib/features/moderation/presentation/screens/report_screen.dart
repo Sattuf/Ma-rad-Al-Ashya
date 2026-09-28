@@ -62,7 +62,7 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
         description: _descriptionController.text,
       );
 
-      if (context.mounted) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('تم إرسال البلاغ بنجاح'),
@@ -72,7 +72,7 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
         context.pop();
       }
     } catch (e) {
-      if (context.mounted) {
+      if (mounted) {
         if (e.toString().contains('already_reported')) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(

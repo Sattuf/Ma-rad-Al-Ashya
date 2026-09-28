@@ -140,7 +140,7 @@ class FraudDashboardScreen extends ConsumerWidget {
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: badgeColor.withOpacity(0.2),
+          backgroundColor: badgeColor.withValues(alpha: 0.2),
           child: Icon(Icons.security, color: badgeColor),
         ),
         title: Text('User: ${signal.userId}'),

@@ -173,7 +173,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   String _extractError(dynamic e) {
-    print('Auth Error: $e');
+    debugPrint('Auth Error: $e');
     if (e is Exception) {
       final str = e.toString();
       // Try to extract DioException message

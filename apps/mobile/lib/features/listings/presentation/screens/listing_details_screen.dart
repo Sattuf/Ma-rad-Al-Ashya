@@ -228,10 +228,10 @@ class _ListingDetailsScreenState extends ConsumerState<ListingDetailsScreen> {
                     try {
                       final repo = ref.read(transactionsRepositoryProvider);
                       final transaction = await repo.createTransaction(listing.id, listing.userId);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('تم طلب الشراء بنجاح!'), backgroundColor: Colors.green),
-                      );
                       if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('تم طلب الشراء بنجاح!'), backgroundColor: Colors.green),
+                        );
                         context.push('/transactions/${transaction.id}');
                       }
                     } catch (e) {
