@@ -67,7 +67,15 @@ export class ListingsService {
     });
   }
 
-  private async triggerSearchIndex(action: 'create' | 'update' | 'delete', listing: any) {
+  /** [categoryId, parentId] for the search index (the catalogue is a two-level tree). */
+  private async categoryWithParent(categoryId?: string | null): Promise<string[]> {
+    if (!categoryId) return [];
+    const rows: Array<{ parent_id: string | null }> = await this.listingsRepository.query('SELECT parent_id FROM categories WHERE id = $1', [categoryId]);
+    return [categoryId, rows[0]?.parent_id].filter((v): v is string => !!v);
+  }
+
+  /** Pushes one listing to search-service. Never throws; resolves false on failure. */
+  async triggerSearchIndex(action: 'create' | 'update' | 'delete', listing: any): Promise<boolean> {
     try {
       const searchServiceUrl = process.env.SEARCH_SERVICE_URL || 'http://localhost:3003';
       
@@ -76,7 +84,7 @@ export class ListingsService {
       if (action !== 'delete') {
         let sellerRating = 0;
         try {
-          const transactionsUrl = process.env.TRANSACTIONS_SERVICE_URL || 'http://localhost:3006';
+          const transactionsUrl = process.env.TRANSACTIONS_SERVICE_URL || 'http://localhost:3005';
           const ratingRes = await firstValueFrom(
             this.httpService.get(`${transactionsUrl}/users/${listing.userId}/reviews`, { timeout: 5000 })
           );
@@ -95,6 +103,9 @@ export class ListingsService {
         }
 
         enrichedListing.images_count = imagesCount;
+        // Search filters by category including subcategories, and hides non-active listings.
+        enrichedListing.category_ids = await this.categoryWithParent(listing.categoryId);
+        enrichedListing.status = listing.status;
         enrichedListing.description_length = listing.description ? listing.description.length : 0;
         enrichedListing.seller_average_rating = sellerRating;
       }
@@ -107,8 +118,10 @@ export class ListingsService {
           headers: internalHeaders(), timeout: 5000
         })
       );
+      return true;
     } catch (error) {
       this.logger.error(`Failed to trigger search index for listing ${listing.id}: ${error.message}`);
+      return false;
     }
   }
 

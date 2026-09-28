@@ -86,7 +86,9 @@ export const SERVICES_CONFIG: ServiceConfig[] = [
     description: 'خدمة البحث — Search Service',
     stripPrefix: false,
     cacheTtlSeconds: 30,
-    cacheableRoutes: /^\/search(\/(suggestions|autocomplete|map|related|categories\/stats))?\/?$/,
+    // Not the ranked search itself (/search): each request must reach search-service to be
+    // assigned its A/B variant and counted, or cache hits would inflate the measured CTR.
+    cacheableRoutes: /^\/search\/(suggestions|autocomplete|map|related|categories\/stats)\/?$/,
   },
   {
     name: 'messaging-service',

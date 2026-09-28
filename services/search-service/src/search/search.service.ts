@@ -7,6 +7,17 @@ import { RankingService } from '../ranking/ranking.service';
 import { SearchQueryDto } from './dto/search-query.dto';
 import { TrackClickDto } from './dto/track-click.dto';
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const MAX_SEARCH_PAGE = 50;
+const SEARCH_CACHE_VERSION_KEY = 'search:cache:version';
+/** Clicks keep influencing ranking for 30 days. */
+const CLICK_SIGNAL_TTL = 30 * 24 * 3600;
+
+const toPositiveNumber = (v: unknown) => {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : undefined;
+};
+
 @Injectable()
 export class SearchService implements OnModuleDestroy {
   private rankingStatsCache?: { at: number; value: unknown };
@@ -39,109 +50,85 @@ export class SearchService implements OnModuleDestroy {
     } while (cursor !== '0');
   }
 
+  /**
+   * Cached results are namespaced by a version that every index write bumps (O(1)),
+   * instead of SCAN-deleting keys across all of Redis on each listing change.
+   */
+  private async searchCacheVersion(): Promise<string> {
+    return (await this.redisClient.get(SEARCH_CACHE_VERSION_KEY)) ?? '0';
+  }
+
+  /**
+   * Text search for the A/B ranking experiment. Each visitor is assigned a sticky variant
+   * (per user, else per session) that decides the ranking; the client cannot choose it.
+   * Only first-page requests count as a "search" so paging does not dilute the CTR.
+   * Returns ids and ranking only; the caller hydrates full listings from listings-service.
+   */
   async search(dto: SearchQueryDto, userId?: string) {
-    const { q: query, category, minPrice, maxPrice, lat, lon, radius, session_id } = dto;
-    const params = { query, category, minPrice, maxPrice, lat, lon, radius, session_id, userId };
-    const cacheKey = this.generateCacheKey('search_v2', params);
+    const query = typeof dto.q === 'string' ? dto.q.trim().slice(0, 100) : '';
+    const categoryId = typeof dto.categoryId === 'string' && UUID.test(dto.categoryId) ? dto.categoryId : undefined;
+    const minPrice = toPositiveNumber(dto.minPrice);
+    const maxPrice = toPositiveNumber(dto.maxPrice);
+    const page = Math.max(1, Math.floor(Number(dto.page)) || 1);
+    const limit = Math.min(MAX_SEARCH_PAGE, Math.max(1, Math.floor(Number(dto.limit)) || 20));
+    const sessionId = typeof dto.session_id === 'string' ? dto.session_id.slice(0, 64) : undefined;
 
-    const cachedResult = await this.redisClient.get(cacheKey);
-    if (cachedResult) {
-      const parsed = JSON.parse(cachedResult);
-      await this.redisClient.incr(`search:ab:${parsed.variant}:total`);
-      return parsed;
+    const variant = await this.rankingService.getABVariant(userId, sessionId);
+    const version = await this.searchCacheVersion();
+    const cacheKey = this.generateCacheKey(`search_v3:${version}`, { query, categoryId, minPrice, maxPrice, page, limit, variant });
+    const countSearch = () => (page === 1 ? this.redisClient.incr(`search:ab:${variant}:total`) : Promise.resolve(0));
+
+    const cached = await this.redisClient.get(cacheKey);
+    if (cached) {
+      await countSearch();
+      return { ...JSON.parse(cached), variant };
     }
-
-    const variant = dto.ab_variant || await this.rankingService.getABVariant(userId, session_id);
 
     const must: any[] = [];
+    // Sold, expired and deleted listings never appear; documents indexed before the
+    // status field existed still do (must_not instead of a term on "active").
     const filter: any[] = [];
-
+    const mustNot: any[] = [{ terms: { status: ['sold', 'expired', 'deleted'] } }];
     if (query) {
-      must.push({
-        multi_match: {
-          query,
-          fields: ['title^3', 'description', 'category', 'tags'],
-          fuzziness: 'AUTO'
-        }
-      });
+      must.push({ multi_match: { query, fields: ['title^3', 'description', 'tags'], fuzziness: 'AUTO' } });
     }
-
-    if (category) {
-      filter.push({ term: { category } });
-    }
-
+    // A parent category matches its subcategories (category_ids holds [id, parentId]).
+    if (categoryId) filter.push({ term: { category_ids: categoryId } });
     if (minPrice !== undefined || maxPrice !== undefined) {
-      const range: any = {};
-      if (minPrice !== undefined) range.gte = minPrice;
-      if (maxPrice !== undefined) range.lte = maxPrice;
-      filter.push({ range: { price: range } });
-    }
-
-    if (lat !== undefined && lon !== undefined && radius) {
-      filter.push({
-        geo_distance: {
-          distance: radius,
-          location: { lat, lon }
-        }
-      });
+      filter.push({ range: { price: { ...(minPrice !== undefined && { gte: minPrice }), ...(maxPrice !== undefined && { lte: maxPrice }) } } });
     }
 
     try {
-      const baseQuery: any = { bool: {} };
-      if (must.length > 0) baseQuery.bool.must = must;
-      if (filter.length > 0) baseQuery.bool.filter = filter;
-      if (must.length === 0 && filter.length === 0) {
-        baseQuery.bool.must = { match_all: {} };
-      }
+      const baseQuery: any = { bool: { must_not: mustNot } };
+      if (must.length) baseQuery.bool.must = must;
+      if (filter.length) baseQuery.bool.filter = filter;
+      if (!must.length && !filter.length) baseQuery.bool.must = { match_all: {} };
 
-      // First pass: get IDs for engagement scores
-      const initialResponse = await this.esService.client.search({
-        index: this.indexName,
-        body: { query: baseQuery },
-        size: 200,
-        _source: false
-      });
+      // First pass: candidate ids for engagement scores (bounded).
+      const initial = await this.esService.client.search({ index: this.indexName, query: baseQuery, size: 200, _source: false });
+      const engagement = await this.rankingService.getEngagementScores(initial.hits.hits.map((h: any) => h._id));
+      const ranking = this.rankingService.buildFunctionScore({ query }, engagement, variant);
 
-      const listingIds = initialResponse.hits.hits.map((hit: any) => hit._id);
-      const engagementScores = await this.rankingService.getEngagementScores(listingIds);
-
-      // Build function score
-      const rankingObj = this.rankingService.buildFunctionScore({ query, lat, lon }, engagementScores, variant);
-
-      const finalBody: any = { query: {} };
-      if (rankingObj.function_score) {
-        finalBody.query = {
-          function_score: {
-            query: baseQuery,
-            ...rankingObj.function_score
-          }
-        };
-      } else {
-        finalBody.query = baseQuery;
-        if (rankingObj.sort) {
-          finalBody.sort = rankingObj.sort;
-        }
-      }
-
+      const body: any = ranking.function_score
+        ? { query: { function_score: { query: baseQuery, ...ranking.function_score } } }
+        : { query: baseQuery, ...(ranking.sort && { sort: ranking.sort }) };
       const response = await this.esService.client.search({
         index: this.indexName,
-        body: finalBody
+        ...body,
+        from: (page - 1) * limit,
+        size: limit,
+        _source: false,
+        track_total_hits: true,
       });
 
-      const hits = response.hits.hits.map((hit: any) => ({
-        id: hit._id,
-        ...hit._source
-      }));
-
-      const result = { data: hits, total: response.hits.total, variant };
+      const total = typeof response.hits.total === 'number' ? response.hits.total : (response.hits.total?.value ?? 0);
+      const result = { ids: response.hits.hits.map((h: any) => h._id as string), total, page, limit };
       await this.redisClient.set(cacheKey, JSON.stringify(result), 'EX', 180);
-      
-      await this.redisClient.incr(`search:ab:${variant}:total`);
-
-      return result;
+      await countSearch();
+      return { ...result, variant };
     } catch (error) {
       this.logger.error(`Search failed: ${error.message}`);
-      throw new HttpException('Search failed', HttpStatus.INTERNAL_SERVER_ERROR);
+      throw new HttpException('Search failed', HttpStatus.SERVICE_UNAVAILABLE);
     }
   }
 
@@ -343,7 +330,9 @@ export class SearchService implements OnModuleDestroy {
           location: (listing.location && listing.location.lat !== undefined && listing.location.lng !== undefined) 
             ? { lat: listing.location.lat, lon: listing.location.lng } 
             : undefined,
-          category: listing.category,
+          category: listing.category?.name ?? undefined,
+          category_ids: (listing.category_ids ?? [listing.categoryId]).filter(Boolean),
+          status: listing.status ?? 'active',
           tags: listing.tags || [],
           createdAt: listing.createdAt,
           updatedAt: listing.updatedAt,
@@ -370,7 +359,7 @@ export class SearchService implements OnModuleDestroy {
         }
       }
 
-      await this.invalidateCache('search:*');
+      await this.redisClient.incr(SEARCH_CACHE_VERSION_KEY);
       await this.invalidateCache('autocomplete:*');
 
       return { success: true };
@@ -419,14 +408,18 @@ export class SearchService implements OnModuleDestroy {
   }
 
   async trackClick(body: TrackClickDto) {
+    if (body.variant !== 'A' && body.variant !== 'B') throw new HttpException('Invalid variant', HttpStatus.BAD_REQUEST);
+    const listingId = typeof body.listing_id === 'string' && UUID.test(body.listing_id) ? body.listing_id : null;
+    const position = typeof body.position === 'number' && Number.isInteger(body.position) && body.position >= 0 && body.position < 1000 ? body.position : null;
     try {
       await pgPool().query(
         `INSERT INTO ab_test_results (variant, session_id, query, clicked_listing_id, click_position, results_count) VALUES ($1, $2, $3, $4, $5, $6)`,
-        [body.variant, body.session_id, body.query, body.listing_id || null, body.position || null, body.listing_id ? 1 : 0]
+        [body.variant, String(body.session_id ?? '').slice(0, 255), String(body.query ?? '').slice(0, 200), listingId, position, listingId ? 1 : 0],
       );
-
-      if (body.listing_id) {
-        await this.redisClient.incr(`listing:views:${body.listing_id}`);
+      // Engagement signal for ranking. Not listing:views — that key is the listing's page-view
+      // counter (drained into viewsCount), and the detail page already counts the visit.
+      if (listingId) {
+        await this.redisClient.multi().incr(`search:clicks:${listingId}`).expire(`search:clicks:${listingId}`, CLICK_SIGNAL_TTL).exec();
       }
       return { tracked: true };
     } catch (error) {

@@ -40,7 +40,9 @@ export class RankingService {
       return scores;
     }
 
-    const viewKeys = listingIds.map(id => `listing:views:${id}`);
+    // Search clicks (persistent, 30-day TTL). listing:views is drained into the database by
+    // listings-service every few minutes, so it would reset the signal to ~0 each cycle.
+    const viewKeys = listingIds.map(id => `search:clicks:${id}`);
     const messageKeys = listingIds.map(id => `listing:messages:${id}`);
 
     const [viewsData, messagesData] = await Promise.all([

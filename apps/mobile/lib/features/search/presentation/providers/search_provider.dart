@@ -75,6 +75,8 @@ class SearchFiltersNotifier extends StateNotifier<SearchFilters> {
   }
 
   void onResultClicked(String listingId, int position) {
+    // Only ranked results are part of the experiment (fallback results have no variant).
+    if (state.variant != 'A' && state.variant != 'B') return;
     final currentSessionId = state.sessionId ?? getOrCreateSessionId();
     _repository.trackClick(
       query: state.query,

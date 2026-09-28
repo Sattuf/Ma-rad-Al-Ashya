@@ -9,6 +9,7 @@ import { ListingCard } from '@/components/ListingCard';
 import { Button, Card, EmptyState, ErrorState, Input, Skeleton } from '@/components/ui';
 import type { ListingsQuery } from '@/types/listing';
 import { trackEvent } from '@/lib/analytics';
+import { searchApi } from '@/lib/api/search';
 
 type Filters = { search: string; categoryId: string; minPrice: string; maxPrice: string };
 const EMPTY: Filters = { search: '', categoryId: '', minPrice: '', maxPrice: '' };
@@ -43,7 +44,7 @@ export default function ListingsPage() {
   const [applied, setApplied] = useState<Filters>(EMPTY);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const { flat: categories } = useCategories();
-  const { listings, total, error, isLoading, isLoadingMore, isReachingEnd, setSize, size, retry } = useListings(
+  const { listings, total, variant, error, isLoading, isLoadingMore, isReachingEnd, setSize, size, retry } = useListings(
     toQuery(applied),
   );
   const { ref, inView } = useInView({ rootMargin: '400px' });
@@ -170,8 +171,16 @@ export default function ListingsPage() {
           ) : (
             <>
               <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                {listings.map((listing) => (
-                  <ListingCard key={listing.id} listing={listing} />
+                {listings.map((listing, position) => (
+                  <ListingCard
+                    key={listing.id}
+                    listing={listing}
+                    onClick={
+                      variant
+                        ? () => searchApi.trackClick({ query: applied.search.trim(), listingId: listing.id, position, variant })
+                        : undefined
+                    }
+                  />
                 ))}
               </div>
               <div ref={ref} className="flex h-20 items-center justify-center">

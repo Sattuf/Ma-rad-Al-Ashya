@@ -6,7 +6,7 @@ import { RelatedSearchDto } from './dto/related-search.dto';
 import { SuggestionsSearchDto } from './dto/suggestions-search.dto';
 import { SearchQueryDto } from './dto/search-query.dto';
 import { TrackClickDto } from './dto/track-click.dto';
-import { AdminGuard, requireSecret, safeEqual } from '../common/security';
+import { AdminGuard, extractBearerToken, requireSecret, safeEqual, verifyAccessToken } from '../common/security';
 
 @ApiTags('Search')
 @Controller('search')
@@ -53,8 +53,18 @@ export class SearchController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Search listings' })
-  async search(@Query() query: SearchQueryDto, @Headers('x-user-id') userId?: string) {
+  @ApiOperation({ summary: 'Ranked text search (A/B experiment); returns ids, total and the variant' })
+  async search(@Query() query: SearchQueryDto, @Headers('authorization') authorization?: string) {
+    // Identity for sticky assignment comes from a verified token only (never a client header).
+    let userId: string | undefined;
+    const token = extractBearerToken(authorization);
+    if (token) {
+      try {
+        userId = verifyAccessToken(token).userId;
+      } catch {
+        userId = undefined; // expired/invalid token: treat as anonymous, do not fail the search
+      }
+    }
     return this.searchService.search(query, userId);
   }
 

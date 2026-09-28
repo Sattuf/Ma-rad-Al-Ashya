@@ -60,6 +60,8 @@ export class ElasticsearchService implements OnModuleInit {
                 price: { type: 'double' },
                 location: { type: 'geo_point' },
                 category: { type: 'keyword' },
+                category_ids: { type: 'keyword' },
+                status: { type: 'keyword' },
                 tags: { type: 'keyword' },
                 createdAt: { type: 'date' },
                 updatedAt: { type: 'date' },
@@ -71,7 +73,12 @@ export class ElasticsearchService implements OnModuleInit {
         });
         this.logger.log(`Created index ${this.indexName} with mapping`);
       } else {
-        this.logger.log(`Index ${this.indexName} already exists`);
+        // Fields added after the index was first created (adding fields is allowed in place).
+        await this.client.indices.putMapping({
+          index: this.indexName,
+          properties: { category_ids: { type: 'keyword' }, status: { type: 'keyword' } },
+        });
+        this.logger.log(`Index ${this.indexName} already exists; mapping ensured`);
       }
     } catch (error) {
       this.logger.error(`Error initializing Elasticsearch index: ${error.message}`);
