@@ -1,21 +1,12 @@
-import { Controller, Post, Get, Body, Param, Req, Query, UnauthorizedException } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, Req, Query, UseGuards, ParseUUIDPipe } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { ReviewsService } from './reviews.service';
 import { CreateReviewDto } from './dto/review.dto';
 import { Request } from 'express';
+import { AuthUser, JwtAuthGuard } from '../common/security';
 
 function getUserId(req: Request): string {
-  const user = req['user'] as any;
-  if (user && user.sub) return user.sub;
-  if (user && user.userId) return user.userId;
-  const auth = req.headers.authorization;
-  if (auth && auth.startsWith('Bearer ')) {
-    try {
-      const payload = JSON.parse(Buffer.from(auth.split('.')[1], 'base64').toString());
-      return payload.sub || payload.userId;
-    } catch(e) {}
-  }
-  throw new UnauthorizedException();
+  return (req['user'] as AuthUser).userId;
 }
 
 @ApiTags('Reviews')
@@ -23,7 +14,9 @@ function getUserId(req: Request): string {
 export class ReviewsController {
   constructor(private readonly reviewsService: ReviewsService) {}
 
-  @Post('transactions/:id/review')
+  // ':id/reviews' is the path clients reach through the gateway (/api/v1/transactions/:id/reviews).
+  @Post(['transactions/:id/review', ':id/reviews'])
+  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Leave a review for a completed transaction' })
   async createReview(
@@ -33,6 +26,12 @@ export class ReviewsController {
   ) {
     const userId = getUserId(req);
     return this.reviewsService.create(transactionId, userId, dto);
+  }
+
+  @Get('users/:userId/rating-summary')
+  @ApiOperation({ summary: 'Get a user rating summary' })
+  async getRatingSummary(@Param('userId', ParseUUIDPipe) userId: string) {
+    return this.reviewsService.getRatingSummary(userId);
   }
 
   @Get('users/:userId/reviews')

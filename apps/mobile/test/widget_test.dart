@@ -1,30 +1,28 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:marad_mobile/main.dart';
+import 'package:marad_mobile/core/theme/app_theme.dart';
 
+// The full app (MyApp) needs Firebase, secure storage and the network, so this smoke test
+// covers what every screen shares instead: both themes build and carry the token colors.
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  for (final entry in {
+    'light': AppTheme.lightTheme,
+    'dark': AppTheme.darkTheme,
+  }.entries) {
+    testWidgets('${entry.key} theme renders an RTL screen with token colors', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: entry.value,
+          home: const Directionality(
+            textDirection: TextDirection.rtl,
+            child: Scaffold(body: Center(child: Text('معرض الأشياء'))),
+          ),
+        ),
+      );
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
-
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
-
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
-  });
+      expect(find.text('معرض الأشياء'), findsOneWidget);
+      expect(entry.value.extension<AppColorsTheme>(), isNotNull);
+    });
+  }
 }

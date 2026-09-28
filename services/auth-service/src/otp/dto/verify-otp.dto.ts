@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString, Length, Matches } from 'class-validator';
+import { IsNotEmpty, IsString, Matches } from 'class-validator';
 
 export class VerifyOtpDto {
   @ApiProperty({ example: '+966500000000', description: 'رقم الهاتف الذي تم إرسال الرمز إليه' })
@@ -13,6 +13,6 @@ export class VerifyOtpDto {
   @ApiProperty({ example: '123456', description: 'رمز التحقق المكون من 4 أو 6 أرقام' })
   @IsString({ message: 'رمز التحقق يجب أن يكون نصًا' })
   @IsNotEmpty({ message: 'رمز التحقق مطلوب' })
-  @Length(4, 6, { message: 'رمز التحقق يجب أن يتراوح طوله بين 4 و 6 أرقام' })
+  @Matches(/^\d{4,6}$/, { message: 'رمز التحقق يجب أن يتكون من 4 إلى 6 أرقام' })
   code: string;
 }

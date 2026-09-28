@@ -3,7 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { UsersService } from '../../users/users.service';
-import { UserStatus } from '../../users/entities/user.entity';
+import { isBlockedStatus } from '../../users/entities/user.entity';
+import { requireSecret } from '../../common/security';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -14,7 +15,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: configService.get<string>('JWT_ACCESS_SECRET', 'access_secret_key_12345'),
+      secretOrKey: requireSecret('JWT_ACCESS_SECRET'),
+      algorithms: ['HS256'],
     });
   }
 
@@ -23,13 +25,16 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     if (!user) {
       throw new UnauthorizedException('المستخدم غير موجود');
     }
-    if (user.status === UserStatus.SUSPENDED) {
+    if (isBlockedStatus(user.status)) {
       throw new UnauthorizedException('حسابك موقوف حالياً');
     }
+    // Same shape as the login response's `user`, so GET /auth/me can restore a session.
     return {
       id: user.id,
-      email: user.email,
-      phone: user.phone,
+      email: user.email ?? undefined,
+      phone: user.phone ?? undefined,
+      fullName: user.fullName,
+      avatar: user.avatarUrl ?? undefined,
       role: user.role,
       status: user.status,
     };

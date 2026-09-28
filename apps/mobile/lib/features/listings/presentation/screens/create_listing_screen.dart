@@ -1,3 +1,4 @@
+import 'package:marad_mobile/core/utils/errors.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -77,12 +78,12 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
       );
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم إضافة الإعلان بنجاح')));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('نُشر إعلانك.')));
         context.pop();
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('خطأ: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userMessage(e, 'تعذّر نشر الإعلان. لم يُحفظ شيء؛ راجع البيانات وحاول مجدداً.'))));
       }
     } finally {
       if (mounted) {
@@ -191,7 +192,7 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
 
             TextFormField(
               controller: _priceController,
-              decoration: const InputDecoration(labelText: 'السعر (ريال)', border: OutlineInputBorder()),
+              decoration: const InputDecoration(labelText: 'السعر (دولار أمريكي)', border: OutlineInputBorder()),
               keyboardType: TextInputType.number,
               validator: (val) => val == null || val.isEmpty ? 'مطلوب' : null,
             ),
@@ -200,7 +201,7 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
             categoriesAsync.when(
               data: (categories) => DropdownButtonFormField<String>(
                 decoration: const InputDecoration(labelText: 'التصنيف', border: OutlineInputBorder()),
-                value: _selectedCategory,
+                initialValue: _selectedCategory,
                 items: categories.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))).toList(),
                 onChanged: (val) => setState(() => _selectedCategory = val),
               ),
@@ -211,7 +212,7 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
 
             DropdownButtonFormField<String>(
               decoration: const InputDecoration(labelText: 'الحالة', border: OutlineInputBorder()),
-              value: _selectedCondition,
+              initialValue: _selectedCondition,
               items: const [
                 DropdownMenuItem(value: 'new', child: Text('جديد')),
                 DropdownMenuItem(value: 'used', child: Text('مستعمل')),

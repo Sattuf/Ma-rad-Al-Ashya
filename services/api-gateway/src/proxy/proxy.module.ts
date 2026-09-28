@@ -1,18 +1,15 @@
 import { Module } from '@nestjs/common';
 import { HttpModule } from '@nestjs/axios';
 import { ProxyController } from './proxy.controller';
+import { ResponseCacheService } from '../cache/response-cache.service';
 
 /**
  * وحدة التوجيه الوكيل — Proxy Module
  * تسجل HttpModule وتوفر ProxyController لتوجيه الطلبات
  */
 @Module({
-  imports: [
-    HttpModule.register({
-      timeout: 30000,
-      maxRedirects: 3,
-    }),
-  ],
+  imports: [HttpModule],
   controllers: [ProxyController],
+  providers: [ResponseCacheService],
 })
 export class ProxyModule {}

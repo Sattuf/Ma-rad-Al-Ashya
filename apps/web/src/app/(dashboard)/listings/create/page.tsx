@@ -1,393 +1,273 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
-import { MapPin, Upload, X, Check, ArrowRight, ArrowLeft } from 'lucide-react';
-import { useDropzone } from 'react-dropzone';
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-} from '@dnd-kit/core';
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  rectSortingStrategy,
-  useSortable,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import Map from '@/components/Map';
+import { z } from 'zod';
+import { useDropzone, type FileRejection } from 'react-dropzone';
+import { Check, ImagePlus, X } from 'lucide-react';
 import { listingsApi } from '@/lib/api/listings';
-import { useRouter } from 'next/navigation';
+import { useCategories } from '@/hooks/useCategories';
+import { Alert, Button, Card, Input } from '@/components/ui';
+import { cn } from '@/lib/cn';
+import { formatPrice } from '@/types/listing';
+import { errorMessage } from '@/lib/errors';
 
-const listingSchema = z.object({
-  title: z.string().min(5, 'العنوان يجب أن يكون 5 أحرف على الأقل'),
-  description: z.string().min(20, 'الوصف يجب أن يكون 20 حرف على الأقل'),
-  price: z.coerce.number().min(1, 'السعر مطلوب'),
-  type: z.enum(['sale', 'rent']),
-  propertyType: z.enum(['apartment', 'house', 'villa', 'land', 'commercial']),
-  bedrooms: z.coerce.number().optional(),
-  bathrooms: z.coerce.number().optional(),
-  area: z.coerce.number().min(1, 'المساحة مطلوبة'),
+// Mirrors listings-service limits (CreateListingDto, image upload pipe).
+const MAX_IMAGES = 10;
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+
+const schema = z.object({
+  title: z.string().trim().min(5, 'اكتب عنواناً من 5 أحرف على الأقل').max(120, 'العنوان طويل جداً (120 حرفاً كحد أقصى)'),
+  categoryId: z.string().min(1, 'اختر القسم المناسب'),
+  price: z
+    .string()
+    .trim()
+    .min(1, 'أدخل السعر')
+    .refine((v) => Number.isFinite(Number(v)) && Number(v) > 0, 'السعر يجب أن يكون رقماً أكبر من صفر'),
+  description: z.string().trim().min(20, 'صف السلعة في 20 حرفاً على الأقل: الحالة، العمر، سبب البيع'),
 });
+type FormValues = z.infer<typeof schema>;
 
-type ListingFormData = z.infer<typeof listingSchema>;
+type Photo = { id: string; file: File; preview: string };
+type Phase = { kind: 'idle' } | { kind: 'publishing'; step: string } | { kind: 'error'; message: string; listingId?: string };
 
-const STEPS = [
-  { id: 1, title: 'المعلومات الأساسية' },
-  { id: 2, title: 'تفاصيل العقار' },
-  { id: 3, title: 'الصور' },
-  { id: 4, title: 'الموقع' },
-];
-
-function SortableItem({ id, url, onRemove }: { id: string; url: string; onRemove: (id: string) => void }) {
-  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
-
-  return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="relative group rounded-xl overflow-hidden aspect-video bg-gray-100 cursor-move">
-      <img src={url} alt="Listing preview" className="w-full h-full object-cover" />
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onRemove(id);
-        }}
-        className="absolute top-2 right-2 p-1 bg-white/80 hover:bg-red-500 hover:text-white rounded-full transition-colors opacity-0 group-hover:opacity-100"
-      >
-        <X size={16} />
-      </button>
-    </div>
-  );
-}
+const STEPS = ['التفاصيل', 'الصور', 'المراجعة والنشر'] as const;
 
 export default function CreateListingPage() {
   const router = useRouter();
-  const [currentStep, setCurrentStep] = useState(1);
-  const [images, setImages] = useState<{ id: string; url: string; file?: File }[]>([]);
-  const [location, setLocation] = useState({ lat: 24.7136, lng: 46.6753, address: '', city: '' });
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [step, setStep] = useState(0);
+  const [photos, setPhotos] = useState<Photo[]>([]);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
+  const { flat: categories, error: categoriesError, retry: retryCategories } = useCategories();
 
-  const { register, handleSubmit, formState: { errors }, trigger, watch } = useForm<any>({
-    resolver: zodResolver(listingSchema),
-    defaultValues: { type: 'sale', propertyType: 'apartment' },
-  });
+  const {
+    register,
+    trigger,
+    getValues,
+    formState: { errors },
+  } = useForm<FormValues>({ resolver: zodResolver(schema), mode: 'onTouched' });
 
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  // Free object URLs when photos change or the page unmounts.
+  useEffect(() => () => photos.forEach((p) => URL.revokeObjectURL(p.preview)), [photos]);
+
+  const onDrop = useCallback(
+    (accepted: File[], rejected: FileRejection[]) => {
+      setPhotoError(null);
+      if (rejected.length) {
+        const tooBig = rejected.some((r) => r.errors.some((e) => e.code === 'file-too-large'));
+        setPhotoError(tooBig ? 'بعض الصور أكبر من 5 ميغابايت ولم تُضف.' : 'نقبل صور JPG وPNG فقط.');
+      }
+      setPhotos((current) => {
+        const room = MAX_IMAGES - current.length;
+        if (accepted.length > room) setPhotoError(`الحد الأقصى ${MAX_IMAGES} صور.`);
+        return [
+          ...current,
+          ...accepted.slice(0, room).map((file) => ({ id: crypto.randomUUID(), file, preview: URL.createObjectURL(file) })),
+        ];
+      });
+    },
+    [],
   );
-
-  const onDrop = (acceptedFiles: File[]) => {
-    const newImages = acceptedFiles.slice(0, 10 - images.length).map(file => ({
-      id: Math.random().toString(36).substring(7),
-      url: URL.createObjectURL(file),
-      file,
-    }));
-    setImages(prev => [...prev, ...newImages]);
-  };
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    accept: { 'image/*': [] },
-    maxFiles: 10,
-    disabled: images.length >= 10,
+    accept: { 'image/jpeg': ['.jpg', '.jpeg'], 'image/png': ['.png'] },
+    maxSize: MAX_IMAGE_BYTES,
+    disabled: photos.length >= MAX_IMAGES || phase.kind === 'publishing',
   });
 
-  const handleDragEnd = (event: any) => {
-    const { active, over } = event;
-    if (active.id !== over.id) {
-      setImages((items) => {
-        const oldIndex = items.findIndex(i => i.id === active.id);
-        const newIndex = items.findIndex(i => i.id === over.id);
-        return arrayMove(items, oldIndex, newIndex);
+  const next = async () => {
+    if (step === 0 && !(await trigger())) return;
+    if (step === 1 && photos.length === 0) {
+      setPhotoError('أضف صورة واحدة على الأقل؛ الإعلانات المصوّرة تُباع أسرع.');
+      return;
+    }
+    setStep((s) => s + 1);
+  };
+
+  const publish = async () => {
+    const values = getValues();
+    let listingId: string | undefined;
+    try {
+      setPhase({ kind: 'publishing', step: 'جارٍ إنشاء الإعلان…' });
+      const listing = await listingsApi.createListing({
+        title: values.title.trim(),
+        description: values.description.trim(),
+        price: Number(values.price),
+        categoryId: values.categoryId,
+      });
+      listingId = listing.id;
+
+      for (const [i, photo] of photos.entries()) {
+        setPhase({ kind: 'publishing', step: `جارٍ رفع الصورة ${i + 1} من ${photos.length}…` });
+        await listingsApi.uploadImage(listing.id, photo.file);
+      }
+      router.push(`/listings/${listing.id}`);
+    } catch (err) {
+      setPhase({
+        kind: 'error',
+        listingId,
+        message: listingId
+          ? `نُشر الإعلان، لكن تعذّر رفع بعض الصور (${errorMessage(err, 'رُفض الملف')}) يمكنك إضافتها من صفحة تعديل الإعلان.`
+          : errorMessage(err, 'تعذّر نشر الإعلان. لم يُحفظ شيء؛ راجع البيانات وحاول مجدداً.'),
       });
     }
   };
 
-  const removeImage = (id: string) => {
-    setImages(prev => prev.filter(img => img.id !== id));
-  };
-
-  const nextStep = async () => {
-    let isValid = false;
-    if (currentStep === 1) isValid = await trigger(['title', 'description', 'price', 'type']);
-    if (currentStep === 2) isValid = await trigger(['propertyType', 'area', 'bedrooms', 'bathrooms']);
-    if (currentStep === 3) isValid = images.length > 0;
-    
-    if (isValid) setCurrentStep(prev => prev + 1);
-  };
-
-  const onSubmit = async (data: any) => {
-    if (images.length === 0) return;
-    if (!location.address || !location.city) return alert('الرجاء إدخال المدينة والحي');
-
-    setIsSubmitting(true);
-    try {
-      // In a real app, upload files first and get URLs
-      const uploadedUrls = images.map(img => img.url); // Mocked
-      
-      const payload = {
-        ...data,
-        images: uploadedUrls,
-        location,
-        features: [],
-        status: 'active' as const,
-      };
-
-      const res = await listingsApi.createListing(payload);
-      router.push(`/listings/${res.id}`);
-    } catch (error) {
-      console.error(error);
-      alert('حدث خطأ أثناء إضافة العقار');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+  const values = getValues();
+  const category = categories.find((c) => c.id === values.categoryId);
 
   return (
-    <div className="max-w-3xl mx-auto py-8 px-4">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900 mb-6">إضافة عقار جديد</h1>
-        {/* Stepper */}
-        <div className="flex items-center justify-between relative">
-          <div className="absolute left-0 right-0 top-1/2 h-0.5 bg-gray-200 -z-10" />
-          {STEPS.map((step, idx) => (
-            <div key={step.id} className="flex flex-col items-center bg-white px-2">
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm mb-2 transition-colors ${
-                currentStep > step.id ? 'bg-primary text-white' :
-                currentStep === step.id ? 'bg-primary text-white ring-4 ring-primary/20' :
-                'bg-gray-100 text-gray-400'
-              }`}>
-                {currentStep > step.id ? <Check size={20} /> : step.id}
-              </div>
-              <span className={`text-sm ${currentStep >= step.id ? 'text-gray-900 font-medium' : 'text-gray-400'}`}>
-                {step.title}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
+    <main className="mx-auto max-w-2xl px-4 py-8">
+      <h1 className="mb-6 text-2xl font-bold text-fg">أضف إعلاناً جديداً</h1>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 md:p-8">
-        <form onSubmit={handleSubmit(onSubmit)}>
-          {currentStep === 1 && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">نوع الإعلان</label>
-                <div className="flex gap-4">
-                  <label className={`flex-1 p-4 rounded-lg border-2 cursor-pointer text-center transition-colors ${
-                    watch('type') === 'sale' ? 'border-primary bg-primary/5 text-primary' : 'border-gray-200 hover:border-primary/50'
-                  }`}>
-                    <input type="radio" value="sale" {...register('type')} className="sr-only" />
-                    <span className="font-medium">للبيع</span>
-                  </label>
-                  <label className={`flex-1 p-4 rounded-lg border-2 cursor-pointer text-center transition-colors ${
-                    watch('type') === 'rent' ? 'border-primary bg-primary/5 text-primary' : 'border-gray-200 hover:border-primary/50'
-                  }`}>
-                    <input type="radio" value="rent" {...register('type')} className="sr-only" />
-                    <span className="font-medium">للإيجار</span>
-                  </label>
-                </div>
-              </div>
+      <ol className="mb-8 grid grid-cols-3 gap-2" aria-label="خطوات إضافة الإعلان">
+        {STEPS.map((label, i) => (
+          <li key={label} aria-current={i === step ? 'step' : undefined} className="flex flex-col gap-2">
+            <span className={cn('h-1.5 rounded-pill', i <= step ? 'bg-primary' : 'bg-surface-muted')} />
+            <span className={cn('flex items-center gap-1 text-sm', i === step ? 'font-semibold text-fg' : 'text-fg-muted')}>
+              {i < step && <Check className="h-4 w-4 text-primary" aria-hidden />}
+              {i + 1}. {label}
+            </span>
+          </li>
+        ))}
+      </ol>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">عنوان الإعلان</label>
-                <input
-                  {...register('title')}
-                  className="w-full rounded-lg border-gray-300 border p-3 focus:ring-primary focus:border-primary"
-                  placeholder="مثال: فيلا فاخرة للبيع في حي الياسمين"
-                />
-                {errors.title && <p className="text-red-500 text-sm mt-1">{errors.title.message as string}</p>}
-              </div>
+      <Card className="p-6">
+        {step === 0 && (
+          <div className="flex flex-col gap-5">
+            <Input label="العنوان" placeholder="مثال: آيفون 15 برو 256GB بحالة ممتازة" {...register('title')} error={errors.title?.message} />
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">السعر (ر.س)</label>
-                <input
-                  type="number"
-                  {...register('price')}
-                  className="w-full rounded-lg border-gray-300 border p-3 focus:ring-primary focus:border-primary"
-                />
-                {errors.price && <p className="text-red-500 text-sm mt-1">{errors.price.message as string}</p>}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">وصف العقار</label>
-                <textarea
-                  {...register('description')}
-                  rows={5}
-                  className="w-full rounded-lg border-gray-300 border p-3 focus:ring-primary focus:border-primary"
-                  placeholder="اكتب تفاصيل العقار ومميزاته..."
-                />
-                {errors.description && <p className="text-red-500 text-sm mt-1">{errors.description.message as string}</p>}
-              </div>
-            </div>
-          )}
-
-          {currentStep === 2 && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">نوع العقار</label>
-                <select
-                  {...register('propertyType')}
-                  className="w-full rounded-lg border-gray-300 border p-3 focus:ring-primary focus:border-primary"
-                >
-                  <option value="apartment">شقة</option>
-                  <option value="house">بيت / دور</option>
-                  <option value="villa">فيلا</option>
-                  <option value="land">أرض</option>
-                  <option value="commercial">تجاري</option>
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">المساحة (م²)</label>
-                  <input
-                    type="number"
-                    {...register('area')}
-                    className="w-full rounded-lg border-gray-300 border p-3 focus:ring-primary focus:border-primary"
-                  />
-                  {errors.area && <p className="text-red-500 text-sm mt-1">{errors.area.message as string}</p>}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">عدد غرف النوم</label>
-                  <input
-                    type="number"
-                    {...register('bedrooms')}
-                    className="w-full rounded-lg border-gray-300 border p-3 focus:ring-primary focus:border-primary"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">دورات المياه</label>
-                  <input
-                    type="number"
-                    {...register('bathrooms')}
-                    className="w-full rounded-lg border-gray-300 border p-3 focus:ring-primary focus:border-primary"
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {currentStep === 3 && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
-              <div>
-                <div
-                  {...getRootProps()}
-                  className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors cursor-pointer ${
-                    isDragActive ? 'border-primary bg-primary/5' : 'border-gray-300 hover:border-primary'
-                  } ${images.length >= 10 ? 'opacity-50 cursor-not-allowed' : ''}`}
-                >
-                  <input {...getInputProps()} />
-                  <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                  <p className="text-gray-700 font-medium mb-1">
-                    اسحب وأفلت الصور هنا، أو انقر لاختيار الصور
-                  </p>
-                  <p className="text-gray-500 text-sm">
-                    الحد الأقصى 10 صور (بصيغة JPG, PNG)
-                  </p>
-                </div>
-                {images.length === 0 && (
-                  <p className="text-red-500 text-sm mt-2 text-center">الرجاء إضافة صورة واحدة على الأقل</p>
+            <div className="flex flex-col gap-1">
+              <label htmlFor="category" className="text-sm font-medium text-fg">القسم</label>
+              <select
+                id="category"
+                {...register('categoryId')}
+                aria-invalid={errors.categoryId ? true : undefined}
+                aria-describedby={errors.categoryId ? 'category-error' : undefined}
+                className={cn(
+                  'min-h-11 rounded-control border bg-surface px-3 text-fg focus:outline-none focus:ring-2 focus:ring-focus-ring',
+                  errors.categoryId ? 'border-danger' : 'border-line',
                 )}
-              </div>
-
-              {images.length > 0 && (
-                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                  <SortableContext items={images.map(i => i.id)} strategy={rectSortingStrategy}>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mt-6">
-                      {images.map((image) => (
-                        <SortableItem key={image.id} id={image.id} url={image.url} onRemove={removeImage} />
-                      ))}
-                    </div>
-                  </SortableContext>
-                </DndContext>
+                defaultValue=""
+              >
+                <option value="" disabled>اختر القسم</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {'  '.repeat(c.depth)}
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+              {errors.categoryId && <p id="category-error" className="text-xs text-danger">{errors.categoryId.message}</p>}
+              {categoriesError && (
+                <button type="button" onClick={retryCategories} className="self-start text-xs text-primary underline">
+                  تعذّر تحميل الأقسام — إعادة المحاولة
+                </button>
               )}
             </div>
-          )}
 
-          {currentStep === 4 && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">المدينة</label>
-                  <input
-                    value={location.city}
-                    onChange={(e) => setLocation({ ...location, city: e.target.value })}
-                    className="w-full rounded-lg border-gray-300 border p-3 focus:ring-primary focus:border-primary"
-                    placeholder="الرياض"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">الحي / الشارع</label>
-                  <input
-                    value={location.address}
-                    onChange={(e) => setLocation({ ...location, address: e.target.value })}
-                    className="w-full rounded-lg border-gray-300 border p-3 focus:ring-primary focus:border-primary"
-                    placeholder="حي الياسمين"
-                    required
-                  />
-                </div>
-              </div>
+            <Input label="السعر (دولار أمريكي)" type="number" inputMode="decimal" min={0} step="0.01" {...register('price')} error={errors.price?.message} />
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">حدد الموقع على الخريطة</label>
-                <Map position={location} onPositionChange={(pos) => setLocation(prev => ({ ...prev, ...pos }))} />
-                <p className="text-sm text-gray-500 mt-2 flex items-center">
-                  <MapPin size={16} className="ml-1" />
-                  انقر على الخريطة لتحديد موقع العقار بدقة
-                </p>
-              </div>
+            <div className="flex flex-col gap-1">
+              <label htmlFor="description" className="text-sm font-medium text-fg">الوصف</label>
+              <textarea
+                id="description"
+                rows={6}
+                {...register('description')}
+                aria-invalid={errors.description ? true : undefined}
+                aria-describedby="description-hint"
+                placeholder="الحالة، مدة الاستعمال، الملحقات المرفقة، وسبب البيع."
+                className={cn(
+                  'rounded-control border bg-surface px-4 py-3 text-fg placeholder:text-fg-subtle focus:outline-none focus:ring-2 focus:ring-focus-ring',
+                  errors.description ? 'border-danger' : 'border-line',
+                )}
+              />
+              <p id="description-hint" className={cn('text-xs', errors.description ? 'text-danger' : 'text-fg-muted')}>
+                {errors.description?.message ?? 'الوصف الواضح يقلّل الأسئلة ويزيد الثقة.'}
+              </p>
             </div>
-          )}
+          </div>
+        )}
 
-          <div className="flex justify-between items-center mt-10 pt-6 border-t border-gray-100">
-            <button
-              type="button"
-              onClick={() => setCurrentStep(prev => prev - 1)}
-              disabled={currentStep === 1}
-              className="flex items-center gap-2 px-6 py-2.5 rounded-lg text-gray-600 hover:bg-gray-100 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        {step === 1 && (
+          <div className="flex flex-col gap-4">
+            <div
+              {...getRootProps()}
+              className={cn(
+                'flex cursor-pointer flex-col items-center gap-2 rounded-card border-2 border-dashed p-8 text-center transition-colors',
+                isDragActive ? 'border-primary bg-primary-soft' : 'border-line hover:border-line-strong',
+              )}
             >
-              <ArrowRight size={18} />
-              <span>السابق</span>
-            </button>
-
-            {currentStep < 4 ? (
-              <button
-                type="button"
-                onClick={nextStep}
-                className="flex items-center gap-2 px-8 py-2.5 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition-colors"
-              >
-                <span>التالي</span>
-                <ArrowLeft size={18} />
-              </button>
-            ) : (
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="flex items-center gap-2 px-8 py-2.5 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-70"
-              >
-                {isSubmitting ? 'جاري الإضافة...' : 'نشر العقار'}
-                <Check size={18} />
-              </button>
+              <input {...getInputProps()} aria-label="اختر صور الإعلان" />
+              <ImagePlus className="h-8 w-8 text-fg-muted" aria-hidden />
+              <p className="font-medium text-fg">اسحب الصور هنا أو اضغط للاختيار</p>
+              <p className="text-sm text-fg-muted">حتى {MAX_IMAGES} صور، JPG أو PNG، بحد أقصى 5 ميغابايت للصورة. الأولى هي صورة الغلاف.</p>
+            </div>
+            {photoError && <Alert tone="warning">{photoError}</Alert>}
+            {photos.length > 0 && (
+              <ul className="grid grid-cols-3 gap-3 sm:grid-cols-4" aria-label="الصور المختارة">
+                {photos.map((p, i) => (
+                  <li key={p.id} className="relative aspect-square overflow-hidden rounded-control border border-line">
+                    <img src={p.preview} alt={`صورة ${i + 1}`} className="h-full w-full object-cover" />
+                    {i === 0 && <span className="absolute bottom-1 start-1 rounded-pill bg-primary px-2 text-xs text-on-primary">الغلاف</span>}
+                    <button
+                      type="button"
+                      onClick={() => setPhotos((all) => all.filter((x) => x.id !== p.id))}
+                      aria-label={`حذف الصورة ${i + 1}`}
+                      className="absolute top-1 end-1 inline-flex h-8 w-8 items-center justify-center rounded-pill bg-surface/90 text-fg"
+                    >
+                      <X className="h-4 w-4" aria-hidden />
+                    </button>
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
-        </form>
-      </div>
-    </div>
+        )}
+
+        {step === 2 && (
+          <div className="flex flex-col gap-4">
+            <div className="flex gap-4">
+              {photos[0] && <img src={photos[0].preview} alt="" className="h-24 w-24 shrink-0 rounded-control object-cover" />}
+              <div className="min-w-0">
+                <p className="text-xs text-fg-subtle">{category?.name}</p>
+                <h2 className="font-semibold text-fg">{values.title}</h2>
+                <p className="text-lg font-bold text-primary">{formatPrice(values.price ?? '0', 'USD')}</p>
+              </div>
+            </div>
+            <p className="whitespace-pre-line text-sm text-fg-muted">{values.description}</p>
+            <p className="text-sm text-fg-muted">{photos.length} صورة</p>
+            {phase.kind === 'publishing' && <Alert tone="info">{phase.step}</Alert>}
+            {phase.kind === 'error' && (
+              <Alert tone="danger">
+                {phase.message}
+                {phase.listingId && (
+                  <button type="button" className="ms-2 font-semibold underline" onClick={() => router.push(`/listings/${phase.listingId}/edit`)}>
+                    تعديل الإعلان
+                  </button>
+                )}
+              </Alert>
+            )}
+          </div>
+        )}
+
+        <div className="mt-8 flex items-center justify-between gap-3 border-t border-line pt-6">
+          <Button variant="ghost" onClick={() => setStep((s) => s - 1)} disabled={step === 0 || phase.kind === 'publishing'}>
+            السابق
+          </Button>
+          {step < 2 ? (
+            <Button onClick={next}>التالي</Button>
+          ) : (
+            <Button onClick={publish} loading={phase.kind === 'publishing'} disabled={phase.kind === 'error' && !!phase.listingId}>
+              نشر الإعلان
+            </Button>
+          )}
+        </div>
+      </Card>
+    </main>
   );
 }

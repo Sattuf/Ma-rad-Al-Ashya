@@ -15,6 +15,12 @@ export enum UserStatus {
   ACTIVE = 'active',
   SUSPENDED = 'suspended',
   PENDING = 'pending',
+  BANNED = 'banned',
+}
+
+/** Suspended and banned accounts may not sign in or refresh tokens. */
+export function isBlockedStatus(status: UserStatus): boolean {
+  return status === UserStatus.SUSPENDED || status === UserStatus.BANNED;
 }
 
 export enum AuthProvider {
@@ -24,23 +30,25 @@ export enum AuthProvider {
 }
 
 @Entity('users')
+// Nullable columns declare their type explicitly: for `string | null`, TypeScript emits
+// `Object` as design:type, which TypeORM rejects at startup (auth-service could not boot).
 export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ unique: true, nullable: true })
+  @Column({ type: 'varchar', unique: true, nullable: true })
   phone: string | null;
 
-  @Column({ unique: true, nullable: true })
+  @Column({ type: 'varchar', unique: true, nullable: true })
   email: string | null;
 
   @Column({ name: 'full_name' })
   fullName: string;
 
-  @Column({ name: 'avatar_url', nullable: true })
+  @Column({ type: 'text', name: 'avatar_url', nullable: true })
   avatarUrl: string | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'text', nullable: true })
   bio: string | null;
 
   @Column({ name: 'is_verified', default: false })
@@ -58,19 +66,19 @@ export class User {
   @Column({ name: 'location_lng', type: 'decimal', precision: 11, scale: 8, nullable: true })
   locationLng: number | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   city: string | null;
 
-  @Column({ name: 'password_hash', nullable: true })
+  @Column({ type: 'varchar', name: 'password_hash', nullable: true })
   passwordHash: string | null;
 
   @Column({ default: 'local' })
   provider: string;
 
-  @Column({ name: 'provider_id', nullable: true })
+  @Column({ type: 'varchar', name: 'provider_id', nullable: true })
   providerId: string | null;
 
-  @Column({ name: 'fcm_token', nullable: true })
+  @Column({ type: 'text', name: 'fcm_token', nullable: true })
   fcmToken: string | null;
 
   @Column({ name: 'preferred_language', default: 'ar' })
@@ -93,10 +101,10 @@ export class User {
   @Column({ name: 'is_email_verified', default: false })
   isEmailVerified: boolean;
 
-  @Column({ name: 'google_id', unique: true, nullable: true })
+  @Column({ type: 'varchar', name: 'google_id', unique: true, nullable: true })
   googleId: string | null;
 
-  @Column({ name: 'facebook_id', unique: true, nullable: true })
+  @Column({ type: 'varchar', name: 'facebook_id', unique: true, nullable: true })
   facebookId: string | null;
 
   @Column({

@@ -18,6 +18,7 @@ export const favoritesApi = {
 
   checkFavorite: async (listingId: string): Promise<{ isFavorite: boolean }> => {
     const response = await api.get(`/users/favorites/${listingId}/check`);
-    return response.data;
+    // users-service answers { favorited }.
+    return { isFavorite: !!response.data?.favorited };
   },
 };

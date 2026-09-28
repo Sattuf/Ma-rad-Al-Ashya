@@ -1,20 +1,18 @@
 import useSWRInfinite from 'swr/infinite';
-import { api } from '@/lib/api/auth';
+import { fetchMessagingPage, pageQuery } from './messagingPage';
 import { Message } from '@/types/message';
-
-const fetcher = (url: string) => api.get(url).then(res => res.data);
 
 export const useMessages = (conversationId: string | null) => {
   const getKey = (pageIndex: number, previousPageData: any) => {
     if (!conversationId) return null;
     if (previousPageData && !previousPageData.hasMore) return null; // reached the end
-    return `/messages/${conversationId}?page=${pageIndex + 1}&limit=20`; // API endpoint
+    return `/messages/${conversationId}?${pageQuery(pageIndex)}`;
   };
 
   const { data, error, size, setSize, mutate } = useSWRInfinite<{
     data: Message[];
     hasMore: boolean;
-  }>(getKey, fetcher, {
+  }>(getKey, fetchMessagingPage, {
     revalidateOnFocus: false,
   });
 

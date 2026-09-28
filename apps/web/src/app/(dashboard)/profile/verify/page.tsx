@@ -1,5 +1,6 @@
 'use client';
 
+import { errorMessage } from '@/lib/errors';
 import React, { useState } from 'react';
 import { useKycStatus } from '@/hooks/useKycStatus';
 import { identityApi } from '@/lib/api/identity';
@@ -19,10 +20,10 @@ export default function VerifyIdentityPage() {
       if (response.verification_url) {
         window.open(response.verification_url, '_blank');
       } else {
-        setError('تعذر الحصول على رابط التوثيق. يرجى المحاولة مرة أخرى.');
+        setError('تعذّر تجهيز رابط التوثيق. حاول مجدداً.');
       }
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'حدث خطأ أثناء بدء عملية التوثيق.');
+    } catch (err) {
+      setError(errorMessage(err, 'تعذّر بدء توثيق الهوية. حاول مجدداً.'));
     } finally {
       setIsStarting(false);
     }
@@ -46,30 +47,30 @@ export default function VerifyIdentityPage() {
         <h1 className="text-3xl font-bold text-gray-900">توثيق الهوية</h1>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
+      <div className="bg-surface rounded-2xl shadow-sm border border-gray-100 p-8">
         {/* Stepper */}
         <div className="flex items-center justify-between mb-12 relative">
-          <div className="absolute left-0 right-0 top-1/2 h-0.5 bg-gray-100 -z-10 -translate-y-1/2"></div>
+          <div className="absolute end-0 start-0 top-1/2 h-0.5 bg-gray-100 -z-10 -translate-y-1/2"></div>
           
-          <div className="flex flex-col items-center gap-2 bg-white px-4">
-            <div className={`w-12 h-12 rounded-full flex items-center justify-center border-2 ${currentStep >= 1 ? 'border-blue-600 bg-blue-50 text-blue-600' : 'border-gray-200 bg-gray-50 text-gray-400'}`}>
+          <div className="flex flex-col items-center gap-2 bg-surface px-4">
+            <div className={`w-12 h-12 rounded-full flex items-center justify-center border-2 ${currentStep >= 1 ? 'border-primary bg-primary-soft text-primary' : 'border-gray-200 bg-gray-50 text-gray-400'}`}>
               <FileText className="w-6 h-6" />
             </div>
-            <span className={`text-sm font-medium ${currentStep >= 1 ? 'text-blue-600' : 'text-gray-500'}`}>الوثائق</span>
+            <span className={`text-sm font-medium ${currentStep >= 1 ? 'text-primary' : 'text-gray-500'}`}>الوثائق</span>
           </div>
 
-          <div className="flex flex-col items-center gap-2 bg-white px-4">
-            <div className={`w-12 h-12 rounded-full flex items-center justify-center border-2 ${currentStep >= 2 ? 'border-blue-600 bg-blue-50 text-blue-600' : 'border-gray-200 bg-gray-50 text-gray-400'}`}>
+          <div className="flex flex-col items-center gap-2 bg-surface px-4">
+            <div className={`w-12 h-12 rounded-full flex items-center justify-center border-2 ${currentStep >= 2 ? 'border-primary bg-primary-soft text-primary' : 'border-gray-200 bg-gray-50 text-gray-400'}`}>
               <UserSquare2 className="w-6 h-6" />
             </div>
-            <span className={`text-sm font-medium ${currentStep >= 2 ? 'text-blue-600' : 'text-gray-500'}`}>التعرف على الوجه</span>
+            <span className={`text-sm font-medium ${currentStep >= 2 ? 'text-primary' : 'text-gray-500'}`}>التعرف على الوجه</span>
           </div>
 
-          <div className="flex flex-col items-center gap-2 bg-white px-4">
-            <div className={`w-12 h-12 rounded-full flex items-center justify-center border-2 ${currentStep >= 3 ? 'border-blue-600 bg-blue-50 text-blue-600' : 'border-gray-200 bg-gray-50 text-gray-400'}`}>
+          <div className="flex flex-col items-center gap-2 bg-surface px-4">
+            <div className={`w-12 h-12 rounded-full flex items-center justify-center border-2 ${currentStep >= 3 ? 'border-primary bg-primary-soft text-primary' : 'border-gray-200 bg-gray-50 text-gray-400'}`}>
               <ShieldCheck className="w-6 h-6" />
             </div>
-            <span className={`text-sm font-medium ${currentStep >= 3 ? 'text-blue-600' : 'text-gray-500'}`}>النتيجة</span>
+            <span className={`text-sm font-medium ${currentStep >= 3 ? 'text-primary' : 'text-gray-500'}`}>النتيجة</span>
           </div>
         </div>
 
@@ -77,8 +78,8 @@ export default function VerifyIdentityPage() {
         <div className="text-center min-h-[300px] flex flex-col justify-center items-center">
           {isLoading ? (
             <div className="flex flex-col items-center gap-4">
-              <Loader2 className="w-10 h-10 text-blue-600 animate-spin" />
-              <p className="text-gray-500">جاري التحقق من حالة التوثيق...</p>
+              <Loader2 className="w-10 h-10 text-primary animate-spin" />
+              <p className="text-gray-500">جارٍ التحقق من حالة التوثيق…</p>
             </div>
           ) : (
             <>
@@ -87,7 +88,7 @@ export default function VerifyIdentityPage() {
                   <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mb-4">
                     <CheckCircle2 className="w-10 h-10 text-green-600" />
                   </div>
-                  <h2 className="text-2xl font-bold text-gray-900">تم توثيق حسابك بنجاح!</h2>
+                  <h2 className="text-2xl font-bold text-gray-900">وُثّقت هويتك</h2>
                   <p className="text-gray-500 max-w-md">
                     شكراً لك. لقد تم التحقق من هويتك بنجاح ويمكنك الآن الاستفادة من كافة ميزات المنصة كبائع موثّق.
                   </p>
@@ -102,14 +103,14 @@ export default function VerifyIdentityPage() {
                   <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mb-4">
                     <XCircle className="w-10 h-10 text-red-600" />
                   </div>
-                  <h2 className="text-2xl font-bold text-gray-900">فشل توثيق الهوية</h2>
+                  <h2 className="text-2xl font-bold text-gray-900">لم نتمكّن من توثيق هويتك</h2>
                   <p className="text-gray-500 max-w-md">
-                    عذراً، لم نتمكن من التحقق من هويتك. يرجى التأكد من وضوح الصورة وصلاحية المستند المرفق والمحاولة مرة أخرى.
+                    غالباً السبب صورة غير واضحة أو وثيقة منتهية. صوّر الوثيقة في إضاءة جيدة دون انعكاس، وتأكد من صلاحيتها، ثم حاول مجدداً.
                   </p>
                   <button 
                     onClick={handleStartVerification}
                     disabled={isStarting}
-                    className="mt-6 px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-colors disabled:opacity-50 flex items-center gap-2"
+                    className="mt-6 px-8 py-3 bg-primary hover:bg-primary text-on-primary rounded-xl font-medium transition-colors disabled:opacity-50 flex items-center gap-2"
                   >
                     {isStarting && <Loader2 className="w-5 h-5 animate-spin" />}
                     إعادة المحاولة
@@ -119,20 +120,20 @@ export default function VerifyIdentityPage() {
 
               {(status === 'session_created' || status === 'processing' || status === 'pending') && (
                 <div className="flex flex-col items-center gap-4 animate-in fade-in duration-300">
-                  <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mb-4">
-                    <Loader2 className="w-10 h-10 text-blue-600 animate-spin" />
+                  <div className="w-20 h-20 bg-primary-soft rounded-full flex items-center justify-center mb-4">
+                    <Loader2 className="w-10 h-10 text-primary animate-spin" />
                   </div>
-                  <h2 className="text-2xl font-bold text-gray-900">جاري التحقق من هويتك</h2>
+                  <h2 className="text-2xl font-bold text-gray-900">جارٍ التحقق من هويتك</h2>
                   <p className="text-gray-500 max-w-md mb-2">
-                    يرجى إكمال خطوات التوثيق في النافذة الجديدة. سيتم تحديث هذه الصفحة تلقائياً فور الانتهاء.
+                    أكمل الخطوات في النافذة التي فُتحت. ستتحدّث هذه الصفحة وحدها عند الانتهاء.
                   </p>
                   <div className="p-4 bg-amber-50 rounded-lg border border-amber-100 text-amber-800 text-sm max-w-md">
-                    ملاحظة: يرجى عدم إغلاق هذه الصفحة حتى تكتمل عملية التوثيق.
+                    أبقِ هذه الصفحة مفتوحة حتى يكتمل التوثيق.
                   </div>
                   <button 
                     onClick={handleStartVerification}
                     disabled={isStarting}
-                    className="mt-4 px-6 py-2 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-xl font-medium transition-colors disabled:opacity-50 text-sm"
+                    className="mt-4 px-6 py-2 bg-surface border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-xl font-medium transition-colors disabled:opacity-50 text-sm"
                   >
                     إعادة فتح رابط التوثيق
                   </button>
@@ -158,12 +159,12 @@ export default function VerifyIdentityPage() {
                   <button 
                     onClick={handleStartVerification}
                     disabled={isStarting}
-                    className="mt-6 px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-colors disabled:opacity-50 flex items-center gap-2"
+                    className="mt-6 px-8 py-3 bg-primary hover:bg-primary text-on-primary rounded-xl font-medium transition-colors disabled:opacity-50 flex items-center gap-2"
                   >
                     {isStarting ? (
                       <>
                         <Loader2 className="w-5 h-5 animate-spin" />
-                        جاري تجهيز الرابط...
+                        جارٍ تجهيز الرابط…
                       </>
                     ) : (
                       'بدء التوثيق الآن'

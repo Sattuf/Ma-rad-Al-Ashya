@@ -66,7 +66,9 @@ async def test_create_event_unauthorized():
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.post("/events", json=event_data)
         
-    assert response.status_code == 403  # FastAPI HTTPBearer returns 403 Forbidden for missing credentials by default
+    # Missing credentials are rejected: FastAPI's HTTPBearer answers 401 in current releases
+    # (403 before 0.117). Either way the event must not be accepted.
+    assert response.status_code in (401, 403)
 
 @pytest.mark.anyio
 async def test_get_recommendations_authorized():

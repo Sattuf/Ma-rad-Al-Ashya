@@ -1,11 +1,12 @@
 import { api } from './auth';
-import { Listing, ListingsQuery } from '@/types/listing';
+import { CreateListingInput, Listing, ListingsQuery } from '@/types/listing';
 
 export interface PaginatedResponse<T> {
   data: T[];
   meta: {
     total: number;
     page: number;
+    limit: number;
     lastPage: number;
   };
 }
@@ -21,12 +22,12 @@ export const listingsApi = {
     return response.data;
   },
 
-  createListing: async (data: Partial<Listing>): Promise<Listing> => {
+  createListing: async (data: CreateListingInput): Promise<Listing> => {
     const response = await api.post('/listings', data);
     return response.data;
   },
 
-  updateListing: async (id: string, data: Partial<Listing>): Promise<Listing> => {
+  updateListing: async (id: string, data: Partial<CreateListingInput>): Promise<Listing> => {
     const response = await api.patch(`/listings/${id}`, data);
     return response.data;
   },
@@ -40,14 +41,23 @@ export const listingsApi = {
     return response.data;
   },
 
-  uploadImage: async (file: File): Promise<{ url: string }> => {
+  /** Images are attached to an existing listing (max 10, 5MB, png/jpeg). */
+  uploadImage: async (listingId: string, file: File): Promise<{ imageUrl: string; thumbnailUrl: string }> => {
     const formData = new FormData();
     formData.append('file', file);
-    const response = await api.post('/upload', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
+    const response = await api.post(`/listings/${listingId}/images`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
     });
+    return response.data;
+  },
+
+  deleteImage: async (listingId: string, imageId: string): Promise<void> => {
+    await api.delete(`/listings/${listingId}/images/${imageId}`);
+  },
+
+  /** Owners may set active or sold; deletion goes through deleteListing. */
+  updateStatus: async (id: string, status: 'active' | 'sold'): Promise<Listing> => {
+    const response = await api.patch(`/listings/${id}/status`, { status });
     return response.data;
   },
 };

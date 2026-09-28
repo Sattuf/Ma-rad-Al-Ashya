@@ -1,11 +1,22 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { Logger, ValidationPipe } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import * as express from 'express';
+import helmet from 'helmet';
 
 import * as Sentry from '@sentry/node';
 import { SentryExceptionFilter } from './filters/sentry-exception.filter';
+
+const DEV_CORS_ORIGINS = ['http://localhost:3100', 'http://localhost:8080', 'http://localhost:5000'];
+
+/** Allowed browser origins from CORS_ORIGINS (comma separated); none by default in production. */
+function corsOrigins(): string[] {
+  if (process.env.CORS_ORIGINS) {
+    return process.env.CORS_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean);
+  }
+  return process.env.NODE_ENV === 'production' ? [] : DEV_CORS_ORIGINS;
+}
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bodyParser: false });
@@ -18,31 +29,24 @@ async function bootstrap() {
 
   const logger = new Logger('APIGateway');
 
-  app.use('/api/v1/promotions/webhook', express.raw({ type: 'application/json' }));
-  app.use('/api/v1/identity/kyc/webhook', express.raw({ type: 'application/json' }));
-  app.use(express.json());
-  app.use(express.urlencoded({ extended: true }));
+  // Set TRUST_PROXY_HOPS to the number of load balancers in front of the gateway. Default 0:
+  // otherwise clients could spoof X-Forwarded-For and dodge the rate limiter.
+  app.getHttpAdapter().getInstance().set('trust proxy', parseInt(process.env.TRUST_PROXY_HOPS || '0', 10));
+  // Swagger UI needs inline scripts, so CSP is relaxed outside production only.
+  app.use(helmet({ contentSecurityPolicy: process.env.NODE_ENV === 'production' ? undefined : false }));
+
+  // Webhooks are verified against the exact bytes the vendor signed, so keep them raw.
+  app.use(['/api/v1/promotions/webhook', '/api/v1/identity/kyc/webhook'], express.raw({ type: 'application/json', limit: '1mb' }));
+  app.use(express.json({ limit: '1mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
   // تفعيل CORS للتطبيقات العميلة
   app.enableCors({
-    origin: [
-      'http://localhost:3100', // Next.js dev
-      'http://localhost:8080', // Flutter web dev
-      'http://localhost:5000', // Flutter Web with fixed port
-    ],
+    origin: corsOrigins(),
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID'],
     credentials: true,
   });
-
-  // Validation pipe عام
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      transform: true,
-      forbidNonWhitelisted: true,
-    }),
-  );
 
   // إعداد Swagger
   const config = new DocumentBuilder()
@@ -55,8 +59,10 @@ async function bootstrap() {
     .addTag('Health', 'فحص صحة الخدمة')
     .addTag('Proxy', 'توجيه الطلبات للخدمات المصغرة')
     .build();
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, document);
+  if (process.env.NODE_ENV !== 'production') {
+    const document = SwaggerModule.createDocument(app, config);
+    SwaggerModule.setup('api/docs', app, document);
+  }
 
   const port = process.env.PORT ?? 3000;
   await app.listen(port);

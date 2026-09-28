@@ -1,3 +1,6 @@
+# Prometheus — scrape configuration.
+# Service /metrics endpoints are internal (the gateway refuses to forward /metrics).
+# The gateway listens publicly, so its /metrics needs the bearer token (METRICS_TOKEN).
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
@@ -7,46 +10,30 @@ scrape_configs:
     static_configs:
       - targets: ['localhost:9090']
 
+  # Request rate, errors, latency and health of every upstream, as seen by the gateway.
   - job_name: 'api-gateway'
+    authorization:
+      type: Bearer
+      credentials_file: /run/secrets/metrics_token
     static_configs:
       - targets: ['api-gateway:3000']
 
-  - job_name: 'auth-service'
+  # Process metrics (CPU, memory, event loop, GC) of each service.
+  - job_name: 'services'
     static_configs:
-      - targets: ['auth-service:3001']
-
-  - job_name: 'listings-service'
-    static_configs:
-      - targets: ['listings-service:3002']
-
-  - job_name: 'search-service'
-    static_configs:
-      - targets: ['search-service:3003']
-
-  - job_name: 'messaging-service'
-    static_configs:
-      - targets: ['messaging-service:3004']
-
-  - job_name: 'transactions-service'
-    static_configs:
-      - targets: ['transactions-service:3005']
-
-  - job_name: 'identity-service'
-    static_configs:
-      - targets: ['identity-service:3006']
-
-  - job_name: 'users-service'
-    static_configs:
-      - targets: ['users-service:3007']
-
-  - job_name: 'moderation-service'
-    static_configs:
-      - targets: ['moderation-service:3008']
-
-  - job_name: 'fraud-service'
-    static_configs:
-      - targets: ['fraud-service:8001']
-
-  - job_name: 'personalization-service'
-    static_configs:
-      - targets: ['personalization-service:8002']
+      - targets:
+          - 'auth-service:3001'
+          - 'listings-service:3002'
+          - 'search-service:3003'
+          - 'messaging-service:3004'
+          - 'transactions-service:3005'
+          - 'identity-service:3006'
+          - 'users-service:3007'
+          - 'moderation-service:3008'
+          - 'fraud-service:8001'
+          - 'personalization-service:8002'
+    relabel_configs:
+      # instance "auth-service:3001" → service="auth-service"
+      - source_labels: [__address__]
+        regex: '([^:]+):\d+'
+        target_label: service

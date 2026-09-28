@@ -1,3 +1,4 @@
+import 'package:marad_mobile/core/utils/errors.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -61,7 +62,7 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
         description: _descriptionController.text,
       );
 
-      if (context.mounted) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('تم إرسال البلاغ بنجاح'),
@@ -71,7 +72,7 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
         context.pop();
       }
     } catch (e) {
-      if (context.mounted) {
+      if (mounted) {
         if (e.toString().contains('already_reported')) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -82,7 +83,7 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('حدث خطأ: $e'),
+              content: Text(userMessage(e, 'تعذّر إرسال البلاغ. حاول مجدداً.')),
               backgroundColor: Colors.red,
             ),
           );

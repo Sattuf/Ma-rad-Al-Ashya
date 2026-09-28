@@ -31,7 +31,9 @@
     "docker:ai": "docker compose -f infra/docker-compose.yml --profile ai up -d",
     "docker:up": "docker compose -f infra/docker-compose.yml --profile all up -d",
     "docker:down": "docker compose -f infra/docker-compose.yml --profile all down",
-    "docker:prune": "docker system prune -af --volumes"
+    "docker:prune": "docker system prune -af --volumes",
+    "tokens:build": "node packages/design-tokens/build.mjs",
+    "tokens:check": "node packages/design-tokens/build.mjs --check"
   },
   "engines": {
     "node": ">=20.0.0",

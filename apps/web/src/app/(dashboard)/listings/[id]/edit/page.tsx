@@ -1,127 +1,208 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useListingDetail } from '@/hooks/useListings';
-import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
+import { z } from 'zod';
+import { ImagePlus, X } from 'lucide-react';
+import { useListingDetail } from '@/hooks/useListings';
+import { useCategories } from '@/hooks/useCategories';
 import { listingsApi } from '@/lib/api/listings';
-import { MapPin } from 'lucide-react';
-import Map from '@/components/Map';
+import { Alert, Button, Card, ErrorState, Input, Skeleton } from '@/components/ui';
+import { cn } from '@/lib/cn';
 
-const editSchema = z.object({
-  title: z.string().min(5),
-  description: z.string().min(20),
-  price: z.coerce.number().min(1),
-  type: z.enum(['sale', 'rent']),
-  propertyType: z.enum(['apartment', 'house', 'villa', 'land', 'commercial']),
-  bedrooms: z.coerce.number().optional(),
-  bathrooms: z.coerce.number().optional(),
-  area: z.coerce.number().min(1),
+const MAX_IMAGES = 10;
+
+const schema = z.object({
+  title: z.string().trim().min(5, 'اكتب عنواناً من 5 أحرف على الأقل').max(120, 'العنوان طويل جداً'),
+  categoryId: z.string().min(1, 'اختر القسم'),
+  price: z
+    .string()
+    .trim()
+    .refine((v) => Number.isFinite(Number(v)) && Number(v) > 0, 'السعر يجب أن يكون رقماً أكبر من صفر'),
+  description: z.string().trim().min(20, 'صف السلعة في 20 حرفاً على الأقل'),
 });
+type FormValues = z.infer<typeof schema>;
 
 export default function EditListingPage() {
-  const params = useParams();
+  const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const id = params.id as string;
-  const { listing, isLoading } = useListingDetail(id);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [location, setLocation] = useState({ lat: 24.7136, lng: 46.6753, address: '', city: '' });
+  const { listing, isLoading, error, mutate } = useListingDetail(id);
+  const { flat: categories } = useCategories();
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<{ tone: 'danger' | 'success'; text: string } | null>(null);
+  const [busyImage, setBusyImage] = useState<string | null>(null);
 
-  const { register, handleSubmit, reset } = useForm({
-    resolver: zodResolver(editSchema),
-  });
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isDirty },
+  } = useForm<FormValues>({ resolver: zodResolver(schema) });
 
   useEffect(() => {
     if (listing) {
       reset({
         title: listing.title,
+        categoryId: listing.categoryId ?? '',
+        price: String(listing.price),
         description: listing.description,
-        price: listing.price,
-        type: listing.type,
-        propertyType: listing.propertyType,
-        bedrooms: listing.bedrooms || 0,
-        bathrooms: listing.bathrooms || 0,
-        area: listing.area,
       });
-      setLocation(listing.location);
     }
   }, [listing, reset]);
 
-  const onSubmit = async (data: any) => {
-    setIsSubmitting(true);
+  const onSubmit = async (values: FormValues) => {
+    setSaving(true);
+    setMessage(null);
     try {
-      await listingsApi.updateListing(id, { ...data, location });
+      await listingsApi.updateListing(id, {
+        title: values.title,
+        description: values.description,
+        price: Number(values.price),
+        categoryId: values.categoryId,
+      });
+      await mutate();
       router.push('/my-listings');
-    } catch (error) {
-      alert('حدث خطأ أثناء التعديل');
+    } catch {
+      setMessage({ tone: 'danger', text: 'تعذّر حفظ التعديلات. لم يتغيّر شيء، حاول مجدداً.' });
     } finally {
-      setIsSubmitting(false);
+      setSaving(false);
     }
   };
 
-  if (isLoading) return <div className="p-8 text-center">جاري التحميل...</div>;
+  const addImages = async (files: FileList | null) => {
+    if (!files?.length || !listing) return;
+    const room = MAX_IMAGES - listing.images.length;
+    setMessage(null);
+    for (const file of Array.from(files).slice(0, room)) {
+      setBusyImage('upload');
+      try {
+        await listingsApi.uploadImage(id, file);
+      } catch {
+        setMessage({ tone: 'danger', text: `تعذّر رفع ${file.name}. تأكد أنها JPG أو PNG وأصغر من 5 ميغابايت.` });
+        break;
+      }
+    }
+    setBusyImage(null);
+    await mutate();
+  };
+
+  const removeImage = async (imageId: string) => {
+    setBusyImage(imageId);
+    try {
+      await listingsApi.deleteImage(id, imageId);
+      await mutate();
+    } catch {
+      setMessage({ tone: 'danger', text: 'تعذّر حذف الصورة، حاول مجدداً.' });
+    } finally {
+      setBusyImage(null);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <main className="mx-auto max-w-2xl space-y-4 px-4 py-8">
+        <Skeleton className="h-8 w-1/2" />
+        <Skeleton className="h-96 w-full" />
+      </main>
+    );
+  }
+  if (error || !listing) {
+    return (
+      <main className="mx-auto max-w-2xl px-4 py-8">
+        <Card>
+          <ErrorState error={error} title="تعذّر تحميل الإعلان" onRetry={() => mutate()} />
+        </Card>
+      </main>
+    );
+  }
+
+  const images = [...listing.images].sort((a, b) => a.sortOrder - b.sortOrder);
 
   return (
-    <div className="max-w-3xl mx-auto py-8 px-4">
-      <h1 className="text-2xl font-bold text-gray-900 mb-8">تعديل العقار</h1>
-      
-      <form onSubmit={handleSubmit(onSubmit)} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-6">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">العنوان</label>
-          <input {...register('title')} className="w-full border p-3 rounded-lg" />
-        </div>
-        
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">السعر</label>
-            <input type="number" {...register('price')} className="w-full border p-3 rounded-lg" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">المساحة</label>
-            <input type="number" {...register('area')} className="w-full border p-3 rounded-lg" />
-          </div>
-        </div>
+    <main className="mx-auto max-w-2xl px-4 py-8">
+      <h1 className="mb-6 text-2xl font-bold text-fg">تعديل الإعلان</h1>
+      {message && <Alert tone={message.tone} className="mb-4">{message.text}</Alert>}
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">الوصف</label>
-          <textarea {...register('description')} rows={4} className="w-full border p-3 rounded-lg" />
-        </div>
+      <Card className="mb-6 p-6">
+        <h2 className="mb-3 font-semibold text-fg">الصور ({images.length}/{MAX_IMAGES})</h2>
+        <ul className="grid grid-cols-3 gap-3 sm:grid-cols-4">
+          {images.map((img, i) => (
+            <li key={img.id} className="relative aspect-square overflow-hidden rounded-control border border-line">
+              <img src={img.thumbnailUrl} alt={`صورة ${i + 1}`} className="h-full w-full object-cover" />
+              {i === 0 && <span className="absolute bottom-1 start-1 rounded-pill bg-primary px-2 text-xs text-on-primary">الغلاف</span>}
+              <button
+                type="button"
+                onClick={() => removeImage(img.id)}
+                disabled={busyImage !== null}
+                aria-label={`حذف الصورة ${i + 1}`}
+                className="absolute top-1 end-1 inline-flex h-8 w-8 items-center justify-center rounded-pill bg-surface/90 text-fg disabled:opacity-50"
+              >
+                <X className="h-4 w-4" aria-hidden />
+              </button>
+            </li>
+          ))}
+          {images.length < MAX_IMAGES && (
+            <li>
+              <label
+                className={cn(
+                  'flex aspect-square cursor-pointer flex-col items-center justify-center gap-1 rounded-control border-2 border-dashed border-line text-fg-muted hover:border-line-strong',
+                  busyImage && 'pointer-events-none opacity-60',
+                )}
+              >
+                <ImagePlus className="h-6 w-6" aria-hidden />
+                <span className="text-xs">{busyImage === 'upload' ? 'جارٍ الرفع…' : 'إضافة صور'}</span>
+                <input type="file" accept="image/jpeg,image/png" multiple className="sr-only" onChange={(e) => addImages(e.target.files)} />
+              </label>
+            </li>
+          )}
+        </ul>
+      </Card>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">المدينة</label>
-            <input 
-              value={location.city}
-              onChange={e => setLocation({ ...location, city: e.target.value })}
-              className="w-full border p-3 rounded-lg" 
+      <Card className="p-6">
+        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5" noValidate>
+          <Input label="العنوان" {...register('title')} error={errors.title?.message} />
+          <div className="flex flex-col gap-1">
+            <label htmlFor="category" className="text-sm font-medium text-fg">القسم</label>
+            <select
+              id="category"
+              {...register('categoryId')}
+              className={cn(
+                'min-h-11 rounded-control border bg-surface px-3 text-fg focus:outline-none focus:ring-2 focus:ring-focus-ring',
+                errors.categoryId ? 'border-danger' : 'border-line',
+              )}
+            >
+              <option value="" disabled>اختر القسم</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {'  '.repeat(c.depth)}
+                  {c.name}
+                </option>
+              ))}
+            </select>
+            {errors.categoryId && <p className="text-xs text-danger">{errors.categoryId.message}</p>}
+          </div>
+          <Input label={`السعر (${listing.currency})`} type="number" inputMode="decimal" min={0} step="0.01" {...register('price')} error={errors.price?.message} />
+          <div className="flex flex-col gap-1">
+            <label htmlFor="description" className="text-sm font-medium text-fg">الوصف</label>
+            <textarea
+              id="description"
+              rows={6}
+              {...register('description')}
+              className={cn(
+                'rounded-control border bg-surface px-4 py-3 text-fg focus:outline-none focus:ring-2 focus:ring-focus-ring',
+                errors.description ? 'border-danger' : 'border-line',
+              )}
             />
+            {errors.description && <p className="text-xs text-danger">{errors.description.message}</p>}
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">العنوان / الحي</label>
-            <input 
-              value={location.address}
-              onChange={e => setLocation({ ...location, address: e.target.value })}
-              className="w-full border p-3 rounded-lg" 
-            />
+          <div className="flex justify-end gap-3 border-t border-line pt-5">
+            <Button variant="ghost" onClick={() => router.back()}>إلغاء</Button>
+            <Button type="submit" loading={saving} disabled={!isDirty}>حفظ التعديلات</Button>
           </div>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">تحديث الموقع</label>
-          <Map position={location} onPositionChange={(pos) => setLocation(prev => ({ ...prev, ...pos }))} />
-        </div>
-
-        <div className="flex justify-end gap-4 pt-4 border-t">
-          <button type="button" onClick={() => router.back()} className="px-6 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">
-            إلغاء
-          </button>
-          <button type="submit" disabled={isSubmitting} className="px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary/90">
-            {isSubmitting ? 'جاري الحفظ...' : 'حفظ التعديلات'}
-          </button>
-        </div>
-      </form>
-    </div>
+        </form>
+      </Card>
+    </main>
   );
 }

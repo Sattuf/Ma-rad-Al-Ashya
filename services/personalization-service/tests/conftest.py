@@ -1,3 +1,8 @@
+import os
+
+# Test-only secret; must be set before app.core.config is imported.
+os.environ.setdefault("JWT_ACCESS_SECRET", "test-access-secret-not-for-production-use")
+
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 

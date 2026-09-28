@@ -1,24 +1,26 @@
-# Marad Load Tests
+# اختبارات الحمل — Load Tests (k6)
 
-This directory contains k6 load tests for evaluating the performance of Marad services.
+الأهداف (المرحلة 2 من `docs/REBUILD_PLAN.md`): **p95 < 300ms** و**أخطاء < 1%** عند 500 طلب/ثانية على تصفح الإعلانات.
+كل سيناريو يحدد عتبات (thresholds)، فيفشل `k6` بكود خروج غير صفري إذا لم تتحقق الأهداف.
 
-## Prerequisites
-
-1. Install [k6](https://k6.io/docs/get-started/installation/).
-2. Ensure the Marad application is running locally via Docker Compose or in your target environment.
-
-## Running Tests
-
-To run a specific test, execute:
+## التشغيل
 
 ```bash
-k6 run search-load.js
-k6 run listings-browse-load.js
-k6 run auth-load.js
+# محلياً بعد docker compose up
+k6 run infra/load-tests/listings-browse-load.js
+# على بيئة staging
+k6 run -e BASE_URL=https://staging.example.com infra/load-tests/search-load.js
 ```
 
-## Scenarios
+أو من GitHub Actions: **Actions → Load tests → Run workflow** مع إدخال `base_url`.
 
-- `search-load.js`: Simulates concurrent users performing search queries.
-- `listings-browse-load.js`: Simulates users browsing listings with ramp-up and ramp-down stages.
-- `auth-load.js`: Simulates login requests to the auth service.
+> ⚠️ لا تشغّل هذه الاختبارات على الإنتاج. حد الطلبات في البوابة (`RATE_LIMIT_PER_MINUTE`) قد يحتاج رفعاً مؤقتاً على staging،
+> وإلا ستقيس اختبارات الحمل رد 429 بدلاً من أداء الخدمة.
+
+## السيناريوهات
+
+| الملف | ماذا يقيس |
+|---|---|
+| `listings-browse-load.js` | تصفح مجهول: صفحات القوائم (كاش البوابة + الفهرس) وتفاصيل الإعلان، بمعدل وصول ثابت حتى 500 RPS |
+| `search-load.js` | البحث عبر Elasticsearch حتى 150 مستخدماً متزامناً |
+| `auth-load.js` | أن محاولات الدخول الخاطئة تُرفض بـ 401/429 ولا تُسقط الخدمة (لا 5xx) |

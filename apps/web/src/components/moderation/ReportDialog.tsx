@@ -1,9 +1,9 @@
 'use client';
 
+import { errorMessage } from '@/lib/errors';
 import { useState } from 'react';
 import { X, AlertTriangle, Loader2 } from 'lucide-react';
 import { reportsApi } from '@/lib/api/reports';
-import { isAxiosError } from 'axios';
 
 interface ReportDialogProps {
   targetType: 'listing' | 'user';
@@ -42,11 +42,7 @@ export function ReportDialog({ targetType, targetId, onClose }: ReportDialogProp
       });
       setSuccess(true);
     } catch (err) {
-      if (isAxiosError(err) && err.response?.status === 409) {
-        setError('لقد قمت بالإبلاغ عن هذا المحتوى مسبقاً');
-      } else {
-        setError('حدث خطأ أثناء إرسال البلاغ. حاول مرة أخرى.');
-      }
+      setError(errorMessage(err, 'تعذّر إرسال البلاغ. حاول مجدداً.'));
     } finally {
       setIsSubmitting(false);
     }
@@ -54,7 +50,7 @@ export function ReportDialog({ targetType, targetId, onClose }: ReportDialogProp
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden" dir="rtl">
+      <div className="bg-surface rounded-xl shadow-xl w-full max-w-md overflow-hidden" dir="rtl">
         <div className="flex justify-between items-center p-4 border-b border-gray-100">
           <div className="flex items-center gap-2 text-red-600">
             <AlertTriangle size={20} />
@@ -116,9 +112,9 @@ export function ReportDialog({ targetType, targetId, onClose }: ReportDialogProp
                 onChange={(e) => setDescription(e.target.value.slice(0, 500))}
                 rows={4}
                 className="w-full border border-gray-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary resize-none"
-                placeholder="يرجى تزويدنا بمزيد من التفاصيل..."
+                placeholder="ماذا لاحظت؟ التفاصيل تساعد فريقنا على المراجعة بسرعة."
               />
-              <div className="text-left mt-1 text-xs text-gray-500">
+              <div className="text-end mt-1 text-xs text-gray-500">
                 {description.length}/500
               </div>
             </div>

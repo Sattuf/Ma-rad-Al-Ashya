@@ -8,7 +8,8 @@ class Settings(BaseSettings):
     MONGODB_URI: str = "mongodb://marad_user:marad_dev_password@localhost:27017/marad_db?authSource=admin"
     REDIS_URL: str = ""
     ELASTICSEARCH_URL: str = "http://localhost:9200"
-    JWT_ACCESS_SECRET: str = "dev-jwt-secret-change-in-production"
+    # Required: no default, a committed secret is a public secret.
+    JWT_ACCESS_SECRET: str
 
     model_config = {
         "env_file": ".env",

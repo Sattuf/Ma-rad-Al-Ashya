@@ -3,10 +3,10 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { ReportsService } from './reports.service';
 import { Report } from './entities/report.entity';
 import { ReportCount } from './entities/report-count.entity';
-import { ConflictException, BadRequestException } from '@nestjs/common';
+import { ConflictException, BadRequestException, BadGatewayException } from '@nestjs/common';
 import { getQueueToken } from '@nestjs/bull';
 import { HttpService } from '@nestjs/axios';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 
 describe('ReportsService', () => {
   let service: ReportsService;
@@ -93,7 +93,7 @@ describe('ReportsService', () => {
 
   describe('reviewReport', () => {
     it('should update report status and action_taken', async () => {
-      mockReportsRepo.findOne.mockResolvedValueOnce({ id: 'report1', target_type: 'user', target_id: 'user2' });
+      mockReportsRepo.findOne.mockResolvedValueOnce({ id: 'report1', status: 'pending', target_type: 'user', target_id: 'user2' });
       mockReportsRepo.save.mockResolvedValue({ id: 'report1', status: 'resolved' });
 
       mockReportCountsRepo.findOne.mockResolvedValueOnce({ pending_count: 1 });
@@ -103,6 +103,42 @@ describe('ReportsService', () => {
       expect(mockReportsRepo.save).toHaveBeenCalled();
       expect(mockReportCountsRepo.save).toHaveBeenCalled();
       expect(mockHttpService.put).toHaveBeenCalled();
+    });
+  });
+
+  describe('reviewReport', () => {
+    const pendingListingReport = () => ({ id: 'r1', status: 'pending', target_type: 'listing', target_id: 'l1' });
+
+    it('does not record a removal when the listing could not be removed', async () => {
+      mockReportsRepo.findOne.mockResolvedValue(pendingListingReport());
+      mockHttpService.put.mockReturnValueOnce(throwError(() => new Error('ECONNREFUSED')));
+
+      await expect(service.reviewReport('r1', { status: 'resolved', action_taken: 'listing_removed' }, 'admin')).rejects.toThrow(BadGatewayException);
+      expect(mockReportsRepo.save).not.toHaveBeenCalled();
+      expect(mockReportCountsRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('leaves the queue count alone when re-reviewing a closed report', async () => {
+      mockReportsRepo.findOne.mockResolvedValue({ ...pendingListingReport(), status: 'resolved' });
+      mockReportsRepo.save.mockImplementation(async (r) => r);
+      mockReportCountsRepo.findOne.mockResolvedValue({ pending_count: 3 });
+
+      await service.reviewReport('r1', { status: 'dismissed', action_taken: 'none' }, 'admin');
+      expect(mockReportCountsRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('closing a report that was only "reviewed" still leaves the queue', async () => {
+      mockReportsRepo.findOne.mockResolvedValue({ ...pendingListingReport(), status: 'reviewed' });
+      mockReportsRepo.save.mockImplementation(async (r) => r);
+      mockReportCountsRepo.findOne.mockResolvedValue({ pending_count: 2 });
+
+      await service.reviewReport('r1', { status: 'dismissed', action_taken: 'none' }, 'admin');
+      expect(mockReportCountsRepo.save).toHaveBeenCalledWith(expect.objectContaining({ pending_count: 1 }));
+    });
+
+    it('rejects unknown statuses and actions', async () => {
+      await expect(service.reviewReport('r1', { status: 'approved' }, 'admin')).rejects.toThrow(BadRequestException);
+      await expect(service.reviewReport('r1', { status: 'resolved', action_taken: 'delete_everything' }, 'admin')).rejects.toThrow(BadRequestException);
     });
   });
 });

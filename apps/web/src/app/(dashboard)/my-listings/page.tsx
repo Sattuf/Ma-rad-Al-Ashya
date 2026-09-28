@@ -1,176 +1,158 @@
 'use client';
 
-import { useMyListings } from '@/hooks/useListings';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Plus, Edit2, Trash2, Eye, Sparkles } from 'lucide-react';
+import { Eye, ImageOff, Pencil, Plus, Rocket, Trash2 } from 'lucide-react';
+import { useMyListings } from '@/hooks/useListings';
 import { listingsApi } from '@/lib/api/listings';
-import { useState, useEffect } from 'react';
-import { promotionsApi, Promotion } from '@/lib/api/promotions';
+import { promotionsApi, type Promotion } from '@/lib/api/promotions';
+import { Alert, Badge, Button, Card, EmptyState, ErrorState, Skeleton } from '@/components/ui';
+import { coverImage, formatPrice, type Listing } from '@/types/listing';
+
+const STATUS: Record<Listing['status'], { label: string; tone: 'success' | 'neutral' | 'warning' | 'danger' }> = {
+  active: { label: 'منشور', tone: 'success' },
+  sold: { label: 'تم البيع', tone: 'neutral' },
+  expired: { label: 'منتهي', tone: 'warning' },
+  deleted: { label: 'محذوف', tone: 'danger' },
+};
 
 export default function MyListingsPage() {
-  const { listings, isLoading, mutate } = useMyListings();
+  const { listings, isLoading, error, mutate } = useMyListings();
   const [promotions, setPromotions] = useState<Promotion[]>([]);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
-    async function loadPromotions() {
-      try {
-        const data = await promotionsApi.getMyPromotions();
-        setPromotions(data);
-      } catch (err) {
-        console.error('Error fetching promotions:', err);
-      }
-    }
-    loadPromotions();
-  }, [listings]);
+    promotionsApi.getMyPromotions().then(setPromotions).catch(() => setPromotions([]));
+  }, [listings.length]);
 
-  const handleDelete = async (id: string) => {
-    if (confirm('هل أنت متأكد من حذف هذا العقار؟')) {
-      try {
-        await listingsApi.deleteListing(id);
-        mutate();
-      } catch (error) {
-        alert('حدث خطأ أثناء الحذف');
-      }
+  const remove = async (id: string) => {
+    setBusyId(id);
+    setNotice(null);
+    try {
+      await listingsApi.deleteListing(id);
+      await mutate();
+    } catch {
+      setNotice('تعذّر حذف الإعلان، حاول مجدداً.');
+    } finally {
+      setBusyId(null);
+      setConfirmId(null);
+    }
+  };
+
+  const markSold = async (id: string) => {
+    setBusyId(id);
+    try {
+      await listingsApi.updateStatus(id, 'sold');
+      await mutate();
+    } catch {
+      setNotice('تعذّر تحديث حالة الإعلان، حاول مجدداً.');
+    } finally {
+      setBusyId(null);
     }
   };
 
   return (
-    <div className="container mx-auto px-4 py-8" dir="rtl">
-      <div className="flex justify-between items-center mb-8 text-right">
+    <main className="container mx-auto px-4 py-8">
+      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">عقاراتي</h1>
-          <p className="text-gray-500">إدارة العقارات الخاصة بك</p>
+          <h1 className="text-2xl font-bold text-fg">إعلاناتي</h1>
+          <p className="text-fg-muted">تابع إعلاناتك وعدّلها أو علّمها كمباعة.</p>
         </div>
-        <Link 
-          href="/listings/create" 
-          className="flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors"
-        >
-          <Plus size={20} />
-          <span>إضافة عقار جديد</span>
+        <Link href="/listings/create" className="inline-flex min-h-11 items-center gap-2 rounded-control bg-primary px-4 font-semibold text-on-primary hover:bg-primary-hover">
+          <Plus className="h-5 w-5" aria-hidden /> أضف إعلاناً
         </Link>
       </div>
 
+      {notice && <Alert tone="danger" className="mb-4">{notice}</Alert>}
+
       {isLoading ? (
-        <div className="space-y-4">
-          {[1, 2, 3].map(i => (
-            <div key={i} className="h-32 bg-gray-100 animate-pulse rounded-xl" />
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-28 w-full" />
           ))}
         </div>
+      ) : error ? (
+        <Card>
+          <ErrorState error={error} title="تعذّر تحميل إعلاناتك" onRetry={() => mutate()} />
+        </Card>
       ) : listings.length === 0 ? (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
-          <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Plus size={32} className="text-gray-400" />
-          </div>
-          <h3 className="text-lg font-bold text-gray-900 mb-2">ليس لديك أي عقارات</h3>
-          <p className="text-gray-500 mb-6">ابدأ بإضافة عقارك الأول الآن ليصل إلى آلاف المهتمين</p>
-          <Link 
-            href="/listings/create" 
-            className="inline-flex items-center gap-2 bg-primary text-white px-6 py-3 rounded-lg font-medium hover:bg-primary/90 transition-colors"
-          >
-            <Plus size={20} />
-            <span>إضافة عقار</span>
-          </Link>
-        </div>
+        <Card>
+          <EmptyState
+            icon={<Plus className="h-6 w-6" aria-hidden />}
+            title="لم تنشر أي إعلان بعد"
+            description="صوّر ما لا تحتاجه، واكتب سعراً عادلاً، ودع المشترين يصلون إليك."
+            action={
+              <Link href="/listings/create" className="inline-flex min-h-11 items-center gap-2 rounded-control bg-primary px-5 font-semibold text-on-primary hover:bg-primary-hover">
+                أضف إعلانك الأول
+              </Link>
+            }
+          />
+        </Card>
       ) : (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-          <div className="overflow-x-auto font-sans text-right">
-            <table className="w-full text-right" dir="rtl">
-              <thead className="bg-gray-50 border-b border-gray-200 text-gray-500 text-sm">
-                <tr>
-                  <th className="px-6 py-4 font-medium">العقار</th>
-                  <th className="px-6 py-4 font-medium">النوع</th>
-                  <th className="px-6 py-4 font-medium">السعر</th>
-                  <th className="px-6 py-4 font-medium">الحالة</th>
-                  <th className="px-6 py-4 font-medium text-left">الإجراءات</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {listings.map(listing => {
-                  const isPromoted = promotions.some(
-                    promo => promo.listingId === listing.id && promo.status === 'active'
-                  );
+        <ul className="space-y-3">
+          {listings.map((listing) => {
+            const promoted = promotions.some((p) => p.listingId === listing.id && p.status === 'active');
+            const image = coverImage(listing);
+            const status = STATUS[listing.status];
+            return (
+              <li key={listing.id}>
+                <Card className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center">
+                  <div className="flex min-w-0 flex-1 items-center gap-4">
+                    {image ? (
+                      <img src={image} alt="" className="h-20 w-20 shrink-0 rounded-control object-cover" />
+                    ) : (
+                      <span className="flex h-20 w-20 shrink-0 items-center justify-center rounded-control bg-surface-muted text-fg-subtle">
+                        <ImageOff className="h-6 w-6" aria-hidden />
+                      </span>
+                    )}
+                    <div className="min-w-0">
+                      <div className="mb-1 flex flex-wrap items-center gap-2">
+                        <Badge tone={status.tone}>{status.label}</Badge>
+                        {promoted && <Badge tone="warning">مروَّج</Badge>}
+                      </div>
+                      <Link href={`/listings/${listing.id}`} className="line-clamp-1 font-semibold text-fg hover:text-primary">
+                        {listing.title}
+                      </Link>
+                      <p className="text-sm text-fg-muted">
+                        {formatPrice(listing.price, listing.currency)} · <Eye className="inline h-3.5 w-3.5" aria-hidden /> {listing.viewsCount.toLocaleString('ar')}
+                      </p>
+                    </div>
+                  </div>
 
-                  return (
-                    <tr key={listing.id} className="hover:bg-gray-50/50 transition-colors">
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-4">
-                          <img 
-                            src={listing.images[0] || 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=200&q=80'} 
-                            alt="" 
-                            className="w-16 h-16 rounded-lg object-cover"
-                          />
-                          <div>
-                            <div className="flex items-center gap-2 mb-1">
-                              <p className="font-semibold text-gray-900">{listing.title}</p>
-                              {isPromoted && (
-                                <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-800 text-xs px-2 py-0.5 rounded-full font-bold">
-                                  <span>مروّج 🚀</span>
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-sm text-gray-500">{listing.location.city}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-gray-600">
-                        {listing.type === 'sale' ? 'للبيع' : 'للإيجار'} - {listing.propertyType}
-                      </td>
-                      <td className="px-6 py-4 font-semibold text-primary">
-                        {listing.price.toLocaleString()} ر.س
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex flex-col gap-1.5 items-start">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            listing.status === 'active' ? 'bg-green-100 text-green-800' :
-                            listing.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                            'bg-gray-100 text-gray-800'
-                          }`}>
-                            {listing.status === 'active' ? 'نشط' : listing.status === 'pending' ? 'قيد المراجعة' : listing.status}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center justify-end gap-2">
-                          {listing.status === 'active' && !isPromoted && (
-                            <Link
-                              href={`/listings/${listing.id}/promote`}
-                              className="inline-flex items-center gap-1 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white text-xs px-3 py-1.5 rounded-lg transition-all font-bold shadow-sm"
-                            >
-                              <Sparkles size={12} />
-                              <span>ترويج</span>
-                            </Link>
-                          )}
-                          <Link 
-                            href={`/listings/${listing.id}`}
-                            className="p-2 text-gray-400 hover:text-primary hover:bg-primary/5 rounded-lg transition-colors"
-                            title="عرض"
-                          >
-                            <Eye size={18} />
-                          </Link>
-                          <Link 
-                            href={`/listings/${listing.id}/edit`}
-                            className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
-                            title="تعديل"
-                          >
-                            <Edit2 size={18} />
-                          </Link>
-                          <button 
-                            onClick={() => handleDelete(listing.id)}
-                            className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                            title="حذف"
-                          >
-                            <Trash2 size={18} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
+                  {confirmId === listing.id ? (
+                    <div className="flex flex-wrap items-center gap-2" role="alertdialog" aria-label="تأكيد الحذف">
+                      <span className="text-sm text-fg">حذف الإعلان نهائياً؟</span>
+                      <Button size="sm" variant="danger" loading={busyId === listing.id} onClick={() => remove(listing.id)}>حذف</Button>
+                      <Button size="sm" variant="ghost" onClick={() => setConfirmId(null)}>تراجع</Button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap items-center gap-2">
+                      {listing.status === 'active' && !promoted && (
+                        <Link href={`/listings/${listing.id}/promote`} className="inline-flex min-h-11 items-center gap-1 rounded-control px-3 text-sm font-medium text-primary hover:bg-primary-soft">
+                          <Rocket className="h-4 w-4" aria-hidden /> ترويج
+                        </Link>
+                      )}
+                      {listing.status === 'active' && (
+                        <Button size="sm" variant="secondary" loading={busyId === listing.id} onClick={() => markSold(listing.id)}>
+                          تم البيع
+                        </Button>
+                      )}
+                      <Link href={`/listings/${listing.id}/edit`} aria-label={`تعديل ${listing.title}`} className="inline-flex h-11 w-11 items-center justify-center rounded-control text-fg-muted hover:bg-surface-muted hover:text-fg">
+                        <Pencil className="h-4 w-4" aria-hidden />
+                      </Link>
+                      <button type="button" onClick={() => setConfirmId(listing.id)} aria-label={`حذف ${listing.title}`} className="inline-flex h-11 w-11 items-center justify-center rounded-control text-fg-muted hover:bg-danger-soft hover:text-danger">
+                        <Trash2 className="h-4 w-4" aria-hidden />
+                      </button>
+                    </div>
+                  )}
+                </Card>
+              </li>
+            );
+          })}
+        </ul>
       )}
-    </div>
+    </main>
   );
 }

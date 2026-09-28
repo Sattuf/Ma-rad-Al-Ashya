@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:marad_mobile/core/network/api_client.dart';
@@ -22,7 +23,7 @@ class FCMService {
     );
 
     if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-      print('User granted permission');
+      debugPrint('User granted permission');
     }
 
     // Initialize local notifications for foreground display
@@ -88,7 +89,7 @@ class FCMService {
     try {
       await _apiClient.dio.put('/users/fcm-token', data: {'fcm_token': token});
     } catch (e) {
-      print('Error sending FCM token to server: $e');
+      debugPrint('Error sending FCM token to server: $e');
     }
   }
 }

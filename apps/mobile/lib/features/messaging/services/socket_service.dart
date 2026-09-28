@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:socket_io_client/socket_io_client.dart' as IO;
+import 'package:socket_io_client/socket_io_client.dart' as io;
 import 'package:marad_mobile/core/storage/secure_storage.dart';
+import 'package:marad_mobile/core/network/api_client.dart';
 import 'dart:async';
 
 final socketServiceProvider = Provider<SocketService>((ref) {
@@ -8,7 +10,7 @@ final socketServiceProvider = Provider<SocketService>((ref) {
 });
 
 class SocketService {
-  IO.Socket? socket;
+  io.Socket? socket;
   final SecureStorage _storage = SecureStorage();
   
   final _messageController = StreamController<Map<String, dynamic>>.broadcast();
@@ -25,7 +27,7 @@ class SocketService {
 
     final token = await _storage.getAccessToken();
 
-    socket = IO.io('http://10.0.2.2:3004', IO.OptionBuilder()
+    socket = io.io(ApiClient.socketUrl,io.OptionBuilder()
       .setTransports(['websocket'])
       .disableAutoConnect()
       .setExtraHeaders({'Authorization': 'Bearer $token'})
@@ -34,11 +36,11 @@ class SocketService {
     socket!.connect();
 
     socket!.onConnect((_) {
-      print('Socket connected');
+      debugPrint('Socket connected');
     });
 
     socket!.onDisconnect((_) {
-      print('Socket disconnected');
+      debugPrint('Socket disconnected');
     });
 
     socket!.on('receive_message', (data) {

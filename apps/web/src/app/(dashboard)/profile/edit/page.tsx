@@ -1,5 +1,7 @@
 'use client';
 
+import { Alert } from '@/components/ui';
+import { errorMessage } from '@/lib/errors';
 import React, { useEffect, useState, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -13,9 +15,7 @@ import { userApi } from '@/lib/api/users';
 
 const profileSchema = z.object({
   name: z.string().min(2, 'الاسم يجب أن يكون أكثر من حرفين'),
-  email: z.string().email('البريد الإلكتروني غير صحيح'),
-  phone: z.string().min(9, 'رقم الهاتف قصير جداً'),
-  location: z.string().optional(),
+  location: z.string().max(100, 'اسم المدينة طويل جداً').optional(),
 });
 
 type ProfileFormValues = z.infer<typeof profileSchema>;
@@ -27,6 +27,8 @@ export default function EditProfilePage() {
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [email, setEmail] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
 
   const {
     register,
@@ -40,15 +42,13 @@ export default function EditProfilePage() {
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const data = await userApi.getProfile();
-        const user = data.user || data;
-        setValue('name', user.name || '');
-        setValue('email', user.email || '');
-        setValue('phone', user.phone || '');
-        setValue('location', user.location || '');
+        const user = await userApi.getProfile();
+        setValue('name', user.name);
+        setValue('location', user.location);
+        setEmail(user.email);
         if (user.avatar) setAvatarPreview(user.avatar);
       } catch (error) {
-        console.error('Failed to fetch profile', error);
+        setFormError(errorMessage(error, 'تعذّر تحميل بياناتك الحالية. حاول مجدداً.'));
       } finally {
         setLoading(false);
       }
@@ -74,8 +74,8 @@ export default function EditProfilePage() {
       };
       const compressedFile = await imageCompression(file, options);
       setAvatarFile(compressedFile);
-    } catch (error) {
-      console.error('Error compressing image:', error);
+    } catch {
+      setFormError('تعذّر تجهيز الصورة. جرّب صورة JPG أو PNG أخرى.');
     } finally {
       setUploadingAvatar(false);
     }
@@ -98,7 +98,7 @@ export default function EditProfilePage() {
       // Upload avatar first if changed
       if (avatarFile) {
         const formData = new FormData();
-        formData.append('avatar', avatarFile);
+        formData.append('file', avatarFile);
         await userApi.uploadAvatar(formData);
       }
 
@@ -106,8 +106,7 @@ export default function EditProfilePage() {
       await userApi.updateProfile(data);
       router.push('/profile');
     } catch (error) {
-      console.error('Failed to update profile', error);
-      // Handle error state here
+      setFormError(errorMessage(error, 'تعذّر حفظ التعديلات. لم يتغيّر شيء؛ حاول مجدداً.'));
     } finally {
       setSaving(false);
     }
@@ -116,24 +115,25 @@ export default function EditProfilePage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+        <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-8">
+    <div className="bg-surface rounded-3xl shadow-sm border border-gray-100 p-8">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900">تعديل البيانات</h1>
         <p className="text-gray-500 mt-1">قم بتحديث معلومات حسابك الشخصية</p>
       </div>
 
+      {formError && <Alert tone="danger" className="mb-6">{formError}</Alert>}
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
         {/* Avatar Upload */}
         <div className="flex flex-col items-center sm:flex-row sm:items-start gap-6 pb-8 border-b border-gray-100">
           <div {...getRootProps()} className="relative cursor-pointer group">
             <input {...getInputProps()} />
-            <div className={`w-32 h-32 rounded-full border-4 ${isDragActive ? 'border-blue-500' : 'border-gray-50'} bg-gray-100 overflow-hidden relative shadow-sm transition-colors`}>
+            <div className={`w-32 h-32 rounded-full border-4 ${isDragActive ? 'border-primary' : 'border-gray-50'} bg-gray-100 overflow-hidden relative shadow-sm transition-colors`}>
               {avatarPreview ? (
                 <Image
                   src={avatarPreview}
@@ -170,34 +170,25 @@ export default function EditProfilePage() {
             <input
               {...register('name')}
               type="text"
-              className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors outline-none text-gray-900"
+              className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-brand-600/20 focus:border-primary transition-colors outline-none text-gray-900"
               placeholder="أدخل اسمك الكامل"
             />
             {errors.name && <p className="text-red-500 text-sm mt-1">{errors.name.message}</p>}
           </div>
 
           <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700">البريد الإلكتروني</label>
+            <label htmlFor="account-email" className="block text-sm font-medium text-gray-700">البريد الإلكتروني</label>
             <input
-              {...register('email')}
-              type="email"
-              className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors outline-none text-gray-900"
-              placeholder="example@domain.com"
+              id="account-email"
+              value={email}
+              readOnly
+              aria-describedby="account-email-hint"
+              className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-100 text-gray-600 cursor-not-allowed"
               dir="ltr"
             />
-            {errors.email && <p className="text-red-500 text-sm mt-1">{errors.email.message}</p>}
-          </div>
-
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700">رقم الهاتف</label>
-            <input
-              {...register('phone')}
-              type="tel"
-              className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors outline-none text-gray-900 text-right"
-              placeholder="+966 5X XXX XXXX"
-              dir="ltr"
-            />
-            {errors.phone && <p className="text-red-500 text-sm mt-1">{errors.phone.message}</p>}
+            <p id="account-email-hint" className="text-xs text-gray-500">
+              البريد ورقم الهاتف مرتبطان بتسجيل الدخول، ويتطلب تغييرهما التحقق منهما.
+            </p>
           </div>
 
           <div className="space-y-2">
@@ -205,7 +196,7 @@ export default function EditProfilePage() {
             <input
               {...register('location')}
               type="text"
-              className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors outline-none text-gray-900"
+              className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-brand-600/20 focus:border-primary transition-colors outline-none text-gray-900"
               placeholder="المدينة، الدولة"
             />
             {errors.location && <p className="text-red-500 text-sm mt-1">{errors.location.message}</p>}
@@ -216,7 +207,7 @@ export default function EditProfilePage() {
           <button
             type="submit"
             disabled={saving || uploadingAvatar}
-            className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-8 py-3 rounded-xl hover:opacity-90 transition-opacity font-medium disabled:opacity-70 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 bg-gradient-to-r from-brand-700 to-brand-700 text-white px-8 py-3 rounded-xl hover:opacity-90 transition-opacity font-medium disabled:opacity-70 disabled:cursor-not-allowed"
           >
             {saving ? (
               <Loader2 className="w-5 h-5 animate-spin" />

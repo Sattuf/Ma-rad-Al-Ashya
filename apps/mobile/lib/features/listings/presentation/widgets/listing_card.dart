@@ -1,3 +1,4 @@
+import 'package:marad_mobile/core/utils/money.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -74,7 +75,7 @@ class ListingCard extends ConsumerWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '${listing.price} ريال',
+                        formatPrice(listing.price, listing.currency),
                         style: TextStyle(
                           fontSize: 16,
                           color: Theme.of(context).primaryColor,

@@ -8,6 +8,15 @@ import Redis from 'ioredis';
 import { NotificationsService } from '../notifications/notifications.service';
 import { HttpService } from '@nestjs/axios';
 import { lastValueFrom } from 'rxjs';
+import { internalHeaders } from '../common/security';
+
+const MAX_PAGE_SIZE = 50;
+
+export function clampPagination(page: number, limit: number): { page: number; limit: number } {
+  const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
+  const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.min(Math.floor(limit), MAX_PAGE_SIZE) : 10;
+  return { page: safePage, limit: safeLimit };
+}
 
 @Injectable()
 export class TransactionsService {
@@ -31,9 +40,12 @@ export class TransactionsService {
       throw new BadRequestException('Buyer cannot be the same as seller');
     }
 
+    await this.assertListingPurchasable(dto.listing_id, dto.seller_id);
+
+    // SET NX makes the idempotency check atomic under concurrent requests
     const idempotencyKey = `transaction:idempotency:${buyerId}:${dto.listing_id}`;
-    const existing = await this.redis.get(idempotencyKey);
-    if (existing) {
+    const acquired = await this.redis.set(idempotencyKey, 'pending', 'EX', 24 * 60 * 60, 'NX');
+    if (!acquired) {
       throw new ConflictException('Transaction already initiated for this listing by this buyer');
     }
 
@@ -44,7 +56,13 @@ export class TransactionsService {
       status: TransactionStatus.PENDING_SELLER,
     });
 
-    const saved = await this.transactionRepo.save(transaction);
+    let saved: Transaction;
+    try {
+      saved = await this.transactionRepo.save(transaction);
+    } catch (err) {
+      await this.redis.del(idempotencyKey);
+      throw err;
+    }
     await this.redis.set(idempotencyKey, saved.id, 'EX', 24 * 60 * 60);
 
     // Mock Notification
@@ -57,7 +75,32 @@ export class TransactionsService {
     return saved;
   }
 
-  async findAll(userId: string, role: string, status: string, page: number, limit: number) {
+  /** The seller must be the listing owner and the listing must still be for sale. */
+  private async assertListingPurchasable(listingId: string, sellerId: string): Promise<void> {
+    const url = `${process.env.LISTINGS_SERVICE_URL || 'http://listings-service:3002'}/listings/batch`;
+    let listing: { userId?: string; status?: string } | null = null;
+    try {
+      const res = await lastValueFrom(
+        this.httpService.post(url, { ids: [listingId] }, { headers: internalHeaders(), timeout: 5000 }),
+      );
+      listing = Array.isArray(res.data) ? res.data[0] : null;
+    } catch (err) {
+      this.logger.error(`Failed to verify listing ${listingId}: ${err.message}`);
+      throw new BadRequestException('Unable to verify listing, please try again');
+    }
+    if (!listing) {
+      throw new NotFoundException('Listing not found');
+    }
+    if (listing.userId !== sellerId) {
+      throw new BadRequestException('Seller does not own this listing');
+    }
+    if (listing.status !== 'active') {
+      throw new BadRequestException('Listing is not available for purchase');
+    }
+  }
+
+  async findAll(userId: string, role: string, status: string, rawPage: number, rawLimit: number) {
+    const { page, limit } = clampPagination(rawPage, rawLimit);
     const query = this.transactionRepo.createQueryBuilder('t');
     
     if (role === 'buyer') {
@@ -119,7 +162,7 @@ export class TransactionsService {
           this.httpService.put(
             url,
             { status: 'sold' },
-            { headers: { 'x-internal-secret': 'marad-internal-secret-for-webhooks' } }
+            { headers: internalHeaders(), timeout: 5000 }
           )
         );
       } catch (err) {
@@ -132,9 +175,9 @@ export class TransactionsService {
     if (saved.status === TransactionStatus.COMPLETED) {
       // Fire-and-forget fraud analysis
       setImmediate(() => {
-        fetch('http://fraud-service:8001/fraud/transaction/analyze', {
+        fetch(`${process.env.FRAUD_SERVICE_URL || 'http://fraud-service:8001'}/fraud/transaction/analyze`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...internalHeaders() },
           body: JSON.stringify({
             transaction_id: saved.id,
             buyer_id: saved.buyer_id,

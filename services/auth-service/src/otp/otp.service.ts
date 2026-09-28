@@ -1,14 +1,23 @@
 import { Injectable, HttpException, HttpStatus, Inject, forwardRef, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { randomInt } from 'crypto';
 import { RedisService } from '../redis/redis.service';
 import { UsersService } from '../users/users.service';
 import { AuthService } from '../auth/auth.service';
+import { safeEqual } from '../common/security';
 import * as twilio from 'twilio';
+
+export const OTP_MAX_ATTEMPTS = 5;
+const OTP_LOCK_SECONDS = 15 * 60;
+const OTP_CODE_TTL_SECONDS = 5 * 60;
+const OTP_RESEND_SECONDS = 60;
+const OTP_DAILY_SEND_LIMIT = 10;
 
 @Injectable()
 export class OtpService {
   private twilioClient: twilio.Twilio | null = null;
   private verifyServiceSid: string | null = null;
+  private readonly mockEnabled: boolean;
   private readonly logger = new Logger(OtpService.name);
 
   constructor(
@@ -22,12 +31,21 @@ export class OtpService {
     const authToken = this.configService.get<string>('TWILIO_AUTH_TOKEN');
     this.verifyServiceSid = this.configService.get<string>('TWILIO_VERIFY_SERVICE_SID') || null;
 
-    if (accountSid && authToken && accountSid !== 'mock' && authToken !== 'mock') {
+    // Mock OTP is a development convenience only. It must be opted into explicitly
+    // and can never be active in production, where it would let anyone sign in as any phone.
+    const isProduction = this.configService.get<string>('NODE_ENV') === 'production';
+    this.mockEnabled = !isProduction && this.configService.get<string>('OTP_MOCK_ENABLED') === 'true';
+
+    if (accountSid && authToken) {
       try {
         this.twilioClient = twilio(accountSid, authToken);
       } catch (err) {
-        console.warn('Failed to initialize Twilio client, using Mock OTP:', err.message);
+        this.logger.error(`Failed to initialize Twilio client: ${err.message}`);
       }
+    }
+
+    if (!this.isTwilioActive() && !this.mockEnabled) {
+      this.logger.warn('No OTP provider configured: phone verification is disabled');
     }
   }
 
@@ -35,63 +53,61 @@ export class OtpService {
     return !!(this.twilioClient && this.verifyServiceSid);
   }
 
+  private otpUnavailable(): HttpException {
+    return new HttpException('خدمة رسائل التحقق غير متاحة حالياً', HttpStatus.SERVICE_UNAVAILABLE);
+  }
+
   async sendOtp(phone: string): Promise<{ message: string; mockCode?: string }> {
-    // 1. Rate limiting check (max 1 request per 60 seconds)
-    const limitKey = `otp_send_limit:${phone}`;
-    const isLimited = await this.redisService.get(limitKey);
-    if (isLimited) {
-      throw new HttpException(
-        'الرجاء الانتظار دقيقة واحدة قبل طلب رمز تحقق جديد',
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
+    if (!this.isTwilioActive() && !this.mockEnabled) {
+      throw this.otpUnavailable();
     }
 
-    // Set rate limit key for 60 seconds
-    await this.redisService.set(limitKey, '1', 60);
-
-    // 2. Check if phone is locked
     const lockKey = `otp_lock:${phone}`;
-    const isLocked = await this.redisService.get(lockKey);
-    if (isLocked) {
+    if (await this.redisService.get(lockKey)) {
       throw new HttpException(
         'هذا الرقم مقفل مؤقتاً بسبب محاولات خاطئة متكررة. الرجاء المحاولة لاحقاً',
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }
 
-    const client = this.twilioClient;
-    const sid = this.verifyServiceSid;
+    // Atomic: two concurrent requests cannot both pass the resend window.
+    const acquired = await this.redisService.setIfAbsent(`otp_send_limit:${phone}`, '1', OTP_RESEND_SECONDS);
+    if (!acquired) {
+      throw new HttpException(
+        'الرجاء الانتظار دقيقة واحدة قبل طلب رمز تحقق جديد',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
 
-    if (client && sid) {
-      try {
-        await client.verify.v2
-          .services(sid)
-          .verifications.create({ to: phone, channel: 'sms' });
-        return { message: 'تم إرسال رمز التحقق بنجاح عبر الرسائل النصية' };
-      } catch (error) {
-        console.error('Twilio Send OTP Error:', error);
-        // Fallback to mock in dev mode if Twilio fails
-        if (this.configService.get<string>('NODE_ENV') === 'development') {
-          return this.sendMockOtp(phone);
-        }
-        throw new HttpException(
-          'فشل إرسال رمز التحقق. الرجاء المحاولة لاحقاً',
-          HttpStatus.INTERNAL_SERVER_ERROR,
-        );
-      }
-    } else {
+    // Daily cap limits SMS pumping (toll fraud) against a single number.
+    const sentToday = await this.redisService.incrWithTtl(`otp_daily:${phone}`, 24 * 3600);
+    if (sentToday > OTP_DAILY_SEND_LIMIT) {
+      throw new HttpException(
+        'تم تجاوز الحد اليومي لطلبات رمز التحقق لهذا الرقم',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
+    if (!this.isTwilioActive()) {
       return this.sendMockOtp(phone);
+    }
+
+    try {
+      await this.twilioClient!.verify.v2
+        .services(this.verifyServiceSid!)
+        .verifications.create({ to: phone, channel: 'sms' });
+      return { message: 'تم إرسال رمز التحقق بنجاح عبر الرسائل النصية' };
+    } catch (error) {
+      this.logger.error(`Twilio send OTP failed: ${error.message}`);
+      throw new HttpException('فشل إرسال رمز التحقق. الرجاء المحاولة لاحقاً', HttpStatus.BAD_GATEWAY);
     }
   }
 
   private async sendMockOtp(phone: string): Promise<{ message: string; mockCode: string }> {
-    const mockCode = '123456'; // Default static mock code for simplicity, or random if needed
-    const codeKey = `otp_code:${phone}`;
-    
-    // Store in redis for 5 minutes (300 seconds)
-    await this.redisService.set(codeKey, mockCode, 300);
-    this.logger.log(`[MOCK OTP] Sent code "${mockCode}" to phone "${phone}"`);
-    
+    const mockCode = randomInt(0, 1_000_000).toString().padStart(6, '0');
+    await this.redisService.set(`otp_code:${phone}`, mockCode, OTP_CODE_TTL_SECONDS);
+    this.logger.log(`[MOCK OTP] Issued code for phone ending ${phone.slice(-4)}`);
+
     return {
       message: 'تم إرسال رمز تحقق افتراضي (بيئة تطوير)',
       mockCode,
@@ -99,73 +115,53 @@ export class OtpService {
   }
 
   async verifyOtp(phone: string, code: string): Promise<any> {
-    // 1. Check lock status
+    if (!this.isTwilioActive() && !this.mockEnabled) {
+      throw this.otpUnavailable();
+    }
+
     const lockKey = `otp_lock:${phone}`;
-    const isLocked = await this.redisService.get(lockKey);
-    if (isLocked) {
+    const attemptsKey = `otp_attempts:${phone}`;
+
+    if (await this.redisService.get(lockKey)) {
       throw new HttpException(
         'تم قفل الحساب مؤقتاً بسبب محاولات خاطئة متكررة. الرجاء المحاولة بعد 15 دقيقة',
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }
 
-    let isVerified = false;
-
-    const verifyClient = this.twilioClient;
-    const verifySid = this.verifyServiceSid;
-
-    if (verifyClient && verifySid) {
-      try {
-        const check = await verifyClient.verify.v2
-          .services(verifySid)
-          .verificationChecks.create({ to: phone, code });
-        isVerified = check.status === 'approved';
-      } catch (error) {
-        console.error('Twilio Verify OTP Error:', error);
-        // Fallback to mock verification in dev mode if Twilio fails
-        if (this.configService.get<string>('NODE_ENV') === 'development') {
-          isVerified = await this.verifyMockOtp(phone, code);
-        } else {
-          throw new HttpException(
-            'فشل التحقق من الرمز. الرجاء المحاولة لاحقاً',
-            HttpStatus.INTERNAL_SERVER_ERROR,
-          );
-        }
-      }
-    } else {
-      isVerified = await this.verifyMockOtp(phone, code);
+    // Count the attempt *before* checking the code so parallel guesses cannot
+    // slip past the limit (the previous get/set pair was racy).
+    const attempts = await this.redisService.incrWithTtl(attemptsKey, OTP_LOCK_SECONDS);
+    if (attempts > OTP_MAX_ATTEMPTS) {
+      await this.lockPhone(lockKey, attemptsKey);
+      throw new HttpException(
+        'تم قفل الحساب مؤقتاً بسبب محاولات خاطئة متكررة. الرجاء المحاولة بعد 15 دقيقة',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
     }
 
-    if (!isVerified) {
-      // Increment failed attempts
-      const attemptsKey = `otp_attempts:${phone}`;
-      const attemptsStr = await this.redisService.get(attemptsKey);
-      let attempts = attemptsStr ? parseInt(attemptsStr, 10) : 0;
-      attempts++;
+    const isVerified = this.isTwilioActive()
+      ? await this.verifyWithTwilio(phone, code)
+      : await this.verifyMockOtp(phone, code);
 
-      if (attempts >= 5) {
-        // Lock for 15 minutes (900 seconds)
-        await this.redisService.set(lockKey, '1', 900);
-        await this.redisService.del(attemptsKey);
+    if (!isVerified) {
+      const remaining = OTP_MAX_ATTEMPTS - attempts;
+      if (remaining <= 0) {
+        await this.lockPhone(lockKey, attemptsKey);
         throw new HttpException(
           'رمز غير صحيح. تم قفل هذا الرقم مؤقتاً لمدة 15 دقيقة بسبب كثرة المحاولات الخاطئة',
           HttpStatus.TOO_MANY_REQUESTS,
         );
-      } else {
-        await this.redisService.set(attemptsKey, attempts.toString(), 300);
-        throw new HttpException(
-          `رمز التحقق غير صحيح. المحاولات المتبقية: ${5 - attempts}`,
-          HttpStatus.BAD_REQUEST,
-        );
       }
+      throw new HttpException(
+        `رمز التحقق غير صحيح. المحاولات المتبقية: ${remaining}`,
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
-    // Success: Clear Redis keys
-    await this.redisService.del(lockKey);
-    await this.redisService.del(`otp_attempts:${phone}`);
+    await this.redisService.del(attemptsKey);
     await this.redisService.del(`otp_code:${phone}`);
 
-    // Find or create user
     let user = await this.usersService.findOneByPhone(phone);
     if (!user) {
       user = await this.usersService.create({
@@ -176,16 +172,35 @@ export class OtpService {
         preferredLanguage: 'ar',
       });
     } else if (!user.isPhoneVerified) {
-      user = await this.usersService.update(user.id, { isPhoneVerified: true });
+      // First proof of phone ownership. Whoever registered this number before without
+      // verifying it may not be its owner, so their password and sessions are dropped
+      // (pre-registration account hijack).
+      user = await this.usersService.update(user.id, { isPhoneVerified: true, passwordHash: null });
+      await this.redisService.deleteByPattern(`refresh:${user.id}:*`);
     }
 
-    // Generate tokens
     return this.authService.loginWithoutPassword(user);
   }
 
+  private async lockPhone(lockKey: string, attemptsKey: string): Promise<void> {
+    await this.redisService.set(lockKey, '1', OTP_LOCK_SECONDS);
+    await this.redisService.del(attemptsKey);
+  }
+
+  private async verifyWithTwilio(phone: string, code: string): Promise<boolean> {
+    try {
+      const check = await this.twilioClient!.verify.v2
+        .services(this.verifyServiceSid!)
+        .verificationChecks.create({ to: phone, code });
+      return check.status === 'approved';
+    } catch (error) {
+      this.logger.error(`Twilio verify OTP failed: ${error.message}`);
+      throw new HttpException('فشل التحقق من الرمز. الرجاء المحاولة لاحقاً', HttpStatus.BAD_GATEWAY);
+    }
+  }
+
   private async verifyMockOtp(phone: string, code: string): Promise<boolean> {
-    const codeKey = `otp_code:${phone}`;
-    const storedCode = await this.redisService.get(codeKey);
-    return storedCode === code;
+    const storedCode = await this.redisService.get(`otp_code:${phone}`);
+    return !!storedCode && safeEqual(code, storedCode);
   }
 }

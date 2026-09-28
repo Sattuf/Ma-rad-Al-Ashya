@@ -8,11 +8,12 @@ logger = logging.getLogger("event_service")
 
 class EventService:
     def __init__(self):
-        logger.info(f"Connecting to MongoDB at: {settings.MONGODB_URI}")
+        # Never log the URI itself: it contains the database password.
+        logger.info("Connecting to MongoDB")
         self.client = AsyncIOMotorClient(settings.MONGODB_URI)
-        
+
         # Determine the database name. If not present in URI, default to 'marad_db'
-        db_name = self.client.get_default_database().name if self.client.get_default_database() else "marad_db"
+        db_name = self.client.get_default_database(default="marad_db").name
         if db_name == "admin":
             db_name = "marad_db"
             

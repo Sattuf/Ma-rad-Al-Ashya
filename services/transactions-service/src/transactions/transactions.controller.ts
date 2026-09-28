@@ -1,27 +1,17 @@
-import { Controller, Post, Get, Body, Param, Req, Query, UseGuards, UnauthorizedException } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, Req, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { TransactionsService } from './transactions.service';
 import { CreateTransactionDto, CancelTransactionDto } from './dto/transaction.dto';
 import { Request } from 'express';
+import { AuthUser, JwtAuthGuard } from '../common/security';
 
-// Simple mock for JWT payload since auth logic varies. Assuming JWT sets user in req.user
 function getUserId(req: Request): string {
-  const user = req['user'] as any;
-  if (user && user.sub) return user.sub;
-  if (user && user.userId) return user.userId;
-  // Fallback for testing without actual auth guard if none provided in this specific microservice scope.
-  const auth = req.headers.authorization;
-  if (auth && auth.startsWith('Bearer ')) {
-    try {
-      const payload = JSON.parse(Buffer.from(auth.split('.')[1], 'base64').toString());
-      return payload.sub || payload.userId;
-    } catch(e) {}
-  }
-  throw new UnauthorizedException();
+  return (req['user'] as AuthUser).userId;
 }
 
 @ApiTags('Transactions')
 @ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
 @Controller()
 export class TransactionsController {
   constructor(private readonly txService: TransactionsService) {}

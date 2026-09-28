@@ -1,0 +1,14 @@
+{
+  "name": "marad-db",
+  "private": true,
+  "type": "module",
+  "description": "Database migrations for معرض الأشياء",
+  "scripts": {
+    "migrate": "node migrate.mjs",
+    "status": "node migrate.mjs --status",
+    "test": "node --test migrate.test.mjs"
+  },
+  "dependencies": {
+    "pg": "^8.13.0"
+  }
+}

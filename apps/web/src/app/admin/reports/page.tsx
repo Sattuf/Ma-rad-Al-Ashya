@@ -9,8 +9,8 @@ import { ar } from 'date-fns/locale';
 
 const STATUS_MAP = {
   pending: { label: 'معلق', color: 'bg-amber-500/10 text-amber-500 border-amber-500/20', icon: AlertCircle },
-  reviewed: { label: 'قيد المراجعة', color: 'bg-blue-500/10 text-blue-500 border-blue-500/20', icon: Eye },
-  resolved: { label: 'تم الحل', color: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20', icon: CheckCircle },
+  reviewed: { label: 'قيد المراجعة', color: 'bg-brand-600/10 text-primary border-brand-600/20', icon: Eye },
+  resolved: { label: 'تم الحل', color: 'bg-brand-600/10 text-primary border-brand-600/20', icon: CheckCircle },
   dismissed: { label: 'مرفوض', color: 'bg-gray-500/10 text-gray-500 border-gray-500/20', icon: XCircle },
 };
 
@@ -22,7 +22,10 @@ const TARGET_TYPE_MAP = {
 export default function AdminReportsPage() {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState('');
+  // Linked from the dashboard as /admin/reports?status=pending (read once, client-side).
+  const [statusFilter, setStatusFilter] = useState(() =>
+    typeof window === 'undefined' ? '' : (new URLSearchParams(window.location.search).get('status') ?? ''),
+  );
   const [typeFilter, setTypeFilter] = useState('');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -31,8 +34,8 @@ export default function AdminReportsPage() {
     setLoading(true);
     adminApi.getReports(statusFilter || undefined, typeFilter || undefined, page, 15)
       .then((res: any) => {
-        setReports(res.data || []);
-        if (res.meta) setTotalPages(res.meta.lastPage || 1);
+        setReports(res.data);
+        setTotalPages(res.lastPage);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -51,7 +54,7 @@ export default function AdminReportsPage() {
           <select 
             value={statusFilter}
             onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
-            className="bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-2 outline-none focus:border-teal-500 transition-colors"
+            className="bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-2 outline-none focus:border-primary transition-colors"
           >
             <option value="">جميع الحالات</option>
             <option value="pending">معلق</option>
@@ -63,7 +66,7 @@ export default function AdminReportsPage() {
           <select 
             value={typeFilter}
             onChange={(e) => { setTypeFilter(e.target.value); setPage(1); }}
-            className="bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-2 outline-none focus:border-teal-500 transition-colors"
+            className="bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-2 outline-none focus:border-primary transition-colors"
           >
             <option value="">جميع الأنواع</option>
             <option value="listing">إعلانات</option>
@@ -74,7 +77,7 @@ export default function AdminReportsPage() {
 
       <div className="bg-gray-800 border border-gray-700 rounded-xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full text-right text-sm">
+          <table className="w-full text-start text-sm">
             <thead className="bg-gray-900/50 text-gray-400">
               <tr>
                 <th className="p-4 font-medium">الرقم</th>
@@ -91,7 +94,7 @@ export default function AdminReportsPage() {
                 <tr>
                   <td colSpan={7} className="p-8 text-center text-gray-500">
                     <div className="flex justify-center">
-                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-teal-500"></div>
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
                     </div>
                   </td>
                 </tr>
@@ -129,10 +132,10 @@ export default function AdminReportsPage() {
                       <td className="p-4 text-gray-400">
                         {report.createdAt ? formatDistanceToNow(new Date(report.createdAt), { addSuffix: true, locale: ar }) : ''}
                       </td>
-                      <td className="p-4 text-left">
+                      <td className="p-4 text-end">
                         <Link 
                           href={`/admin/reports/${report.id}`}
-                          className="inline-flex items-center justify-center px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded text-xs font-medium transition-colors"
+                          className="inline-flex items-center justify-center px-3 py-1.5 bg-primary hover:bg-primary text-on-primary rounded text-xs font-medium transition-colors"
                         >
                           التفاصيل
                         </Link>

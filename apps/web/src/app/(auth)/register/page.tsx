@@ -1,5 +1,6 @@
 'use client';
 
+import { errorMessage } from '@/lib/errors';
 import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -10,6 +11,7 @@ import { authApi } from '@/lib/api/auth';
 import { useAuthStore } from '@/lib/store/auth-store';
 import Cookies from 'js-cookie';
 import { getFingerprint } from '@/lib/fingerprint';
+import { SocialLogin } from '@/components/auth/SocialLogin';
 
 const registerSchema = z.object({
   fullName: z.string().min(2, 'الاسم يجب أن يكون حرفين على الأقل'),
@@ -70,22 +72,15 @@ export default function RegisterPage() {
       
       setAuth(res.user, res.tokens.access_token);
       router.push('/');
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'حدث خطأ أثناء إنشاء الحساب');
+    } catch (err) {
+      setError(errorMessage(err, 'تعذّر إنشاء الحساب. راجع البيانات وحاول مجدداً.'));
     }
   };
 
-  const handleGoogleLogin = () => {
-    window.location.href = 'http://localhost:3000/api/v1/auth/google';
-  };
-
-  const handleFacebookLogin = () => {
-    window.location.href = 'http://localhost:3000/api/v1/auth/facebook';
-  };
 
   return (
     <div>
-      <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">إنشاء حساب جديد</h2>
+      <h2 className="text-2xl font-bold text-fg mb-6 text-center">إنشاء حساب جديد</h2>
       
       {error && (
         <div className="bg-red-50 text-red-600 p-3 rounded-lg mb-6 text-sm border border-red-100">
@@ -99,7 +94,7 @@ export default function RegisterPage() {
           <input
             {...register('fullName')}
             type="text"
-            className={`w-full px-4 py-3 rounded-xl border focus:ring-2 focus:ring-teal-500 focus:outline-none transition-all ${
+            className={`w-full px-4 py-3 rounded-xl border focus:ring-2 focus:ring-focus-ring focus:outline-none transition-all ${
               errors.fullName ? 'border-red-500' : 'border-gray-200'
             }`}
             placeholder="أحمد محمد"
@@ -112,7 +107,7 @@ export default function RegisterPage() {
           <input
             {...register('email')}
             type="email"
-            className={`w-full px-4 py-3 rounded-xl border focus:ring-2 focus:ring-teal-500 focus:outline-none transition-all ${
+            className={`w-full px-4 py-3 rounded-xl border focus:ring-2 focus:ring-focus-ring focus:outline-none transition-all ${
               errors.email ? 'border-red-500' : 'border-gray-200'
             }`}
             placeholder="example@mail.com"
@@ -126,7 +121,7 @@ export default function RegisterPage() {
             {...register('phone')}
             type="tel"
             dir="ltr"
-            className={`w-full px-4 py-3 rounded-xl border focus:ring-2 focus:ring-teal-500 focus:outline-none transition-all text-right ${
+            className={`w-full px-4 py-3 rounded-xl border focus:ring-2 focus:ring-focus-ring focus:outline-none transition-all text-start ${
               errors.phone ? 'border-red-500' : 'border-gray-200'
             }`}
             placeholder="+966500000000"
@@ -139,7 +134,7 @@ export default function RegisterPage() {
           <input
             {...register('password')}
             type="password"
-            className={`w-full px-4 py-3 rounded-xl border focus:ring-2 focus:ring-teal-500 focus:outline-none transition-all ${
+            className={`w-full px-4 py-3 rounded-xl border focus:ring-2 focus:ring-focus-ring focus:outline-none transition-all ${
               errors.password ? 'border-red-500' : 'border-gray-200'
             }`}
             placeholder="••••••••"
@@ -150,15 +145,15 @@ export default function RegisterPage() {
         <button
           type="submit"
           disabled={isSubmitting}
-          className="w-full bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 text-white font-bold py-3 px-4 rounded-xl transition-all disabled:opacity-70 shadow-md mt-2"
+          className="w-full bg-primary hover:bg-primary-hover text-on-primary font-bold py-3 px-4 rounded-xl transition-all disabled:opacity-70 shadow-md mt-2"
         >
           {isSubmitting ? (
             <span className="flex items-center justify-center">
-              <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <svg className="animate-spin -me-1 ms-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
-              جاري إنشاء الحساب...
+              جارٍ إنشاء الحساب…
             </span>
           ) : (
             'إنشاء حساب'
@@ -166,34 +161,11 @@ export default function RegisterPage() {
         </button>
       </form>
 
-      <div className="mt-6 flex items-center justify-between">
-        <hr className="w-full border-gray-200" />
-        <span className="px-3 text-sm text-gray-400 whitespace-nowrap">أو الدخول بواسطة</span>
-        <hr className="w-full border-gray-200" />
-      </div>
+      <SocialLogin />
 
-      <div className="mt-6 grid grid-cols-2 gap-4">
-        <button
-          onClick={handleGoogleLogin}
-          type="button"
-          className="flex items-center justify-center w-full px-4 py-2 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
-        >
-          <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" className="h-5 w-5 ml-2" />
-          <span className="text-gray-700 font-medium">جوجل</span>
-        </button>
-        <button
-          onClick={handleFacebookLogin}
-          type="button"
-          className="flex items-center justify-center w-full px-4 py-2 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
-        >
-          <img src="https://www.svgrepo.com/show/475647/facebook-color.svg" alt="Facebook" className="h-5 w-5 ml-2" />
-          <span className="text-gray-700 font-medium">فيسبوك</span>
-        </button>
-      </div>
-
-      <p className="mt-8 text-center text-sm text-gray-600">
+      <p className="mt-8 text-center text-sm text-fg-muted">
         لديك حساب بالفعل؟{' '}
-        <Link href="/login" className="font-bold text-teal-600 hover:text-teal-500 transition-colors">
+        <Link href="/login" className="font-bold text-primary hover:text-primary-hover transition-colors">
           تسجيل الدخول
         </Link>
       </p>

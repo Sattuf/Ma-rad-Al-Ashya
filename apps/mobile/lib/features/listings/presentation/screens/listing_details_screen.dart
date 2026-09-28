@@ -1,3 +1,5 @@
+import 'package:marad_mobile/core/utils/errors.dart';
+import 'package:marad_mobile/core/utils/money.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -147,7 +149,7 @@ class _ListingDetailsScreenState extends ConsumerState<ListingDetailsScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      '${listing.price} ريال',
+                      formatPrice(listing.price, listing.currency),
                       style: TextStyle(fontSize: 22, color: Theme.of(context).primaryColor, fontWeight: FontWeight.w600),
                     ),
                     const SizedBox(height: 16),
@@ -194,71 +196,6 @@ class _ListingDetailsScreenState extends ConsumerState<ListingDetailsScreen> {
                       listing.description,
                       style: const TextStyle(fontSize: 16, height: 1.5),
                     ),
-                    const Divider(height: 32),
-                    const Text(
-                      'إعلانات مشابهة',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      height: 180,
-                      child: ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: 5,
-                        separatorBuilder: (context, index) => const SizedBox(width: 12),
-                        itemBuilder: (context, index) {
-                          return Container(
-                            width: 140,
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(12),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.05),
-                                  blurRadius: 4,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      color: Colors.grey[200],
-                                      borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-                                    ),
-                                    child: const Center(
-                                      child: Icon(Icons.image, color: Colors.grey),
-                                    ),
-                                  ),
-                                ),
-                                Padding(
-                                  padding: const EdgeInsets.all(8.0),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'إعلان ${index + 1}',
-                                        style: const TextStyle(fontWeight: FontWeight.bold),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        '${(index + 1) * 100} ريال',
-                                        style: TextStyle(color: Theme.of(context).primaryColor, fontWeight: FontWeight.bold),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-                    ),
                   ],
                 ),
               ),
@@ -267,7 +204,7 @@ class _ListingDetailsScreenState extends ConsumerState<ListingDetailsScreen> {
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stack) => Center(child: Text('حدث خطأ: $error')),
+        error: (error, stack) => const Center(child: Padding(padding: EdgeInsets.all(24), child: Text('تعذّر تحميل الإعلان. تحقّق من اتصالك ثم حاول مجدداً.', textAlign: TextAlign.center))),
       ),
       bottomNavigationBar: listingAsync.whenOrNull(
         data: (listing) {
@@ -291,16 +228,16 @@ class _ListingDetailsScreenState extends ConsumerState<ListingDetailsScreen> {
                     try {
                       final repo = ref.read(transactionsRepositoryProvider);
                       final transaction = await repo.createTransaction(listing.id, listing.userId);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('تم طلب الشراء بنجاح!'), backgroundColor: Colors.green),
-                      );
                       if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('تم طلب الشراء بنجاح!'), backgroundColor: Colors.green),
+                        );
                         context.push('/transactions/${transaction.id}');
                       }
                     } catch (e) {
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('حدث خطأ: $e'), backgroundColor: Colors.red),
+                          SnackBar(content: Text(userMessage(e, 'تعذّر بدء الصفقة. حاول مجدداً.')), backgroundColor: Colors.red),
                         );
                       }
                     }

@@ -1,5 +1,6 @@
 import useSWR from 'swr';
 import { favoritesApi } from '@/lib/api/favorites';
+import { useAuthStore } from '@/lib/store/auth-store';
 
 export function useFavorites(page: number = 1, limit: number = 10) {
   const { data, error, isLoading, mutate } = useSWR(
@@ -16,7 +17,9 @@ export function useFavorites(page: number = 1, limit: number = 10) {
 }
 
 export function useFavoriteCheck(listingId: string) {
-  const key = listingId ? `/users/favorites/${listingId}/check` : null;
+  // Guests have no favorites: skip the request instead of one 401 per card.
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const key = listingId && isAuthenticated ? `/users/favorites/${listingId}/check` : null;
   const { data, error, isLoading, mutate } = useSWR(
     key,
     () => favoritesApi.checkFavorite(listingId)

@@ -10,28 +10,29 @@ export class RankingService {
     this.redisClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
   }
 
+  private variantKey(userId?: string, sessionId?: string) {
+    return userId ? `ab:user:${userId}` : sessionId ? `ab:session:${sessionId}` : undefined;
+  }
+
+  /**
+   * Sticky, race-free assignment: SET NX means concurrent first requests (two tabs, a retry)
+   * agree on one variant instead of each drawing and overwriting.
+   */
   async getABVariant(userId?: string, sessionId?: string): Promise<'A' | 'B'> {
-    let key: string | undefined;
-    if (userId) {
-      key = `ab:user:${userId}`;
-    } else if (sessionId) {
-      key = `ab:session:${sessionId}`;
-    }
+    const key = this.variantKey(userId, sessionId);
+    const draw: 'A' | 'B' = Math.random() < 0.5 ? 'A' : 'B';
+    if (!key) return draw;
+    await this.redisClient.set(key, draw, 'EX', AB_VARIANT_TTL, 'NX');
+    const stored = await this.redisClient.get(key);
+    return stored === 'A' || stored === 'B' ? stored : draw;
+  }
 
-    if (key) {
-      const stored = await this.redisClient.get(key);
-      if (stored === 'A' || stored === 'B') {
-        return stored;
-      }
-    }
-
-    const variant = Math.random() < 0.5 ? 'A' : 'B';
-
-    if (key) {
-      await this.redisClient.set(key, variant, 'EX', AB_VARIANT_TTL);
-    }
-
-    return variant;
+  /** The variant already assigned to this visitor, if any (never assigns). */
+  async assignedVariant(userId?: string, sessionId?: string): Promise<'A' | 'B' | null> {
+    const key = this.variantKey(userId, sessionId);
+    if (!key) return null;
+    const stored = await this.redisClient.get(key);
+    return stored === 'A' || stored === 'B' ? stored : null;
   }
 
   async getEngagementScores(listingIds: string[]): Promise<Map<string, { views: number; messages: number }>> {
@@ -40,7 +41,9 @@ export class RankingService {
       return scores;
     }
 
-    const viewKeys = listingIds.map(id => `listing:views:${id}`);
+    // Search clicks (persistent, 30-day TTL). listing:views is drained into the database by
+    // listings-service every few minutes, so it would reset the signal to ~0 each cycle.
+    const viewKeys = listingIds.map(id => `search:clicks:${id}`);
     const messageKeys = listingIds.map(id => `listing:messages:${id}`);
 
     const [viewsData, messagesData] = await Promise.all([

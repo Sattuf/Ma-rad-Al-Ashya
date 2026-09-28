@@ -6,7 +6,18 @@ import { RelatedSearchDto } from './dto/related-search.dto';
 import { SuggestionsSearchDto } from './dto/suggestions-search.dto';
 import { SearchQueryDto } from './dto/search-query.dto';
 import { TrackClickDto } from './dto/track-click.dto';
-import { AdminGuard } from '../guards/admin.guard';
+import { AdminGuard, extractBearerToken, requireSecret, safeEqual, verifyAccessToken } from '../common/security';
+
+/** Identity for the experiment comes from a verified token only (never a client header). */
+function optionalUserId(authorization?: string): string | undefined {
+  const token = extractBearerToken(authorization);
+  if (!token) return undefined;
+  try {
+    return verifyAccessToken(token).userId;
+  } catch {
+    return undefined; // expired/invalid token: treat as anonymous, do not fail the request
+  }
+}
 
 @ApiTags('Search')
 @Controller('search')
@@ -53,9 +64,9 @@ export class SearchController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Search listings' })
-  async search(@Query() query: SearchQueryDto, @Headers('x-user-id') userId?: string) {
-    return this.searchService.search(query, userId);
+  @ApiOperation({ summary: 'Ranked text search (A/B experiment); returns ids, total and the variant' })
+  async search(@Query() query: SearchQueryDto, @Headers('authorization') authorization?: string) {
+    return this.searchService.search(query, optionalUserId(authorization));
   }
 
   @Get('autocomplete')
@@ -70,11 +81,11 @@ export class SearchController {
 
   @Post('track-click')
   @ApiOperation({ summary: 'Track user click for A/B testing' })
-  async trackClick(@Body() body: TrackClickDto) {
+  async trackClick(@Body() body: TrackClickDto, @Headers('authorization') authorization?: string) {
     if (!body.query || !body.variant) {
       throw new HttpException('Missing required fields', HttpStatus.BAD_REQUEST);
     }
-    return this.searchService.trackClick(body);
+    return this.searchService.trackClick(body, optionalUserId(authorization));
   }
 
   @Get('ranking/stats')
@@ -91,7 +102,7 @@ export class SearchController {
     @Headers('x-internal-secret') secret: string,
     @Body() body: { action: 'create' | 'update' | 'delete', listing: any }
   ) {
-    if (secret !== (process.env.INTERNAL_SECRET || 'secret123')) {
+    if (!safeEqual(secret, requireSecret('INTERNAL_SECRET'))) {
       throw new UnauthorizedException('Invalid internal secret');
     }
     if (!body.action || !body.listing || !body.listing.id) {
@@ -108,8 +119,7 @@ export class SearchController {
     @Headers('x-internal-secret') secret: string,
     @Body() body: { boost_multiplier: number; expires_at: string }
   ) {
-    const internalSecret = process.env.INTERNAL_SECRET || 'marad-internal-secret-for-webhooks';
-    if (secret !== internalSecret && secret !== 'secret123') {
+    if (!safeEqual(secret, requireSecret('INTERNAL_SECRET'))) {
       throw new UnauthorizedException('Invalid internal secret');
     }
     if (body.boost_multiplier === undefined || !body.expires_at) {

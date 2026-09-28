@@ -10,6 +10,43 @@ import { CreateListingDto } from './dto/create-listing.dto';
 import { UpdateListingDto } from './dto/update-listing.dto';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
+import { internalHeaders } from '../common/security';
+
+export const MAX_PAGE_SIZE = 50;
+const DEFAULT_PAGE_SIZE = 20;
+/** Statuses visible to the public. Deleted/expired listings never leave the service. */
+const PUBLIC_STATUSES: string[] = [ListingStatus.ACTIVE, ListingStatus.SOLD];
+/** Statuses an owner may set directly (deletion goes through DELETE). */
+const OWNER_SETTABLE_STATUSES: string[] = [ListingStatus.ACTIVE, ListingStatus.SOLD];
+
+export interface ListingsPage {
+  data: Listing[];
+  meta: { total: number; page: number; limit: number; lastPage: number };
+}
+
+function toPositiveInt(value: unknown, fallback: number): number {
+  const parsed = parseInt(String(value ?? ''), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const MAX_IDS = 20;
+
+/** A query value that must be a UUID (Postgres rejects anything else with a 500). */
+function toUuid(value: unknown): string | undefined {
+  return typeof value === 'string' && UUID.test(value) ? value : undefined;
+}
+
+/** "a,b,c" → valid UUIDs only, de-duplicated, at most MAX_IDS. */
+function toUuidList(value: unknown): string[] {
+  if (typeof value !== 'string') return [];
+  return [...new Set(value.split(',').map((v) => v.trim()).filter((v) => UUID.test(v)))].slice(0, MAX_IDS);
+}
+
+/** Escapes LIKE wildcards so user input is matched literally. */
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
 
 @Injectable()
 export class ListingsService {
@@ -30,21 +67,26 @@ export class ListingsService {
     });
   }
 
-  private async triggerSearchIndex(action: 'create' | 'update' | 'delete', listing: any) {
+  /** [categoryId, parentId] for the search index (the catalogue is a two-level tree). */
+  private async categoryWithParent(categoryId?: string | null): Promise<string[]> {
+    if (!categoryId) return [];
+    const rows: Array<{ parent_id: string | null }> = await this.listingsRepository.query('SELECT parent_id FROM categories WHERE id = $1', [categoryId]);
+    return [categoryId, rows[0]?.parent_id].filter((v): v is string => !!v);
+  }
+
+  /** Pushes one listing to search-service. Never throws; resolves false on failure. */
+  async triggerSearchIndex(action: 'create' | 'update' | 'delete', listing: any): Promise<boolean> {
     try {
       const searchServiceUrl = process.env.SEARCH_SERVICE_URL || 'http://localhost:3003';
-      const secret = process.env.INTERNAL_SECRET || 'secret123';
       
       let enrichedListing = { ...listing };
       
       if (action !== 'delete') {
         let sellerRating = 0;
         try {
-          const transactionsUrl = process.env.TRANSACTIONS_SERVICE_URL || 'http://localhost:3006';
+          const transactionsUrl = process.env.TRANSACTIONS_SERVICE_URL || 'http://localhost:3005';
           const ratingRes = await firstValueFrom(
-            this.httpService.get(`${transactionsUrl}/users/${listing.userId}/reviews`, {
-              headers: { 'x-internal-secret': secret }
-            })
+            this.httpService.get(`${transactionsUrl}/users/${listing.userId}/reviews`, { timeout: 5000 })
           );
           if (ratingRes.data && ratingRes.data.summary) {
             sellerRating = Number(ratingRes.data.summary.average_rating) || 0;
@@ -61,6 +103,9 @@ export class ListingsService {
         }
 
         enrichedListing.images_count = imagesCount;
+        // Search filters by category including subcategories, and hides non-active listings.
+        enrichedListing.category_ids = await this.categoryWithParent(listing.categoryId);
+        enrichedListing.status = listing.status;
         enrichedListing.description_length = listing.description ? listing.description.length : 0;
         enrichedListing.seller_average_rating = sellerRating;
       }
@@ -70,11 +115,13 @@ export class ListingsService {
           action,
           listing: enrichedListing,
         }, {
-          headers: { 'x-internal-secret': secret }
+          headers: internalHeaders(), timeout: 5000
         })
       );
+      return true;
     } catch (error) {
       this.logger.error(`Failed to trigger search index for listing ${listing.id}: ${error.message}`);
+      return false;
     }
   }
 
@@ -85,24 +132,81 @@ export class ListingsService {
       status: ListingStatus.ACTIVE,
     });
     const savedListing = await this.listingsRepository.save(listing);
-    await this.triggerSearchIndex('create', savedListing);
+    // Indexing must not add latency to (or fail) the user's request.
+    // TODO(phase 2): move to an outbox + queue so no index update is ever lost.
+    void this.triggerSearchIndex('create', savedListing);
     return savedListing;
   }
 
-  async findAll(query: any): Promise<Listing[]> {
-    const { categoryId, status, search, userId } = query;
-    const qb = this.listingsRepository.createQueryBuilder('listing')
-      .leftJoinAndSelect('listing.images', 'images');
+  /**
+   * Public listing query. Always paginated (max 50 rows) and ordered by an indexed
+   * column, so the cost per request stays bounded no matter how large the table grows.
+   */
+  async findAll(query: Record<string, any> = {}): Promise<ListingsPage> {
+    const categoryId = toUuid(query.categoryId ?? query.category_id);
+    const userId = toUuid(query.userId);
+    // Batch lookup by id (e.g. recommendations) without counting a view per listing.
+    const ids = toUuidList(query.ids);
+    const search = typeof (query.search ?? query.q) === 'string' ? String(query.search ?? query.q).trim().slice(0, 100) : '';
+    const status = PUBLIC_STATUSES.includes(query.status) ? query.status : ListingStatus.ACTIVE;
+    const page = toPositiveInt(query.page, 1);
+    const limit = Math.min(toPositiveInt(query.limit, DEFAULT_PAGE_SIZE), MAX_PAGE_SIZE);
 
-    if (categoryId) qb.andWhere('listing.categoryId = :categoryId', { categoryId });
-    if (status) qb.andWhere('listing.status = :status', { status });
+    const qb = this.listingsRepository.createQueryBuilder('listing').leftJoinAndSelect('listing.images', 'images');
+    // A lookup by id (deal history, dashboards) must also find listings that sold since;
+    // browsing without ids shows active listings only. Deleted listings never appear.
+    if (query.ids !== undefined && !PUBLIC_STATUSES.includes(query.status)) {
+      qb.where('listing.status IN (:...statuses)', { statuses: PUBLIC_STATUSES });
+    } else {
+      qb.where('listing.status = :status', { status });
+    }
+
+    // A parent category includes its subcategories (the catalogue is a two-level tree).
+    if (categoryId) {
+      qb.andWhere('listing.categoryId IN (SELECT c.id FROM categories c WHERE c.id = :categoryId OR c.parent_id = :categoryId)', { categoryId });
+    }
     if (userId) qb.andWhere('listing.userId = :userId', { userId });
-    if (search) qb.andWhere('listing.title ILIKE :search', { search: `%${search}%` });
+    if (query.ids !== undefined) qb.andWhere(ids.length ? 'listing.id IN (:...ids)' : '1 = 0', { ids });
+    if (search) qb.andWhere("listing.title ILIKE :search ESCAPE '\\'", { search: `%${escapeLike(search)}%` });
+    const minPrice = Number(query.minPrice);
+    const maxPrice = Number(query.maxPrice);
+    if (Number.isFinite(minPrice) && minPrice > 0) qb.andWhere('listing.price >= :minPrice', { minPrice });
+    if (Number.isFinite(maxPrice) && maxPrice > 0) qb.andWhere('listing.price <= :maxPrice', { maxPrice });
 
-    return qb.getMany();
+    qb.orderBy('listing.createdAt', 'DESC')
+      .addOrderBy('listing.id', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit);
+
+    const [data, total] = await qb.getManyAndCount();
+    return { data, meta: { total, page, limit, lastPage: Math.max(1, Math.ceil(total / limit)) } };
   }
 
+  /** Listings of the signed-in owner (all statuses except deleted). */
+  async findMine(userId: string, query: Record<string, any> = {}): Promise<ListingsPage> {
+    const page = toPositiveInt(query.page, 1);
+    const limit = Math.min(toPositiveInt(query.limit, DEFAULT_PAGE_SIZE), MAX_PAGE_SIZE);
+    const [data, total] = await this.listingsRepository
+      .createQueryBuilder('listing')
+      .leftJoinAndSelect('listing.images', 'images')
+      .where('listing.userId = :userId', { userId })
+      .andWhere('listing.status != :deleted', { deleted: ListingStatus.DELETED })
+      .orderBy('listing.createdAt', 'DESC')
+      .addOrderBy('listing.id', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
+    return { data, meta: { total, page, limit, lastPage: Math.max(1, Math.ceil(total / limit)) } };
+  }
+
+  /** Public lookup: deleted listings are not found. */
   async findOne(id: string): Promise<Listing> {
+    const listing = await this.findOneAnyStatus(id);
+    if (listing.status === ListingStatus.DELETED) throw new NotFoundException('Listing not found');
+    return listing;
+  }
+
+  private async findOneAnyStatus(id: string): Promise<Listing> {
     const listing = await this.listingsRepository.findOne({
       where: { id },
       relations: { images: true, category: true },
@@ -141,7 +245,7 @@ export class ListingsService {
 
     Object.assign(listing, updateDto);
     const updatedListing = await this.listingsRepository.save(listing);
-    await this.triggerSearchIndex('update', updatedListing);
+    void this.triggerSearchIndex('update', updatedListing);
     return updatedListing;
   }
 
@@ -151,31 +255,33 @@ export class ListingsService {
     
     listing.status = ListingStatus.DELETED;
     await this.listingsRepository.save(listing);
-    await this.triggerSearchIndex('delete', { id });
+    void this.triggerSearchIndex('delete', { id });
   }
 
   async updateStatus(id: string, userId: string, status: ListingStatus): Promise<Listing> {
+    if (!OWNER_SETTABLE_STATUSES.includes(status)) {
+      throw new BadRequestException(`Status must be one of: ${OWNER_SETTABLE_STATUSES.join(', ')}`);
+    }
     const listing = await this.findOne(id);
     if (listing.userId !== userId) throw new BadRequestException('Not authorized');
-    
+
     listing.status = status;
     const savedListing = await this.listingsRepository.save(listing);
-    if (status === ListingStatus.DELETED) {
-      await this.triggerSearchIndex('delete', { id });
-    } else {
-      await this.triggerSearchIndex('update', savedListing);
-    }
+    void this.triggerSearchIndex('update', savedListing);
     return savedListing;
   }
 
   async updateStatusInternal(id: string, status: ListingStatus): Promise<Listing> {
-    const listing = await this.findOne(id);
+    if (!Object.values(ListingStatus).includes(status)) {
+      throw new BadRequestException('Invalid status');
+    }
+    const listing = await this.findOneAnyStatus(id);
     listing.status = status;
     const savedListing = await this.listingsRepository.save(listing);
     if (status === ListingStatus.DELETED) {
-      await this.triggerSearchIndex('delete', { id });
+      void this.triggerSearchIndex('delete', { id });
     } else {
-      await this.triggerSearchIndex('update', savedListing);
+      void this.triggerSearchIndex('update', savedListing);
     }
     return savedListing;
   }
@@ -209,37 +315,41 @@ export class ListingsService {
     await this.listingImagesRepository.remove(image);
   }
 
-  async findByUser(userId: string): Promise<Listing[]> {
-    return this.findAll({ userId });
+  async findByUser(userId: string, query: Record<string, any> = {}): Promise<ListingsPage> {
+    return this.findAll({ ...query, userId });
   }
 
-  async findByCategory(categoryId: string): Promise<Listing[]> {
-    return this.findAll({ categoryId });
+  async findByCategory(categoryId: string, query: Record<string, any> = {}): Promise<ListingsPage> {
+    return this.findAll({ ...query, categoryId });
   }
 
+  /**
+   * Flushes buffered view counters to Postgres. SCAN (not KEYS) keeps Redis responsive,
+   * and GETDEL reads-and-resets atomically so views arriving meanwhile are not lost.
+   */
   @Cron(CronExpression.EVERY_5_MINUTES)
   async syncViews() {
-    const keys = await this.redis.keys('listing:views:*');
-    for (const key of keys) {
-      const id = key.replace('listing:views:', '');
-      const viewsStr = await this.redis.get(key);
-      const views = parseInt(viewsStr || '0', 10);
-      
-      if (views > 0) {
-        await this.listingsRepository.increment({ id }, 'viewsCount', views);
-        await this.redis.set(key, '0');
+    let cursor = '0';
+    do {
+      const [next, keys] = await this.redis.scan(cursor, 'MATCH', 'listing:views:*', 'COUNT', 500);
+      cursor = next;
+      for (const key of keys) {
+        const views = parseInt((await this.redis.getdel(key)) || '0', 10);
+        if (views > 0) {
+          const id = key.replace('listing:views:', '');
+          await this.listingsRepository.increment({ id }, 'viewsCount', views);
+        }
       }
-    }
+    } while (cursor !== '0');
   }
 
   sendViewEvent(listingId: string, categoryId: string, authHeader?: string) {
+    // Personalization only uses events of signed-in users.
+    if (!authHeader) return;
     setImmediate(async () => {
       try {
         const personalizationUrl = process.env.PERSONALIZATION_SERVICE_URL || 'http://personalization-service:8002';
-        const headers: any = {};
-        if (authHeader) {
-          headers['authorization'] = authHeader;
-        }
+        const headers = { authorization: authHeader };
         await firstValueFrom(
           this.httpService.post(`${personalizationUrl}/events`, {
             event_type: 'view',

@@ -50,15 +50,22 @@ marad/
 ### التشغيل
 
 ```bash
-# تشغيل جميع الخدمات عبر Docker
+# 1) الأسرار (إلزامية — الخدمات ترفض الإقلاع بدونها)
+cp infra/.env.example infra/.env   # ثم املأ القيم: openssl rand -base64 48
+
+# 2) تشغيل جميع الخدمات عبر Docker
 npm run docker:up
 
 # تشغيل خدمة محددة للتطوير
 npm run dev:gateway
 npm run dev:web
 
-# تشغيل تطبيق الجوال
-cd apps/mobile && flutter run
+# تشغيل تطبيق الجوال (يصل افتراضياً إلى البوابة على جهازك من محاكي Android)
+cd apps/mobile && cp .env.example .env && flutter run
+
+# نسخة الإصدار: عنوان البوابة وخادم المحادثات الحقيقيان
+flutter build apk --dart-define=API_URL=https://api.example.com/api/v1 \
+                  --dart-define=SOCKET_URL=https://chat.example.com
 ```
 
 ## 📝 التوثيق
@@ -66,6 +73,7 @@ cd apps/mobile && flutter run
 - [مخطط قاعدة البيانات](docs/database-schema.md)
 - [البنية المعمارية](docs/architecture.md)
 - [سجل التغييرات](docs/CHANGELOG.md)
+- [خطة التحسين وإعادة البناء](docs/REBUILD_PLAN.md)
 
 ## 📄 الترخيص
 

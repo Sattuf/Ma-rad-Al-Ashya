@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Patch, Body, Param, Query, UseGuards, Request, UseInterceptors, UploadedFile, ParseFilePipe, MaxFileSizeValidator, FileTypeValidator, UnauthorizedException, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Patch, Body, Param, Query, UseGuards, ParseUUIDPipe, Request, UseInterceptors, UploadedFile, ParseFilePipe, MaxFileSizeValidator, FileTypeValidator, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { ListingsService } from './listings.service';
 import { CreateListingDto } from './dto/create-listing.dto';
@@ -6,6 +6,7 @@ import { UpdateListingDto } from './dto/update-listing.dto';
 import { ListingStatus } from './entities/listing.entity';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { assertInternalRequest } from '../common/security';
 
 @ApiTags('listings')
 @Controller('listings')
@@ -13,14 +14,32 @@ export class ListingsController {
   constructor(private readonly listingsService: ListingsService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Get all listings with optional filters' })
-  findAll(@Query() query: any) {
+  @ApiOperation({ summary: 'Get listings (paginated, max 50 per page)' })
+  findAll(@Query() query: Record<string, any>) {
     return this.listingsService.findAll(query);
+  }
+
+  // Declared before ':id' so these paths are not treated as ids.
+  @Get('my')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Get the current user's listings (paginated)" })
+  findMine(@Request() req, @Query() query: Record<string, any>) {
+    return this.listingsService.findMine(req.user.userId, query);
+  }
+
+  // The web dashboard expects a plain array here (apps/web/src/lib/api/listings.ts).
+  @Get('my-listings')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Get the current user's listings (array, first page)" })
+  async findMineArray(@Request() req, @Query() query: Record<string, any>) {
+    return (await this.listingsService.findMine(req.user.userId, query)).data;
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get a listing by id' })
-  async findOne(@Param('id') id: string, @Request() req) {
+  async findOne(@Param('id', ParseUUIDPipe) id: string, @Request() req) {
     const listing = await this.listingsService.findOne(id);
     await this.listingsService.incrementView(id);
     this.listingsService.sendViewEvent(listing.id, listing.categoryId, req.headers['authorization']);
@@ -36,10 +55,11 @@ export class ListingsController {
   }
 
   @Put(':id')
+  @Patch(':id')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update a listing' })
-  update(@Param('id') id: string, @Request() req, @Body() updateDto: UpdateListingDto) {
+  update(@Param('id', ParseUUIDPipe) id: string, @Request() req, @Body() updateDto: UpdateListingDto) {
     return this.listingsService.update(id, req.user.userId, updateDto);
   }
 
@@ -47,14 +67,14 @@ export class ListingsController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Delete a listing' })
-  remove(@Param('id') id: string, @Request() req) {
+  remove(@Param('id', ParseUUIDPipe) id: string, @Request() req) {
     return this.listingsService.delete(id, req.user.userId);
   }
 
   @Post(':id/images')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024, files: 1 } }))
   @ApiConsumes('multipart/form-data')
   @ApiBody({
     schema: {
@@ -97,18 +117,15 @@ export class ListingsController {
   @ApiBearerAuth()
   @ApiBody({ schema: { properties: { status: { type: 'string', enum: Object.values(ListingStatus) } } } })
   @ApiOperation({ summary: 'Update listing status' })
-  updateStatus(@Param('id') id: string, @Request() req, @Body('status') status: ListingStatus) {
+  updateStatus(@Param('id', ParseUUIDPipe) id: string, @Request() req, @Body('status') status: ListingStatus) {
     return this.listingsService.updateStatus(id, req.user.userId, status);
   }
 
   @Put(':id/status')
   @ApiOperation({ summary: 'Internal: Update listing status' })
   @ApiBody({ schema: { properties: { status: { type: 'string', enum: Object.values(ListingStatus) } } } })
-  async updateStatusInternal(@Param('id') id: string, @Request() req, @Body('status') status: ListingStatus) {
-    const internalSecret = req.headers['x-internal-secret'];
-    if (internalSecret !== (process.env.INTERNAL_SECRET || 'marad-internal-secret-for-webhooks')) {
-      throw new UnauthorizedException('Invalid internal secret');
-    }
+  async updateStatusInternal(@Param('id', ParseUUIDPipe) id: string, @Request() req, @Body('status') status: ListingStatus) {
+    assertInternalRequest(req.headers);
     // Update status internally, bypassing owner check
     return this.listingsService.updateStatusInternal(id, status);
   }
@@ -117,11 +134,9 @@ export class ListingsController {
   @ApiOperation({ summary: 'Internal: Get multiple listings by IDs' })
   @ApiBody({ schema: { properties: { ids: { type: 'array', items: { type: 'string' } } } } })
   async findBatch(@Request() req, @Body('ids') ids: string[]) {
-    const internalSecret = req.headers['x-internal-secret'];
-    if (internalSecret !== (process.env.INTERNAL_SECRET || 'marad-internal-secret-for-webhooks')) {
-      throw new UnauthorizedException('Invalid internal secret');
-    }
-    if (!ids || !Array.isArray(ids) || ids.length > 50) {
+    assertInternalRequest(req.headers);
+    const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!ids || !Array.isArray(ids) || ids.length > 50 || !ids.every((id) => typeof id === 'string' && uuid.test(id))) {
       throw new BadRequestException('Invalid or too many IDs (max 50)');
     }
     return this.listingsService.findBatch(ids);
@@ -129,13 +144,13 @@ export class ListingsController {
 
   @Get('user/:userId')
   @ApiOperation({ summary: 'Get listings by user ID' })
-  findByUser(@Param('userId') userId: string) {
-    return this.listingsService.findByUser(userId);
+  findByUser(@Param('userId', ParseUUIDPipe) userId: string, @Query() query: Record<string, any>) {
+    return this.listingsService.findByUser(userId, query);
   }
 
   @Get('category/:categoryId')
   @ApiOperation({ summary: 'Get listings by category ID' })
-  findByCategory(@Param('categoryId') categoryId: string) {
-    return this.listingsService.findByCategory(categoryId);
+  findByCategory(@Param('categoryId', ParseUUIDPipe) categoryId: string, @Query() query: Record<string, any>) {
+    return this.listingsService.findByCategory(categoryId, query);
   }
 }

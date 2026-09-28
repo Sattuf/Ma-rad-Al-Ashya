@@ -54,6 +54,7 @@ describe('ProxyController', () => {
       const mockRes = {
         status: jest.fn().mockReturnThis(),
         json: jest.fn().mockReturnThis(),
+        send: jest.fn().mockReturnThis(),
         setHeader: jest.fn(),
       } as any;
 
@@ -82,6 +83,7 @@ describe('ProxyController', () => {
       const mockRes = {
         status: jest.fn().mockReturnThis(),
         json: jest.fn().mockReturnThis(),
+        send: jest.fn().mockReturnThis(),
         setHeader: jest.fn(),
       } as any;
 
@@ -108,6 +110,7 @@ describe('ProxyController', () => {
       const mockRes = {
         status: jest.fn().mockReturnThis(),
         json: jest.fn().mockReturnThis(),
+        send: jest.fn().mockReturnThis(),
         setHeader: jest.fn(),
       } as any;
 
@@ -140,10 +143,11 @@ describe('ProxyController', () => {
       const mockRes = {
         status: jest.fn().mockReturnThis(),
         json: jest.fn().mockReturnThis(),
+        send: jest.fn().mockReturnThis(),
         setHeader: jest.fn(),
       } as any;
 
-      await controller.proxyWithPath('listings', 'recent', mockReq, mockRes);
+      await controller.proxyWithPath('listings', mockReq, mockRes);
 
       expect(mockHttpService.request).toHaveBeenCalledWith(
         expect.objectContaining({

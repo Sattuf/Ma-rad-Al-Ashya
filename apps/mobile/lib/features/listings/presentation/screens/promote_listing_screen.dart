@@ -1,3 +1,4 @@
+import 'package:marad_mobile/core/utils/money.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
@@ -21,48 +22,6 @@ class _PromoteListingScreenState extends ConsumerState<PromoteListingScreen> {
   PromotionPlan? _selectedPlan;
   bool _isLoading = false;
 
-  Future<bool?> _showMockPaymentDialog(PromotionPlan plan) {
-    return showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return Directionality(
-          textDirection: TextDirection.rtl,
-          child: AlertDialog(
-            title: const Text('محاكاة عملية الدفع (Stripe Sandbox)'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('الخطة: ${plan.name}'),
-                const SizedBox(height: 8),
-                Text('السعر: \$${plan.price}'),
-                const SizedBox(height: 16),
-                const Text(
-                  'لقد تم اكتشاف بيئة تجريبية/موجّه محلي. هل ترغب في محاكاة نجاح الدفع؟',
-                  style: TextStyle(fontSize: 14),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: const Text(
-                  'إلغاء',
-                  style: TextStyle(color: Colors.red),
-                ),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                child: const Text('نجاح الدفع'),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
   Future<void> _handlePayment() async {
     if (_selectedPlan == null) return;
     
@@ -74,45 +33,29 @@ class _PromoteListingScreenState extends ConsumerState<PromoteListingScreen> {
       final repo = ref.read(promotionsRepositoryProvider);
       final paymentIntent = await repo.createPaymentIntent(widget.listingId, _selectedPlan!);
       final clientSecret = paymentIntent['clientSecret'] as String? ?? '';
-      final isMock = paymentIntent['isMock'] as bool? ?? false;
 
       bool isSuccess = false;
 
-      if (isMock || clientSecret.startsWith('mock_secret')) {
-        final mockResult = await _showMockPaymentDialog(_selectedPlan!);
-        isSuccess = mockResult ?? false;
-      } else {
-        try {
-          await Stripe.instance.initPaymentSheet(
-            paymentSheetParameters: SetupPaymentSheetParameters(
-              paymentIntentClientSecret: clientSecret,
-              merchantDisplayName: 'معرض الأشياء',
-              style: ThemeMode.light,
-            ),
-          );
-          await Stripe.instance.presentPaymentSheet();
-          isSuccess = true;
-        } catch (e) {
-          if (e is StripeException) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('فشلت عملية الدفع: ${e.error.localizedMessage}')),
-            );
-          } else {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('حدث خطأ غير متوقع أثناء الدفع: $e')),
-            );
-          }
-        }
+      try {
+        await Stripe.instance.initPaymentSheet(
+          paymentSheetParameters: SetupPaymentSheetParameters(
+            paymentIntentClientSecret: clientSecret,
+            merchantDisplayName: 'معرض الأشياء',
+            style: ThemeMode.system,
+          ),
+        );
+        await Stripe.instance.presentPaymentSheet();
+        isSuccess = true;
+      } catch (e) {
+        if (!mounted) return;
+        final message = e is StripeException
+            ? 'لم تكتمل عملية الدفع ولم يُخصم أي مبلغ. ${e.error.localizedMessage ?? ''}'
+            : 'تعذّر إتمام الدفع الآن. لم يُخصم أي مبلغ، حاول مجدداً.';
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
       }
 
       if (isSuccess) {
-        // Save the promotion locally
-        await repo.saveLocalPromotion(
-          widget.listingId,
-          _selectedPlan!.id,
-          _selectedPlan!.durationDays,
-        );
-
+        // The server activates the promotion from Stripe's webhook; refresh from the API.
         // Invalidate promotions providers to refresh data
         ref.invalidate(myPromotionsProvider);
 
@@ -129,7 +72,7 @@ class _PromoteListingScreenState extends ConsumerState<PromoteListingScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('فشل إنشاء عملية الدفع: $e')),
+          const SnackBar(content: Text('تعذّر الاتصال ببوابة الدفع الآن. حاول بعد قليل.')),
         );
       }
     } finally {
@@ -202,7 +145,7 @@ class _PromoteListingScreenState extends ConsumerState<PromoteListingScreen> {
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(isSelected ? 0.15 : 0.05),
+                                color: Colors.black.withValues(alpha: isSelected ? 0.15 : 0.05),
                                 blurRadius: isSelected ? 12 : 6,
                                 offset: const Offset(0, 4),
                               ),
@@ -229,11 +172,11 @@ class _PromoteListingScreenState extends ConsumerState<PromoteListingScreen> {
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                                       decoration: BoxDecoration(
-                                        color: isPremium ? Colors.brown.shade900.withOpacity(0.15) : Colors.grey.shade100,
+                                        color: isPremium ? Colors.brown.shade900.withValues(alpha: 0.15) : Colors.grey.shade100,
                                         borderRadius: BorderRadius.circular(20),
                                       ),
                                       child: Text(
-                                        '\$${plan.price}',
+                                        formatPrice(plan.price),
                                         style: TextStyle(
                                           fontSize: 18,
                                           fontWeight: FontWeight.bold,
@@ -322,7 +265,21 @@ class _PromoteListingScreenState extends ConsumerState<PromoteListingScreen> {
             );
           },
           loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, s) => Center(child: Text('حدث خطأ في تحميل الخطط: $e')),
+          error: (e, s) => Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('تعذّر تحميل خطط الترويج', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  const Text('لن نعرض أسعاراً غير مؤكدة. تحقّق من اتصالك ثم حاول مجدداً.', textAlign: TextAlign.center),
+                  const SizedBox(height: 16),
+                  OutlinedButton(onPressed: () => ref.invalidate(promotionsPlansProvider), child: const Text('إعادة المحاولة')),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );

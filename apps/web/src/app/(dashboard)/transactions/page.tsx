@@ -2,129 +2,124 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useTransactions } from '@/hooks/useTransactions';
-import { ShoppingBag, Tag, ChevronLeft } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ar } from 'date-fns/locale';
+import { ChevronLeft, Handshake, ImageOff } from 'lucide-react';
+import { useDealDetails, useTransactions } from '@/hooks/useTransactions';
+import { useAuthStore } from '@/lib/store/auth-store';
+import { Badge, Button, Card, EmptyState, ErrorState, Skeleton } from '@/components/ui';
+import { cn } from '@/lib/cn';
+import { coverImage, formatPrice } from '@/types/listing';
+import { dealStatusLabel } from '@/lib/deals';
 
-const getStatusBadge = (status: string) => {
-  switch (status) {
-    case 'pending_seller':
-      return <span className="px-2.5 py-1 text-xs font-medium bg-amber-100 text-amber-800 rounded-full">بانتظار البائع</span>;
-    case 'pending_buyer':
-      return <span className="px-2.5 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">بانتظار المشتري</span>;
-    case 'completed':
-      return <span className="px-2.5 py-1 text-xs font-medium bg-emerald-100 text-emerald-800 rounded-full">مكتمل</span>;
-    case 'cancelled':
-      return <span className="px-2.5 py-1 text-xs font-medium bg-red-100 text-red-800 rounded-full">ملغي</span>;
-    default:
-      return <span className="px-2.5 py-1 text-xs font-medium bg-gray-100 text-gray-800 rounded-full">{status}</span>;
-  }
-};
+const TABS = [
+  { role: 'buyer', label: 'مشترياتي' },
+  { role: 'seller', label: 'مبيعاتي' },
+] as const;
 
-export default function TransactionsDashboard() {
+export default function DealsPage() {
   const [role, setRole] = useState<'buyer' | 'seller'>('buyer');
   const [page, setPage] = useState(1);
-
-  const { transactions, isLoading } = useTransactions(role, undefined, page, 10);
+  const me = useAuthStore((s) => s.user?.id);
+  const { transactions: deals, lastPage, isLoading, error, mutate } = useTransactions(role, undefined, page, 10);
+  const { listings, people } = useDealDetails(deals, me);
 
   return (
-    <div className="max-w-5xl mx-auto p-4 sm:p-6 lg:p-8 space-y-8" dir="rtl">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">المعاملات</h1>
-        <p className="mt-1 text-sm text-gray-500">تابع عمليات البيع والشراء الخاصة بك</p>
+    <main className="container mx-auto max-w-4xl px-4 py-8">
+      <h1 className="text-2xl font-bold text-fg">صفقاتي</h1>
+      <p className="mb-6 text-fg-muted">تتمّ الصفقة عندما يؤكدها البائع ثم المشتري بعد الاستلام.</p>
+
+      <div role="tablist" aria-label="نوع الصفقات" className="mb-6 flex gap-2 border-b border-line">
+        {TABS.map((t) => (
+          <button
+            key={t.role}
+            role="tab"
+            aria-selected={role === t.role}
+            onClick={() => {
+              setRole(t.role);
+              setPage(1);
+            }}
+            className={cn(
+              '-mb-px min-h-11 border-b-2 px-4 text-sm font-medium',
+              role === t.role ? 'border-primary text-fg' : 'border-transparent text-fg-muted hover:text-fg',
+            )}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
 
-      <div className="border-b border-gray-200">
-        <nav className="-mb-px flex space-x-8 space-x-reverse" aria-label="Tabs">
-          <button
-            onClick={() => { setRole('buyer'); setPage(1); }}
-            className={`${
+      {isLoading ? (
+        <div className="flex flex-col gap-3">
+          {[1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-24" />
+          ))}
+        </div>
+      ) : error ? (
+        <Card>
+          <ErrorState error={error} title="تعذّر تحميل صفقاتك" onRetry={() => mutate()} />
+        </Card>
+      ) : deals.length === 0 ? (
+        <Card>
+          <EmptyState
+            icon={<Handshake className="h-6 w-6" aria-hidden />}
+            title={role === 'buyer' ? 'لم تشترِ شيئاً بعد' : 'لم تبع شيئاً بعد'}
+            description={
               role === 'buyer'
-                ? 'border-emerald-500 text-emerald-600'
-                : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
-            } flex whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium items-center gap-2`}
-          >
-            <ShoppingBag className="w-5 h-5" />
-            كمشتري
-          </button>
-          <button
-            onClick={() => { setRole('seller'); setPage(1); }}
-            className={`${
-              role === 'seller'
-                ? 'border-emerald-500 text-emerald-600'
-                : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
-            } flex whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium items-center gap-2`}
-          >
-            <Tag className="w-5 h-5" />
-            كبائع
-          </button>
-        </nav>
-      </div>
-
-      <div className="bg-white shadow sm:rounded-md">
-        {isLoading ? (
-          <div className="p-8 text-center text-gray-500 animate-pulse">جاري التحميل...</div>
-        ) : transactions && transactions.length > 0 ? (
-          <ul role="list" className="divide-y divide-gray-200">
-            {transactions.map((transaction: any) => (
-              <li key={transaction.id}>
-                <Link href={`/transactions/${transaction.id}`} className="block hover:bg-gray-50 transition-colors">
-                  <div className="flex items-center px-4 py-4 sm:px-6">
-                    <div className="min-w-0 flex-1 flex items-center">
-                      <div className="flex-shrink-0 relative">
-                        {transaction.listing?.images?.[0] ? (
-                          <img
-                            src={transaction.listing.images[0]}
-                            alt={transaction.listing.title}
-                            className="h-16 w-16 rounded-md object-cover"
-                          />
-                        ) : (
-                          <div className="h-16 w-16 rounded-md bg-gray-100 flex items-center justify-center">
-                            <Tag className="h-6 w-6 text-gray-400" />
-                          </div>
-                        )}
+                ? 'عندما تضغط «اشترِ الآن» في صفحة إعلان، تظهر الصفقة هنا لتتابعها حتى الاستلام.'
+                : 'عندما يطلب مشترٍ أحد إعلاناتك، تظهر الصفقة هنا لتؤكدها.'
+            }
+            action={
+              <Link href={role === 'buyer' ? '/listings' : '/listings/create'} className="inline-flex min-h-11 items-center rounded-control bg-primary px-5 font-semibold text-on-primary hover:bg-primary-hover">
+                {role === 'buyer' ? 'تصفّح الإعلانات' : 'أضف إعلاناً'}
+              </Link>
+            }
+          />
+        </Card>
+      ) : (
+        <>
+          <ul className="flex flex-col gap-3">
+            {deals.map((deal) => {
+              const listing = listings?.get(deal.listingId);
+              const other = people?.get(role === 'buyer' ? deal.sellerId : deal.buyerId);
+              const status = dealStatusLabel(deal.status, role);
+              const image = listing ? coverImage(listing) : null;
+              return (
+                <li key={deal.id}>
+                  <Link href={`/transactions/${deal.id}`} className="block rounded-card focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring">
+                    <Card className="flex items-center gap-4 p-4 transition-colors hover:border-line-strong">
+                      {image ? (
+                        <img src={image} alt="" className="h-16 w-16 shrink-0 rounded-control object-cover" />
+                      ) : (
+                        <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-control bg-surface-muted text-fg-subtle">
+                          <ImageOff className="h-5 w-5" aria-hidden />
+                        </span>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-semibold text-fg">{listing?.title ?? (listings ? 'إعلان محذوف' : '…')}</p>
+                        <p className="text-sm text-fg-muted">
+                          {listing && `${formatPrice(listing.price, listing.currency)} · `}
+                          {role === 'buyer' ? 'البائع' : 'المشتري'}: {other?.name || '…'} ·{' '}
+                          {formatDistanceToNow(new Date(deal.createdAt), { addSuffix: true, locale: ar })}
+                        </p>
                       </div>
-                      <div className="min-w-0 flex-1 px-4 md:grid md:grid-cols-2 md:gap-4">
-                        <div>
-                          <p className="text-sm font-medium text-emerald-600 truncate">{transaction.listing?.title || 'إعلان غير متاح'}</p>
-                          <p className="mt-2 flex items-center text-sm text-gray-500">
-                            <span className="truncate">
-                              {role === 'buyer' ? 'البائع: ' : 'المشتري: '}
-                              {role === 'buyer' ? transaction.seller?.name : transaction.buyer?.name}
-                            </span>
-                          </p>
-                        </div>
-                        <div className="hidden md:block">
-                          <div>
-                            <p className="text-sm text-gray-900">
-                              تم الإنشاء
-                              <time dateTime={transaction.createdAt} className="mx-1">
-                                {transaction.createdAt ? formatDistanceToNow(new Date(transaction.createdAt), { addSuffix: true, locale: ar }) : ''}
-                              </time>
-                            </p>
-                            <p className="mt-2 flex items-center text-sm text-gray-500">
-                              السعر: {transaction.listing?.price} ريال
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex flex-col items-end gap-2 ml-5">
-                      {getStatusBadge(transaction.status)}
-                      <ChevronLeft className="h-5 w-5 text-gray-400" aria-hidden="true" />
-                    </div>
-                  </div>
-                </Link>
-              </li>
-            ))}
+                      <Badge tone={status.tone}>{status.label}</Badge>
+                      <ChevronLeft className="h-5 w-5 shrink-0 text-fg-subtle" aria-hidden />
+                    </Card>
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
-        ) : (
-          <div className="p-8 text-center text-gray-500">
-            لا توجد معاملات {role === 'buyer' ? 'كمشتري' : 'كبائع'} حالياً.
-          </div>
-        )}
-      </div>
-    </div>
+          {lastPage > 1 && (
+            <nav aria-label="الصفحات" className="mt-6 flex items-center justify-center gap-3">
+              <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>السابق</Button>
+              <span className="text-sm text-fg-muted">صفحة {page} من {lastPage}</span>
+              <Button variant="secondary" size="sm" disabled={page >= lastPage} onClick={() => setPage((p) => p + 1)}>التالي</Button>
+            </nav>
+          )}
+        </>
+      )}
+    </main>
   );
 }

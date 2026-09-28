@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { postgresConnectionOptions } from './common/database';
 import { HttpModule } from '@nestjs/axios';
 import { ScheduleModule } from '@nestjs/schedule';
 
@@ -22,10 +23,8 @@ import { PrometheusModule } from '@willsoto/nestjs-prometheus';
   imports: [
     PrometheusModule.register(),
     TypeOrmModule.forRoot({
-      type: 'postgres',
-      url: process.env.DATABASE_URL || 'postgresql://marad_user:marad_dev_password@localhost:5432/marad_db',
+      ...postgresConnectionOptions(),
       entities: [KycVerification, KycAuditLog],
-      synchronize: false, // Migrations will handle DB schema
     }),
     TypeOrmModule.forFeature([KycVerification, KycAuditLog]),
     HttpModule,

@@ -1,8 +1,9 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from security import verify_admin
 import database
 from typing import Dict
 
-router = APIRouter(prefix="/fraud/risk", tags=["Risk"])
+router = APIRouter(prefix="/fraud/risk", dependencies=[Depends(verify_admin)], tags=["Risk"])
 
 @router.get("/{user_id}", response_model=Dict)
 async def get_risk_score(user_id: str):

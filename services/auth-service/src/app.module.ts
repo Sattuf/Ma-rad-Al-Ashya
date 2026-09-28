@@ -1,3 +1,4 @@
+import { AdminStatsModule } from './admin-stats/admin-stats.module';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
@@ -21,6 +22,7 @@ import { PrometheusModule } from '@willsoto/nestjs-prometheus';
     UsersModule,
     AuthModule,
     OtpModule,
+    AdminStatsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

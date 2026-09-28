@@ -9,6 +9,7 @@ import { StorageService } from '../storage/storage.service';
 import Redis from 'ioredis';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
+import { internalHeaders } from '../common/security';
 
 @Injectable()
 export class UsersService {
@@ -32,6 +33,19 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
     return user;
+  }
+
+  async getPublicProfile(userId: string) {
+    const user = await this.getProfile(userId);
+    return {
+      id: user.id,
+      full_name: user.full_name,
+      bio: user.bio,
+      city: user.city,
+      avatar_url: user.avatar_url,
+      is_identity_verified: user.is_identity_verified,
+      created_at: user.created_at,
+    };
   }
 
   async updateProfile(userId: string, updateProfileDto: UpdateProfileDto): Promise<User> {
@@ -60,9 +74,11 @@ export class UsersService {
   }
 
   async updateStatus(userId: string, status: string): Promise<User> {
-    const user = await this.getProfile(userId);
-    (user as any).status = status as any;
-    return this.usersRepository.save(user);
+    const result = await this.usersRepository.update({ id: userId }, { status });
+    if (!result.affected) {
+      throw new NotFoundException('User not found');
+    }
+    return this.getProfile(userId);
   }
 
   async verifyUser(userId: string): Promise<User> {
@@ -99,12 +115,11 @@ export class UsersService {
 
     try {
       const listingsServiceUrl = process.env.LISTINGS_SERVICE_URL || 'http://listings-service:3002';
-      const secret = process.env.INTERNAL_SECRET || 'marad-internal-secret-for-webhooks';
       
       const response = await firstValueFrom(
         this.httpService.post(`${listingsServiceUrl}/listings/batch`, 
           { ids: paginatedIds }, 
-          { headers: { 'x-internal-secret': secret } }
+          { headers: internalHeaders(), timeout: 5000 }
         )
       );
 

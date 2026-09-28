@@ -52,4 +52,39 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   async ttl(key: string): Promise<number> {
     return this.client.ttl(key);
   }
+
+  /** Atomically reads and removes a key (single-use tokens). */
+  async getAndDelete(key: string): Promise<string | null> {
+    return this.client.getdel(key);
+  }
+
+  /** Atomic "set if absent". Returns true when the key was created. */
+  async setIfAbsent(key: string, value: string, ttlSeconds: number): Promise<boolean> {
+    const result = await this.client.set(key, value, 'EX', ttlSeconds, 'NX');
+    return result === 'OK';
+  }
+
+  /** Atomic counter with a TTL applied when the window starts. */
+  async incrWithTtl(key: string, ttlSeconds: number): Promise<number> {
+    const [[, count]] = (await this.client
+      .multi()
+      .incr(key)
+      .expire(key, ttlSeconds, 'NX')
+      .exec()) as [[Error | null, number], [Error | null, number]];
+    return count;
+  }
+
+  /** Deletes keys matching a pattern using SCAN (never KEYS, which blocks Redis). */
+  async deleteByPattern(pattern: string): Promise<number> {
+    let cursor = '0';
+    let deleted = 0;
+    do {
+      const [next, keys] = await this.client.scan(cursor, 'MATCH', pattern, 'COUNT', 200);
+      cursor = next;
+      if (keys.length) {
+        deleted += await this.client.del(...keys);
+      }
+    } while (cursor !== '0');
+    return deleted;
+  }
 }

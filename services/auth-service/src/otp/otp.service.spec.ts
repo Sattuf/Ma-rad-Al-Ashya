@@ -42,11 +42,16 @@ describe('OtpService', () => {
     updatedAt: new Date(),
   };
 
-  beforeEach(async () => {
+  let config: Record<string, string>;
+
+  const buildService = async () => {
     const mockRedisService = {
       get: jest.fn(),
       set: jest.fn(),
       del: jest.fn(),
+      setIfAbsent: jest.fn().mockResolvedValue(true),
+      incrWithTtl: jest.fn().mockResolvedValue(1),
+      deleteByPattern: jest.fn(),
     };
 
     const mockUsersService = {
@@ -60,10 +65,7 @@ describe('OtpService', () => {
     };
 
     const mockConfigService = {
-      get: jest.fn((key: string, defaultValue?: any) => {
-        if (key === 'NODE_ENV') return 'development';
-        return defaultValue;
-      }),
+      get: jest.fn((key: string, defaultValue?: any) => config[key] ?? defaultValue),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -80,90 +82,149 @@ describe('OtpService', () => {
     redisService = module.get(RedisService);
     usersService = module.get(UsersService);
     authService = module.get(AuthService);
+  };
 
-    jest.clearAllMocks();
+  beforeEach(async () => {
+    config = { NODE_ENV: 'development', OTP_MOCK_ENABLED: 'true' };
+    await buildService();
+  });
+
+  describe('mock mode safety', () => {
+    it('refuses to send OTP in production without a real provider, even if mock is requested', async () => {
+      config = { NODE_ENV: 'production', OTP_MOCK_ENABLED: 'true' };
+      await buildService();
+
+      await expect(service.sendOtp(mockPhone)).rejects.toMatchObject({ status: HttpStatus.SERVICE_UNAVAILABLE });
+      await expect(service.verifyOtp(mockPhone, '123456')).rejects.toMatchObject({
+        status: HttpStatus.SERVICE_UNAVAILABLE,
+      });
+      expect(authService.loginWithoutPassword).not.toHaveBeenCalled();
+    });
+
+    it('refuses OTP when mock mode is not explicitly enabled', async () => {
+      config = { NODE_ENV: 'development' };
+      await buildService();
+
+      await expect(service.sendOtp(mockPhone)).rejects.toMatchObject({ status: HttpStatus.SERVICE_UNAVAILABLE });
+    });
   });
 
   describe('sendOtp', () => {
-    it('should send OTP successfully in mock mode', async () => {
-      redisService.get.mockResolvedValue(null); // No rate limit, no lock
-      redisService.set.mockResolvedValue(undefined);
+    it('should issue a random 6-digit code in mock mode', async () => {
+      redisService.get.mockResolvedValue(null);
 
       const result = await service.sendOtp(mockPhone);
 
       expect(result.message).toContain('رمز تحقق افتراضي');
-      expect(result.mockCode).toBe('123456');
-      expect(redisService.set).toHaveBeenCalledWith(`otp_code:${mockPhone}`, '123456', 300);
-      expect(redisService.set).toHaveBeenCalledWith(`otp_send_limit:${mockPhone}`, '1', 60);
+      expect(result.mockCode).toMatch(/^\d{6}$/);
+      expect(redisService.set).toHaveBeenCalledWith(`otp_code:${mockPhone}`, result.mockCode, 300);
+      expect(redisService.setIfAbsent).toHaveBeenCalledWith(`otp_send_limit:${mockPhone}`, '1', 60);
     });
 
     it('should throw HttpException (429) if requested within 60 seconds', async () => {
-      redisService.get.mockImplementation(async (key: string) => {
-        if (key.startsWith('otp_send_limit:')) return '1';
-        return null;
-      });
+      redisService.get.mockResolvedValue(null);
+      (redisService.setIfAbsent as jest.Mock).mockResolvedValue(false);
 
       await expect(service.sendOtp(mockPhone)).rejects.toThrow(
         new HttpException('الرجاء الانتظار دقيقة واحدة قبل طلب رمز تحقق جديد', HttpStatus.TOO_MANY_REQUESTS),
       );
+    });
+
+    it('should enforce the daily send cap', async () => {
+      redisService.get.mockResolvedValue(null);
+      (redisService.incrWithTtl as jest.Mock).mockResolvedValue(11);
+
+      await expect(service.sendOtp(mockPhone)).rejects.toMatchObject({ status: HttpStatus.TOO_MANY_REQUESTS });
+      expect(redisService.set).not.toHaveBeenCalled();
     });
   });
 
   describe('verifyOtp', () => {
     it('should verify OTP successfully and return login tokens', async () => {
       redisService.get.mockImplementation(async (key: string) => {
-        if (key === `otp_code:${mockPhone}`) return '123456';
-        return null; // Not locked
+        if (key === `otp_code:${mockPhone}`) return '482913';
+        return null;
       });
-      redisService.del.mockResolvedValue(undefined);
       usersService.findOneByPhone.mockResolvedValue(mockUser);
       authService.loginWithoutPassword.mockResolvedValue({
         user: { id: mockUser.id, phone: mockPhone, fullName: mockUser.fullName } as any,
         tokens: { access_token: 'access_val', refresh_token: 'refresh_val' },
       });
 
-      const result = await service.verifyOtp(mockPhone, '123456');
+      const result = await service.verifyOtp(mockPhone, '482913');
 
       expect(result.tokens.access_token).toBe('access_val');
       expect(redisService.del).toHaveBeenCalledWith(`otp_code:${mockPhone}`);
       expect(authService.loginWithoutPassword).toHaveBeenCalledWith(mockUser);
     });
 
-    it('should increment attempts on incorrect verification code', async () => {
+    it('should not accept the old static code 123456', async () => {
       redisService.get.mockImplementation(async (key: string) => {
-        if (key === `otp_code:${mockPhone}`) return '123456';
-        if (key === `otp_attempts:${mockPhone}`) return '2';
-        return null; // Not locked
+        if (key === `otp_code:${mockPhone}`) return '482913';
+        return null;
       });
-      redisService.set.mockResolvedValue(undefined);
 
-      await expect(service.verifyOtp(mockPhone, 'wrong_code')).rejects.toThrow(
-        new HttpException('رمز التحقق غير صحيح. المحاولات المتبقية: 2', HttpStatus.BAD_REQUEST),
-      );
-
-      // Verify that attempts count is incremented (from 2 to 3)
-      expect(redisService.set).toHaveBeenCalledWith(`otp_attempts:${mockPhone}`, '3', 300);
+      await expect(service.verifyOtp(mockPhone, '123456')).rejects.toMatchObject({ status: HttpStatus.BAD_REQUEST });
+      expect(authService.loginWithoutPassword).not.toHaveBeenCalled();
     });
 
-    it('should lock the account for 15 minutes after 5 failed attempts', async () => {
-      redisService.get.mockImplementation(async (key: string) => {
-        if (key === `otp_code:${mockPhone}`) return '123456';
-        if (key === `otp_attempts:${mockPhone}`) return '4';
-        return null; // Not locked
-      });
-      redisService.set.mockResolvedValue(undefined);
-      redisService.del.mockResolvedValue(undefined);
+    it('should reject when no code was issued', async () => {
+      redisService.get.mockResolvedValue(null);
 
-      await expect(service.verifyOtp(mockPhone, 'wrong_code')).rejects.toThrow(
+      await expect(service.verifyOtp(mockPhone, '123456')).rejects.toMatchObject({ status: HttpStatus.BAD_REQUEST });
+    });
+
+    it('should count the attempt atomically and report remaining attempts', async () => {
+      redisService.get.mockImplementation(async (key: string) => {
+        if (key === `otp_code:${mockPhone}`) return '482913';
+        return null;
+      });
+      (redisService.incrWithTtl as jest.Mock).mockResolvedValue(3);
+
+      await expect(service.verifyOtp(mockPhone, '000000')).rejects.toThrow(
+        new HttpException('رمز التحقق غير صحيح. المحاولات المتبقية: 2', HttpStatus.BAD_REQUEST),
+      );
+      expect(redisService.incrWithTtl).toHaveBeenCalledWith(`otp_attempts:${mockPhone}`, 900);
+    });
+
+    it('should lock the number for 15 minutes on the 5th failed attempt', async () => {
+      redisService.get.mockImplementation(async (key: string) => {
+        if (key === `otp_code:${mockPhone}`) return '482913';
+        return null;
+      });
+      (redisService.incrWithTtl as jest.Mock).mockResolvedValue(5);
+
+      await expect(service.verifyOtp(mockPhone, '000000')).rejects.toThrow(
         new HttpException(
           'رمز غير صحيح. تم قفل هذا الرقم مؤقتاً لمدة 15 دقيقة بسبب كثرة المحاولات الخاطئة',
           HttpStatus.TOO_MANY_REQUESTS,
         ),
       );
-
-      // Verify that lock is set
       expect(redisService.set).toHaveBeenCalledWith(`otp_lock:${mockPhone}`, '1', 900);
       expect(redisService.del).toHaveBeenCalledWith(`otp_attempts:${mockPhone}`);
+    });
+
+    it('should refuse even a correct code once attempts are exhausted (parallel guessing)', async () => {
+      redisService.get.mockImplementation(async (key: string) => {
+        if (key === `otp_code:${mockPhone}`) return '482913';
+        return null;
+      });
+      (redisService.incrWithTtl as jest.Mock).mockResolvedValue(6);
+
+      await expect(service.verifyOtp(mockPhone, '482913')).rejects.toMatchObject({
+        status: HttpStatus.TOO_MANY_REQUESTS,
+      });
+      expect(authService.loginWithoutPassword).not.toHaveBeenCalled();
+    });
+      it('drops the password of an unverified pre-registered account on first phone proof', async () => {
+      redisService.get.mockImplementation(async (key: string) => (key === `otp_code:${mockPhone}` ? '482913' : null));
+      usersService.findOneByPhone.mockResolvedValue({ ...mockUser, isPhoneVerified: false, passwordHash: 'attacker' });
+      usersService.update.mockResolvedValue({ ...mockUser, isPhoneVerified: true, passwordHash: null });
+
+      await service.verifyOtp(mockPhone, '482913');
+
+      expect(usersService.update).toHaveBeenCalledWith(mockUser.id, { isPhoneVerified: true, passwordHash: null });
+      expect((redisService as any).deleteByPattern).toHaveBeenCalledWith(`refresh:${mockUser.id}:*`);
     });
   });
 });

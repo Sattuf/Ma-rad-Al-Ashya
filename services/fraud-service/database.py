@@ -6,7 +6,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 MONGO_URL = os.getenv("MONGO_URL", "mongodb://localhost:27017")
-POSTGRES_URL = os.getenv("POSTGRES_URL", "postgresql://postgres:postgres@localhost:5432/marad_fraud")
+# docker-compose passes DATABASE_URL (the name every service uses); POSTGRES_URL is kept for
+# older deployments. Reading only POSTGRES_URL left the pool empty and every admin call 500.
+POSTGRES_URL = os.getenv("POSTGRES_URL") or os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/marad_fraud")
 
 # MongoDB connections
 mongo_client = None

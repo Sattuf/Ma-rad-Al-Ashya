@@ -1,4 +1,3 @@
-import 'package:dio/dio.dart';
 import 'package:marad_mobile/core/network/api_client.dart';
 import 'package:marad_mobile/features/transactions/data/models/transaction_model.dart';
 import 'package:marad_mobile/features/transactions/data/models/review_model.dart';
@@ -78,7 +77,8 @@ class TransactionsRepository {
         'limit': limit,
       },
     );
-    final List data = response.data['data'] ?? response.data;
+    // transactions-service returns { summary, reviews }.
+    final List data = response.data['reviews'] ?? const [];
     return data.map((json) => Review.fromJson(json)).toList();
   }
   

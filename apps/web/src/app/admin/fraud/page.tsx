@@ -28,11 +28,11 @@ export default function FraudDashboardPage() {
   }, []);
 
   if (loading) {
-    return <div className="p-8 text-center">جاري التحميل...</div>;
+    return <div className="p-8 text-center">جارٍ التحميل…</div>;
   }
 
   const statCards = [
-    { title: 'إجمالي الإشارات', value: stats?.total_signals || stats?.signals_today || 0, color: 'bg-blue-500/10 text-blue-500 border-blue-500/20' },
+    { title: 'إجمالي الإشارات', value: stats?.total_signals || stats?.signals_today || 0, color: 'bg-brand-600/10 text-primary border-brand-600/20' },
     { title: 'مستخدمين ذوي خطورة عالية', value: stats?.high_risk_users || 0, color: 'bg-red-500/10 text-red-500 border-red-500/20' },
     { title: 'حسابات محظورة', value: stats?.blocked_users || stats?.locked_accounts || 0, color: 'bg-orange-500/10 text-orange-500 border-orange-500/20' },
     { title: 'أنشطة مشبوهة مكتشفة', value: stats?.anomalies_detected || 0, color: 'bg-purple-500/10 text-purple-500 border-purple-500/20' },
@@ -65,7 +65,7 @@ export default function FraudDashboardPage() {
           <h2 className="text-lg font-semibold text-white">أحدث الإشارات (Signals)</h2>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-right">
+          <table className="w-full text-start">
             <thead className="bg-gray-900 text-gray-400 text-sm">
               <tr>
                 <th className="p-4 font-medium">معرف المستخدم</th>
@@ -98,7 +98,7 @@ export default function FraudDashboardPage() {
                     <td className="p-4">
                       <Link 
                         href={`/admin/fraud/${signal.user_id}`}
-                        className="text-teal-500 hover:text-teal-400 text-sm font-medium"
+                        className="text-primary hover:text-brand-400 text-sm font-medium"
                       >
                         التفاصيل
                       </Link>

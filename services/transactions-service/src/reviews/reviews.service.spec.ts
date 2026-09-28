@@ -79,4 +79,34 @@ describe('ReviewsService', () => {
     expect(res.id).toBe('r-1');
     expect(qr.commitTransaction).toHaveBeenCalled();
   });
+
+  describe('rating summary', () => {
+    const completedDeal = { status: TransactionStatus.COMPLETED, buyer_id: 'u-1', seller_id: 'u-2', listing_id: 'l-1' };
+    const savedSummary = (qr: any) => qr.manager.save.mock.calls.map((c: any[]) => c[0]).find((e: any) => 'total_reviews' in e);
+
+    it("creates a user's first summary with real numbers (was NaN → 500)", async () => {
+      txRepo.findOne.mockResolvedValue(completedDeal);
+      reviewRepo.findOne.mockResolvedValue(null);
+      const qr = dataSourceMock.createQueryRunner();
+      qr.manager.findOne.mockResolvedValue(null);
+
+      await service.create('tx-1', 'u-1', { rating: 4 });
+
+      expect(savedSummary(qr)).toMatchObject({ user_id: 'u-2', total_reviews: 1, rating_4_count: 1, rating_5_count: 0, average_rating: 4 });
+    });
+
+    it('updates an existing summary whose numbers come back from Postgres as strings', async () => {
+      txRepo.findOne.mockResolvedValue(completedDeal);
+      reviewRepo.findOne.mockResolvedValue(null);
+      const qr = dataSourceMock.createQueryRunner();
+      qr.manager.findOne.mockResolvedValue({
+        user_id: 'u-2', total_reviews: 1, average_rating: '5.00',
+        rating_1_count: 0, rating_2_count: 0, rating_3_count: 0, rating_4_count: 0, rating_5_count: 1,
+      });
+
+      await service.create('tx-1', 'u-1', { rating: 3 });
+
+      expect(savedSummary(qr)).toMatchObject({ total_reviews: 2, rating_3_count: 1, average_rating: 4 });
+    });
+  });
 });

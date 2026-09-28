@@ -57,6 +57,9 @@ describe('AuthService', () => {
       get: jest.fn(),
       set: jest.fn(),
       del: jest.fn(),
+      incrWithTtl: jest.fn(),
+      deleteByPattern: jest.fn(),
+      getAndDelete: jest.fn(),
     };
 
     const mockJwtService = {
@@ -146,15 +149,115 @@ describe('AuthService', () => {
           password: 'wrongpassword',
         }),
       ).rejects.toThrow(UnauthorizedException);
+      expect(redisService.incrWithTtl).toHaveBeenCalledWith('login_failures:test@example.com:unknown', 900);
+      expect(redisService.incrWithTtl).toHaveBeenCalledWith('login_failures:test@example.com', 900);
+    });
+
+    it('should return the same error for unknown accounts (no user enumeration)', async () => {
+      usersService.findOneByEmail.mockResolvedValue(null);
+      (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+
+      await expect(
+        service.login({ identifier: 'nobody@example.com', password: 'whatever1' }),
+      ).rejects.toThrow(new UnauthorizedException('بيانات الدخول غير صحيحة'));
+      expect(bcrypt.compare).toHaveBeenCalled();
+    });
+
+    it('should not let failures from another IP lock the account owner out', async () => {
+      redisService.get.mockImplementation(async (key: string) =>
+        key === 'login_failures:test@example.com:10.0.0.9' ? '5' : key === 'login_failures:test@example.com' ? '5' : null,
+      );
+      usersService.findOneByEmail.mockResolvedValue(mockUser);
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+      jwtService.signAsync.mockResolvedValue('token_val');
+
+      const result = await service.login({ identifier: 'test@example.com', password: 'password123' }, '192.168.1.5');
+      expect(result.tokens.access_token).toBe('token_val');
+    });
+
+    it('should block login after too many failures, even with the right password', async () => {
+      redisService.get.mockResolvedValue('5');
+
+      await expect(
+        service.login({ identifier: 'test@example.com', password: 'password123' }),
+      ).rejects.toMatchObject({ status: 429 });
+      expect(usersService.findOneByEmail).not.toHaveBeenCalled();
+    });
+
+    it('should reject banned users after a correct password', async () => {
+      usersService.findOneByEmail.mockResolvedValue({ ...mockUser, status: UserStatus.BANNED });
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+      await expect(
+        service.login({ identifier: 'test@example.com', password: 'password123' }),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+  });
+
+  describe('handleOAuth', () => {
+    it('should not link an existing account through an unverified email', async () => {
+      usersService.findOneByEmail.mockResolvedValue(mockUser);
+      (usersService as any).findOneByFacebookId = jest.fn().mockResolvedValue(null);
+
+      await expect(
+        service.handleOAuth(
+          { id: 'fb-1', email: 'test@example.com', emailVerified: false },
+          AuthProvider.FACEBOOK,
+        ),
+      ).rejects.toThrow(ConflictException);
+      expect(usersService.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('handleOAuth pre-registration hijack', () => {
+    it('clears the password of an unverified account when Google proves the email', async () => {
+      (usersService as any).findOneByGoogleId = jest.fn().mockResolvedValue(null);
+      usersService.findOneByEmail.mockResolvedValue({ ...mockUser, isEmailVerified: false });
+      usersService.update.mockResolvedValue({ ...mockUser, isEmailVerified: true, passwordHash: null });
+      jwtService.signAsync.mockResolvedValue('t');
+
+      await service.handleOAuth({ id: 'g-1', email: mockUser.email, emailVerified: true }, AuthProvider.GOOGLE);
+
+      expect(usersService.update).toHaveBeenCalledWith(
+        mockUser.id,
+        expect.objectContaining({ googleId: 'g-1', isEmailVerified: true, passwordHash: null }),
+      );
+      expect(redisService.deleteByPattern).toHaveBeenCalledWith(`refresh:${mockUser.id}:*`);
     });
   });
 
   describe('refresh', () => {
+    it('should revoke all sessions when a token rotated long ago is replayed', async () => {
+      jwtService.verifyAsync.mockResolvedValue({ sub: 'user-uuid-123', jti: 'old-jti' });
+      (redisService as any).getAndDelete.mockResolvedValue(null);
+      redisService.get.mockResolvedValue(String(Date.now() - 10 * 60 * 1000));
+
+      await expect(service.refresh({ refresh_token: 'stolen' })).rejects.toThrow(UnauthorizedException);
+      expect(redisService.deleteByPattern).toHaveBeenCalledWith('refresh:user-uuid-123:*');
+    });
+
+    it('should not revoke everything on a concurrent refresh from the same client', async () => {
+      jwtService.verifyAsync.mockResolvedValue({ sub: 'user-uuid-123', jti: 'jti-1' });
+      (redisService as any).getAndDelete.mockResolvedValue(null);
+      redisService.get.mockResolvedValue(String(Date.now() - 1000));
+
+      await expect(service.refresh({ refresh_token: 'same' })).rejects.toThrow(UnauthorizedException);
+      expect(redisService.deleteByPattern).not.toHaveBeenCalled();
+    });
+
+    it('should not revoke everything for a token that was logged out', async () => {
+      jwtService.verifyAsync.mockResolvedValue({ sub: 'user-uuid-123', jti: 'jti-2' });
+      (redisService as any).getAndDelete.mockResolvedValue(null);
+      redisService.get.mockResolvedValue(null);
+
+      await expect(service.refresh({ refresh_token: 'logged-out' })).rejects.toThrow(UnauthorizedException);
+      expect(redisService.deleteByPattern).not.toHaveBeenCalled();
+    });
+
     it('should refresh tokens successfully and implement rotation', async () => {
       const payload = { sub: 'user-uuid-123', jti: 'token-id-abc' };
       jwtService.verifyAsync.mockResolvedValue(payload);
-      redisService.get.mockResolvedValue('valid');
-      redisService.del.mockResolvedValue(undefined);
+      (redisService as any).getAndDelete.mockResolvedValue('valid');
       usersService.findOneById.mockResolvedValue(mockUser);
       jwtService.signAsync.mockResolvedValue('new_token_val');
       redisService.set.mockResolvedValue(undefined);
@@ -164,7 +267,7 @@ describe('AuthService', () => {
       });
 
       expect(result.tokens.access_token).toBe('new_token_val');
-      expect(redisService.del).toHaveBeenCalledWith('refresh:user-uuid-123:token-id-abc');
+      expect((redisService as any).getAndDelete).toHaveBeenCalledWith('refresh:user-uuid-123:token-id-abc');
       expect(redisService.set).toHaveBeenCalled();
     });
   });

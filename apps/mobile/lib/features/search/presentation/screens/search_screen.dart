@@ -26,6 +26,14 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   late final PagingController<int, Listing> _pagingController;
 
+  /// From the server's total, not the page length: hydration drops listings that stopped
+  /// being active, so a short page does not mean the results ended.
+  bool _hasMore = true;
+
+  /// Only a submitted query (keyboard "search", or opening with a query) is part of the
+  /// ranking experiment; results while typing come from the plain listings search.
+  bool _committed = false;
+
   void _trackSearch(String query) {
     if (query.isNotEmpty) {
       ref.read(analyticsServiceProvider).trackEvent('search', searchQuery: query);
@@ -37,6 +45,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     super.initState();
     if (widget.initialQuery != null) {
       _searchController.text = widget.initialQuery!;
+      _committed = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         ref.read(searchFiltersProvider.notifier).setQuery(widget.initialQuery!);
         _trackSearch(widget.initialQuery!);
@@ -61,14 +70,15 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           maxPrice: filters.maxPrice,
           condition: filters.condition,
           sessionId: sessionId,
+          ranked: _committed,
         );
 
+        _hasMore = response.hasMore;
         filtersNotifier.setVariant(response.variant);
         return response.listings;
       },
       getNextPageKey: (state) {
-        final lastPage = state.pages?.last;
-        if (lastPage != null && lastPage.length < _pageSize) return null;
+        if (state.pages != null && !_hasMore) return null;
         return (state.keys?.last ?? 0) + 1;
       },
     );
@@ -87,11 +97,19 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       'search-debouncer',
       const Duration(milliseconds: 500),
       () {
+        _committed = false;
         ref.read(searchFiltersProvider.notifier).setQuery(query);
         _pagingController.refresh();
-        _trackSearch(query);
       },
     );
+  }
+
+  void _onSearchSubmitted(String query) {
+    EasyDebounce.cancel('search-debouncer');
+    _committed = query.trim().isNotEmpty;
+    ref.read(searchFiltersProvider.notifier).setQuery(query);
+    _pagingController.refresh();
+    _trackSearch(query);
   }
 
   void _showSortBottomSheet() {
@@ -217,7 +235,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       },
       onSelected: (String selection) {
         _searchController.text = selection;
-        _onSearchChanged(selection);
+        _onSearchSubmitted(selection); // choosing a suggestion is a deliberate search
         _searchFocusNode.unfocus();
       },
       fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
@@ -249,7 +267,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           onChanged: _onSearchChanged,
           onSubmitted: (value) {
             onFieldSubmitted();
-            _onSearchChanged(value);
+            _onSearchSubmitted(value);
           },
           textInputAction: TextInputAction.search,
         );

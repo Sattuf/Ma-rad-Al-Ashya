@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
+import { internalHeaders, requireSecret } from '../common/security';
 import Stripe = require('stripe');
 import { Listing, ListingStatus } from '../listings/entities/listing.entity';
 import { Promotion, PromotionPlan, PromotionStatus } from './entities/promotion.entity';
@@ -34,7 +35,7 @@ export const PROMOTION_PLANS = {
 
 @Injectable()
 export class PromotionsService {
-  private stripe: any;
+  private stripeClient: any;
   private readonly logger = new Logger(PromotionsService.name);
 
   constructor(
@@ -44,11 +45,16 @@ export class PromotionsService {
     private listingsRepository: Repository<Listing>,
     private configService: ConfigService,
     private httpService: HttpService,
-  ) {
-    const stripeKey = this.configService.get<string>('STRIPE_SECRET_KEY') || 'sk_test_mock';
-    this.stripe = new Stripe(stripeKey, {
-      apiVersion: '2023-10-16' as any,
-    });
+  ) {}
+
+  /** Created on first use so the service can boot without payments configured. */
+  private get stripe(): any {
+    if (!this.stripeClient) {
+      this.stripeClient = new Stripe(requireSecret('STRIPE_SECRET_KEY'), {
+        apiVersion: '2023-10-16' as any,
+      });
+    }
+    return this.stripeClient;
   }
 
   async getPlans() {
@@ -169,7 +175,6 @@ export class PromotionsService {
 
       try {
         const searchServiceUrl = this.configService.get<string>('SEARCH_SERVICE_URL') || 'http://localhost:3003';
-        const secret = this.configService.get<string>('INTERNAL_SECRET') || 'marad-internal-secret-for-webhooks';
         
         await firstValueFrom(
           this.httpService.put(
@@ -179,7 +184,8 @@ export class PromotionsService {
               expires_at: expiresAt.toISOString(),
             },
             {
-              headers: { 'x-internal-secret': secret },
+              headers: internalHeaders(),
+              timeout: 5000,
             }
           )
         );

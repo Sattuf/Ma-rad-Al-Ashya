@@ -5,6 +5,7 @@ import { Review } from './entities/review.entity';
 import { UserRatingSummary } from './entities/user-rating-summary.entity';
 import { CreateReviewDto } from './dto/review.dto';
 import { Transaction, TransactionStatus } from '../transactions/entities/transaction.entity';
+import { clampPagination } from '../transactions/transactions.service';
 
 @Injectable()
 export class ReviewsService {
@@ -54,19 +55,32 @@ export class ReviewsService {
 
       let summary = await queryRunner.manager.findOne(UserRatingSummary, { where: { user_id: revieweeId } });
       if (!summary) {
+        // Column defaults apply in the database, not on this object: start every counter at 0,
+        // otherwise the first review of a user computes NaN and the insert fails.
         summary = queryRunner.manager.create(UserRatingSummary, {
           user_id: revieweeId,
+          total_reviews: 0,
+          average_rating: 0,
+          rating_1_count: 0,
+          rating_2_count: 0,
+          rating_3_count: 0,
+          rating_4_count: 0,
+          rating_5_count: 0,
         });
       }
 
-      summary.total_reviews += 1;
-      (summary as any)[`rating_${dto.rating}_count`] += 1;
-      
-      const totalScore = (summary.rating_1_count * 1) + (summary.rating_2_count * 2) + 
-                         (summary.rating_3_count * 3) + (summary.rating_4_count * 4) + 
-                         (summary.rating_5_count * 5);
-                         
-      summary.average_rating = totalScore / summary.total_reviews;
+      summary.total_reviews = Number(summary.total_reviews) + 1;
+      const key = `rating_${dto.rating}_count` as 'rating_1_count';
+      summary[key] = Number(summary[key]) + 1;
+
+      const totalScore =
+        Number(summary.rating_1_count) * 1 +
+        Number(summary.rating_2_count) * 2 +
+        Number(summary.rating_3_count) * 3 +
+        Number(summary.rating_4_count) * 4 +
+        Number(summary.rating_5_count) * 5;
+
+      summary.average_rating = Math.round((totalScore / summary.total_reviews) * 100) / 100;
       summary.last_updated = new Date();
 
       await queryRunner.manager.save(summary);
@@ -81,7 +95,13 @@ export class ReviewsService {
     }
   }
 
-  async getUserReviews(userId: string, page: number, limit: number) {
+  async getRatingSummary(userId: string) {
+    const summary = await this.summaryRepo.findOne({ where: { user_id: userId } });
+    return summary || { user_id: userId, total_reviews: 0, average_rating: 0 };
+  }
+
+  async getUserReviews(userId: string, rawPage: number, rawLimit: number) {
+    const { page, limit } = clampPagination(rawPage, rawLimit);
     const summary = await this.summaryRepo.findOne({ where: { user_id: userId } });
     const reviews = await this.reviewRepo.find({
       where: { reviewee_id: userId },
