@@ -60,8 +60,12 @@ npm run docker:up
 npm run dev:gateway
 npm run dev:web
 
-# تشغيل تطبيق الجوال
-cd apps/mobile && flutter run
+# تشغيل تطبيق الجوال (يصل افتراضياً إلى البوابة على جهازك من محاكي Android)
+cd apps/mobile && cp .env.example .env && flutter run
+
+# نسخة الإصدار: عنوان البوابة وخادم المحادثات الحقيقيان
+flutter build apk --dart-define=API_URL=https://api.example.com/api/v1 \
+                  --dart-define=SOCKET_URL=https://chat.example.com
 ```
 
 ## 📝 التوثيق

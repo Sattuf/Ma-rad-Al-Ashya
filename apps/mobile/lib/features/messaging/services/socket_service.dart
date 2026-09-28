@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 import 'package:marad_mobile/core/storage/secure_storage.dart';
+import 'package:marad_mobile/core/network/api_client.dart';
 import 'dart:async';
 
 final socketServiceProvider = Provider<SocketService>((ref) {
@@ -26,7 +27,7 @@ class SocketService {
 
     final token = await _storage.getAccessToken();
 
-    socket = io.io('http://10.0.2.2:3004', io.OptionBuilder()
+    socket = io.io(ApiClient.socketUrl,io.OptionBuilder()
       .setTransports(['websocket'])
       .disableAutoConnect()
       .setExtraHeaders({'Authorization': 'Bearer $token'})

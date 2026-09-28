@@ -3,7 +3,18 @@ import 'package:flutter/foundation.dart';
 import 'package:marad_mobile/core/storage/secure_storage.dart';
 
 class ApiClient {
-  static const String baseUrl = kIsWeb ? 'http://127.0.0.1:3000/api/v1' : 'http://10.0.2.2:3000/api/v1';
+  // Release builds pass the real gateway: --dart-define=API_URL=https://api.example.com/api/v1
+  // The defaults reach a gateway on the developer's machine (10.0.2.2 is the host from the Android emulator).
+  static const String baseUrl = String.fromEnvironment(
+    'API_URL',
+    defaultValue: kIsWeb ? 'http://127.0.0.1:3000/api/v1' : 'http://10.0.2.2:3000/api/v1',
+  );
+
+  // messaging-service's socket.io endpoint; the gateway does not proxy websockets.
+  static const String socketUrl = String.fromEnvironment(
+    'SOCKET_URL',
+    defaultValue: kIsWeb ? 'http://127.0.0.1:3004' : 'http://10.0.2.2:3004',
+  );
 
   late final Dio dio;
   final SecureStorage _storage = SecureStorage();
