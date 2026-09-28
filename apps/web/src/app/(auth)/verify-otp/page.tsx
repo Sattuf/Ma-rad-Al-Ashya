@@ -78,7 +78,7 @@ function VerifyOtpContent() {
       
       setAuth(res.user, res.tokens.access_token);
       router.push('/');
-    } catch (err: any) {
+    } catch (err) {
       setError(errorMessage(err, 'رمز التحقق غير صحيح. تأكد من الأرقام وحاول مجدداً.'));
     } finally {
       setIsSubmitting(false);
@@ -91,7 +91,7 @@ function VerifyOtpContent() {
       setError(null);
       await authApi.sendOtp(phone);
       setTimeLeft(60);
-    } catch (err: any) {
+    } catch (err) {
       setError(errorMessage(err, 'تعذّر إرسال رمز جديد. حاول بعد دقيقة.'));
     }
   };

@@ -44,7 +44,7 @@ export default function LoginPage() {
       
       setAuth(res.user, res.tokens.access_token);
       router.replace(safeNext(new URLSearchParams(window.location.search).get('next')));
-    } catch (err: any) {
+    } catch (err) {
       setError(errorMessage(err, 'تعذّر تسجيل الدخول. تأكد من البيانات وحاول مجدداً.'));
     }
   };

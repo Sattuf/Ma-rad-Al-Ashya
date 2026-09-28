@@ -8,6 +8,17 @@ import { SearchQueryDto } from './dto/search-query.dto';
 import { TrackClickDto } from './dto/track-click.dto';
 import { AdminGuard, extractBearerToken, requireSecret, safeEqual, verifyAccessToken } from '../common/security';
 
+/** Identity for the experiment comes from a verified token only (never a client header). */
+function optionalUserId(authorization?: string): string | undefined {
+  const token = extractBearerToken(authorization);
+  if (!token) return undefined;
+  try {
+    return verifyAccessToken(token).userId;
+  } catch {
+    return undefined; // expired/invalid token: treat as anonymous, do not fail the request
+  }
+}
+
 @ApiTags('Search')
 @Controller('search')
 export class SearchController {
@@ -55,17 +66,7 @@ export class SearchController {
   @Get()
   @ApiOperation({ summary: 'Ranked text search (A/B experiment); returns ids, total and the variant' })
   async search(@Query() query: SearchQueryDto, @Headers('authorization') authorization?: string) {
-    // Identity for sticky assignment comes from a verified token only (never a client header).
-    let userId: string | undefined;
-    const token = extractBearerToken(authorization);
-    if (token) {
-      try {
-        userId = verifyAccessToken(token).userId;
-      } catch {
-        userId = undefined; // expired/invalid token: treat as anonymous, do not fail the search
-      }
-    }
-    return this.searchService.search(query, userId);
+    return this.searchService.search(query, optionalUserId(authorization));
   }
 
   @Get('autocomplete')
@@ -80,11 +81,11 @@ export class SearchController {
 
   @Post('track-click')
   @ApiOperation({ summary: 'Track user click for A/B testing' })
-  async trackClick(@Body() body: TrackClickDto) {
+  async trackClick(@Body() body: TrackClickDto, @Headers('authorization') authorization?: string) {
     if (!body.query || !body.variant) {
       throw new HttpException('Missing required fields', HttpStatus.BAD_REQUEST);
     }
-    return this.searchService.trackClick(body);
+    return this.searchService.trackClick(body, optionalUserId(authorization));
   }
 
   @Get('ranking/stats')

@@ -5,8 +5,9 @@ import '../../../listings/data/models/listing.dart';
 class SearchResponse {
   final List<Listing> listings;
   final String variant;
+  final bool hasMore;
 
-  SearchResponse({required this.listings, required this.variant});
+  SearchResponse({required this.listings, required this.variant, this.hasMore = false});
 }
 
 class SearchRepository {
@@ -31,24 +32,28 @@ class SearchRepository {
     String? condition,
     String? abVariant,
     String? sessionId,
+    bool ranked = false,
   }) async {
     final filters = {
       if (categoryId != null && categoryId.isNotEmpty) 'categoryId': categoryId,
       if (minPrice != null) 'minPrice': minPrice,
       if (maxPrice != null) 'maxPrice': maxPrice,
     };
+    if (!ranked || query.trim().length < 2) return _plainSearch(query, page, limit, filters);
     try {
-      final ranked = await _apiClient.dio.get('/search', queryParameters: {
+      final rankedResponse = await _apiClient.dio.get('/search', queryParameters: {
         'q': query,
         'page': page,
         'limit': limit,
         if (sessionId != null && sessionId.isNotEmpty) 'session_id': sessionId,
         ...filters,
       });
-      final data = Map<String, dynamic>.from(ranked.data as Map);
+      final data = Map<String, dynamic>.from(rankedResponse.data as Map);
       final ids = (data['ids'] as List? ?? const []).map((e) => e.toString()).toList();
       final variant = data['variant']?.toString() ?? '';
-      if (ids.isEmpty) return SearchResponse(listings: const [], variant: variant);
+      final total = (data['total'] as num?)?.toInt() ?? 0;
+      final hasMore = page * limit < total;
+      if (ids.isEmpty) return SearchResponse(listings: const [], variant: variant, hasMore: hasMore);
 
       final hydrated = await _apiClient.dio.get('/listings', queryParameters: {'ids': ids.join(','), 'limit': ids.length});
       final byId = <String, Listing>{};
@@ -56,14 +61,31 @@ class SearchRepository {
         final listing = Listing.fromJson(Map<String, dynamic>.from(json as Map));
         if (listing.status == 'active') byId[listing.id] = listing;
       }
-      return SearchResponse(listings: [for (final id in ids) if (byId[id] != null) byId[id]!], variant: variant);
+      return SearchResponse(listings: [for (final id in ids) if (byId[id] != null) byId[id]!], variant: variant, hasMore: hasMore);
     } on DioException catch (e) {
       final status = e.response?.statusCode ?? 0;
       if (e.response != null && status < 500) rethrow; // a real request error, not an outage
-      final fallback = await _apiClient.dio.get('/listings', queryParameters: {'search': query, 'page': page, 'limit': limit, ...filters});
-      final rows = (fallback.data['data'] as List? ?? const []);
-      return SearchResponse(listings: rows.map((json) => Listing.fromJson(Map<String, dynamic>.from(json as Map))).toList(), variant: '');
+      return _plainSearch(query, page, limit, filters);
     }
+  }
+
+  /// Database search on /listings (while typing, for empty queries, or when search is
+  /// down). Not part of the experiment: empty variant, clicks are not reported.
+  Future<SearchResponse> _plainSearch(String query, int page, int limit, Map<String, Object> filters) async {
+    final response = await _apiClient.dio.get('/listings', queryParameters: {
+      if (query.trim().isNotEmpty) 'search': query.trim(),
+      'page': page,
+      'limit': limit,
+      ...filters,
+    });
+    final rows = (response.data['data'] as List? ?? const []);
+    final meta = response.data['meta'] as Map? ?? const {};
+    final lastPage = (meta['lastPage'] as num?)?.toInt() ?? page;
+    return SearchResponse(
+      listings: rows.map((json) => Listing.fromJson(Map<String, dynamic>.from(json as Map))).toList(),
+      variant: '',
+      hasMore: page < lastPage,
+    );
   }
 
   void trackClick({

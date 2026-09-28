@@ -4,6 +4,10 @@
  */
 const KEY = 'marad_visitor_id';
 
+// When storage is blocked (private mode, strict settings) each page load still gets its own
+// random id; a shared constant would put every such visitor in one variant and bias the test.
+let memoryId: string | null = null;
+
 export function visitorId(): string {
   try {
     let id = localStorage.getItem(KEY);
@@ -13,6 +17,7 @@ export function visitorId(): string {
     }
     return id;
   } catch {
-    return 'anonymous'; // storage blocked: still searchable, just not sticky
+    memoryId ??= crypto.randomUUID();
+    return memoryId;
   }
 }

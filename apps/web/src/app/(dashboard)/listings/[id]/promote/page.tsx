@@ -101,7 +101,7 @@ export default function PromoteListingPage({ params }: { params: Promise<{ id: s
     try {
       const { clientSecret } = await promotionsApi.createPaymentIntent(listingId, selected);
       setClientSecret(clientSecret);
-    } catch (err: any) {
+    } catch (err) {
       setPaymentError(errorMessage(err, 'تعذّر بدء الدفع. لم يُخصم أي مبلغ؛ حاول مجدداً.'));
     } finally {
       setStarting(false);

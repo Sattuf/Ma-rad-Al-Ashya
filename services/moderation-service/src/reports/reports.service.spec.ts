@@ -127,6 +127,15 @@ describe('ReportsService', () => {
       expect(mockReportCountsRepo.save).not.toHaveBeenCalled();
     });
 
+    it('closing a report that was only "reviewed" still leaves the queue', async () => {
+      mockReportsRepo.findOne.mockResolvedValue({ ...pendingListingReport(), status: 'reviewed' });
+      mockReportsRepo.save.mockImplementation(async (r) => r);
+      mockReportCountsRepo.findOne.mockResolvedValue({ pending_count: 2 });
+
+      await service.reviewReport('r1', { status: 'dismissed', action_taken: 'none' }, 'admin');
+      expect(mockReportCountsRepo.save).toHaveBeenCalledWith(expect.objectContaining({ pending_count: 1 }));
+    });
+
     it('rejects unknown statuses and actions', async () => {
       await expect(service.reviewReport('r1', { status: 'approved' }, 'admin')).rejects.toThrow(BadRequestException);
       await expect(service.reviewReport('r1', { status: 'resolved', action_taken: 'delete_everything' }, 'admin')).rejects.toThrow(BadRequestException);

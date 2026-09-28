@@ -94,7 +94,7 @@ export function SearchBar() {
             </ul>
           ) : (
             <div className="p-6 text-center text-gray-500 text-sm">
-              لا توجد نتائج مطابقة لـ "{query}"
+              لا توجد نتائج مطابقة لـ «{query}»
             </div>
           )}
         </div>

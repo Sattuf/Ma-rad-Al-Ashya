@@ -22,7 +22,7 @@ export default function VerifyIdentityPage() {
       } else {
         setError('تعذّر تجهيز رابط التوثيق. حاول مجدداً.');
       }
-    } catch (err: any) {
+    } catch (err) {
       setError(errorMessage(err, 'تعذّر بدء توثيق الهوية. حاول مجدداً.'));
     } finally {
       setIsStarting(false);

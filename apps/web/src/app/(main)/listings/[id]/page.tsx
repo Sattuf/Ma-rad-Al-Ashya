@@ -1,5 +1,6 @@
 'use client';
 
+import { errorMessage } from '@/lib/errors';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -80,11 +81,8 @@ export default function ListingDetailPage() {
     try {
       const tx = await transactionsApi.createTransaction(listing.id, listing.userId);
       router.push(`/transactions/${tx.id}`);
-    } catch (err: any) {
-      setNotice({
-        tone: 'danger',
-        text: err?.response?.status === 409 ? 'أرسلت طلب شراء لهذا الإعلان مسبقاً. تابعه من صفحة صفقاتي.' : 'تعذّر إرسال طلب الشراء، حاول مجدداً.',
-      });
+    } catch (err) {
+      setNotice({ tone: 'danger', text: errorMessage(err, 'تعذّر إرسال طلب الشراء. حاول مجدداً.') });
       setBusy(null);
     }
   };
@@ -95,8 +93,8 @@ export default function ListingDetailPage() {
     try {
       const conversation = await messagingApi.startConversation(listing.userId, listing.id);
       router.push(`/messages?c=${conversation.id}`);
-    } catch {
-      setNotice({ tone: 'danger', text: 'تعذّر فتح المحادثة، حاول مجدداً.' });
+    } catch (err) {
+      setNotice({ tone: 'danger', text: errorMessage(err, 'تعذّر فتح المحادثة. حاول مجدداً.') });
       setBusy(null);
     }
   };

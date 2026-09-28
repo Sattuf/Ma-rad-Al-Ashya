@@ -143,7 +143,8 @@ export class ReportsService {
     // listing is still online would mislead the moderator and the reporter.
     await this.applyAction(report, action);
 
-    const wasPending = report.status === 'pending';
+    // "reviewed" is still open (looked at, not decided); the queue count covers open reports.
+    const wasOpen = report.status === 'pending' || report.status === 'reviewed';
     report.status = status;
     report.action_taken = action;
     report.admin_note = typeof reviewDto.admin_note === 'string' ? reviewDto.admin_note.slice(0, 2000) : report.admin_note;
@@ -151,8 +152,8 @@ export class ReportsService {
     report.reviewed_at = new Date();
     const saved = await this.reportsRepository.save(report);
 
-    // Only a pending → closed transition leaves the queue (re-reviews must not drift the count).
-    if (wasPending && (status === 'resolved' || status === 'dismissed')) {
+    // Only an open → closed transition leaves the queue (re-reviews must not drift the count).
+    if (wasOpen && (status === 'resolved' || status === 'dismissed')) {
       const count = await this.reportCountsRepository.findOne({
         where: { target_type: report.target_type, target_id: report.target_id },
       });

@@ -72,7 +72,7 @@ export default function RegisterPage() {
       
       setAuth(res.user, res.tokens.access_token);
       router.push('/');
-    } catch (err: any) {
+    } catch (err) {
       setError(errorMessage(err, 'تعذّر إنشاء الحساب. راجع البيانات وحاول مجدداً.'));
     }
   };

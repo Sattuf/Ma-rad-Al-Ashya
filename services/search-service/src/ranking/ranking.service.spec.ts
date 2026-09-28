@@ -39,6 +39,20 @@ describe('RankingService', () => {
     expect(variant1).toBe('A');
   });
 
+  it('agrees on one variant when two first requests race (SET NX, then read back)', async () => {
+    const set = jest.spyOn(service['redisClient'], 'set').mockResolvedValue(null as any); // another request won
+    jest.spyOn(service['redisClient'], 'get').mockResolvedValue('B');
+    await expect(service.getABVariant(undefined, 'session-1')).resolves.toBe('B');
+    expect(set).toHaveBeenCalledWith('ab:session:session-1', expect.stringMatching(/^[AB]$/), 'EX', expect.any(Number), 'NX');
+  });
+
+  it('assignedVariant never assigns', async () => {
+    const set = jest.spyOn(service['redisClient'], 'set');
+    jest.spyOn(service['redisClient'], 'get').mockResolvedValue(null);
+    await expect(service.assignedVariant(undefined, 'nobody')).resolves.toBeNull();
+    expect(set).not.toHaveBeenCalled();
+  });
+
   it('should return engagement scores correctly from Redis', async () => {
     jest.spyOn(service['redisClient'], 'mget')
       .mockResolvedValueOnce(['10', '0'])

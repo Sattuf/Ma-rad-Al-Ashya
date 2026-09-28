@@ -12,6 +12,13 @@ const MAX_SEARCH_PAGE = 50;
 const SEARCH_CACHE_VERSION_KEY = 'search:cache:version';
 /** Clicks keep influencing ranking for 30 days. */
 const CLICK_SIGNAL_TTL = 30 * 24 * 3600;
+/** Dedupe window for searches and clicks, and how long served results stay clickable. */
+const EXPERIMENT_WINDOW = 30 * 60;
+/** Elasticsearch index.max_result_window default. */
+const ES_RESULT_WINDOW = 10_000;
+
+/** The experiment unit: the signed-in account, else the anonymous visitor id. */
+const experimentIdentity = (userId?: string, sessionId?: string) => (userId ? `u:${userId}` : sessionId ? `s:${sessionId}` : undefined);
 
 const toPositiveNumber = (v: unknown) => {
   const n = Number(v);
@@ -38,17 +45,6 @@ export class SearchService implements OnModuleDestroy {
     return `${prefix}:${hash}`;
   }
 
-  private async invalidateCache(pattern: string) {
-    let cursor = '0';
-    do {
-      const result = await this.redisClient.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
-      cursor = result[0];
-      const keys = result[1];
-      if (keys.length > 0) {
-        await this.redisClient.del(...keys);
-      }
-    } while (cursor !== '0');
-  }
 
   /**
    * Cached results are namespaced by a version that every index write bumps (O(1)),
@@ -69,19 +65,40 @@ export class SearchService implements OnModuleDestroy {
     const categoryId = typeof dto.categoryId === 'string' && UUID.test(dto.categoryId) ? dto.categoryId : undefined;
     const minPrice = toPositiveNumber(dto.minPrice);
     const maxPrice = toPositiveNumber(dto.maxPrice);
-    const page = Math.max(1, Math.floor(Number(dto.page)) || 1);
     const limit = Math.min(MAX_SEARCH_PAGE, Math.max(1, Math.floor(Number(dto.limit)) || 20));
-    const sessionId = typeof dto.session_id === 'string' ? dto.session_id.slice(0, 64) : undefined;
+    // Elasticsearch refuses from + size beyond its result window: stop paging there.
+    const lastReachablePage = Math.floor(ES_RESULT_WINDOW / limit);
+    const page = Math.min(lastReachablePage, Math.max(1, Math.floor(Number(dto.page)) || 1));
+    const sessionId = typeof dto.session_id === 'string' && dto.session_id.trim() ? dto.session_id.trim().slice(0, 64) : undefined;
+    const identity = experimentIdentity(userId, sessionId);
 
     const variant = await this.rankingService.getABVariant(userId, sessionId);
     const version = await this.searchCacheVersion();
     const cacheKey = this.generateCacheKey(`search_v3:${version}`, { query, categoryId, minPrice, maxPrice, page, limit, variant });
-    const countSearch = () => (page === 1 ? this.redisClient.incr(`search:ab:${variant}:total`) : Promise.resolve(0));
+    const fingerprint = crypto.createHash('md5').update(JSON.stringify([query.toLowerCase(), categoryId, minPrice, maxPrice])).digest('hex');
+
+    /**
+     * A "search" for the experiment = the first page of a (visitor, query) pair, counted once
+     * per 30 minutes: refreshes, back-navigation and repeats do not inflate the denominator,
+     * and anonymous requests without any visitor id are ranked but never counted.
+     * The ids served are remembered so a click is only accepted for a result actually shown.
+     */
+    const record = async (ids: string[]) => {
+      if (!identity) return;
+      const served = `search:served:${identity}`;
+      const tx = this.redisClient.multi();
+      if (ids.length) tx.sadd(served, ...ids).expire(served, EXPERIMENT_WINDOW);
+      await tx.exec();
+      if (page === 1 && (await this.redisClient.set(`search:seen:${identity}:${fingerprint}`, '1', 'EX', EXPERIMENT_WINDOW, 'NX'))) {
+        await this.redisClient.incr(`search:ab:${variant}:total`);
+      }
+    };
 
     const cached = await this.redisClient.get(cacheKey);
     if (cached) {
-      await countSearch();
-      return { ...JSON.parse(cached), variant };
+      const parsed = JSON.parse(cached);
+      await record(parsed.ids);
+      return { ...parsed, variant };
     }
 
     const must: any[] = [];
@@ -121,10 +138,12 @@ export class SearchService implements OnModuleDestroy {
         track_total_hits: true,
       });
 
-      const total = typeof response.hits.total === 'number' ? response.hits.total : (response.hits.total?.value ?? 0);
+      const rawTotal = typeof response.hits.total === 'number' ? response.hits.total : (response.hits.total?.value ?? 0);
+      // Clients derive the last page from total; never promise pages beyond the window.
+      const total = Math.min(rawTotal, lastReachablePage * limit);
       const result = { ids: response.hits.hits.map((h: any) => h._id as string), total, page, limit };
       await this.redisClient.set(cacheKey, JSON.stringify(result), 'EX', 180);
-      await countSearch();
+      await record(result.ids);
       return { ...result, variant };
     } catch (error) {
       this.logger.error(`Search failed: ${error.message}`);
@@ -279,7 +298,7 @@ export class SearchService implements OnModuleDestroy {
   async autocomplete(query: string) {
     if (!query || query.length < 2) return [];
 
-    const cacheKey = this.generateCacheKey('autocomplete', { query });
+    const cacheKey = this.generateCacheKey(`autocomplete_v2:${await this.searchCacheVersion()}`, { query });
     const cachedResult = await this.redisClient.get(cacheKey);
     if (cachedResult) return JSON.parse(cachedResult);
 
@@ -360,7 +379,6 @@ export class SearchService implements OnModuleDestroy {
       }
 
       await this.redisClient.incr(SEARCH_CACHE_VERSION_KEY);
-      await this.invalidateCache('autocomplete:*');
 
       return { success: true };
     } catch (error) {
@@ -383,8 +401,7 @@ export class SearchService implements OnModuleDestroy {
       });
       this.logger.log(`Updated boost multiplier to ${boostMultiplier} and expires_at to ${expiresAt} for document ${id}`);
       
-      await this.invalidateCache('search:*');
-      await this.invalidateCache('autocomplete:*');
+      await this.redisClient.incr(SEARCH_CACHE_VERSION_KEY);
       
       return { success: true };
     } catch (error) {
@@ -407,20 +424,37 @@ export class SearchService implements OnModuleDestroy {
     }
   }
 
-  async trackClick(body: TrackClickDto) {
+  /**
+   * Records a click on a ranked result. Unauthenticated by design (guests search too), so
+   * every click is checked before it counts toward the experiment or the ranking signal:
+   * the variant must be the one this visitor was assigned, the listing must have been
+   * served to them recently, and one visitor counts once per listing per 30 minutes.
+   * Forged or repeated clicks are acknowledged but ignored ({ tracked: false }).
+   */
+  async trackClick(body: TrackClickDto, userId?: string) {
     if (body.variant !== 'A' && body.variant !== 'B') throw new HttpException('Invalid variant', HttpStatus.BAD_REQUEST);
     const listingId = typeof body.listing_id === 'string' && UUID.test(body.listing_id) ? body.listing_id : null;
     const position = typeof body.position === 'number' && Number.isInteger(body.position) && body.position >= 0 && body.position < 1000 ? body.position : null;
+    const sessionId = typeof body.session_id === 'string' && body.session_id.trim() ? body.session_id.trim().slice(0, 64) : undefined;
+    const identity = experimentIdentity(userId, sessionId);
+    if (!identity || !listingId) return { tracked: false };
+
+    const [assigned, served] = await Promise.all([
+      this.rankingService.assignedVariant(userId, sessionId),
+      this.redisClient.sismember(`search:served:${identity}`, listingId),
+    ]);
+    if (assigned !== body.variant || !served) return { tracked: false };
+    const first = await this.redisClient.set(`search:clicked:${identity}:${listingId}`, '1', 'EX', EXPERIMENT_WINDOW, 'NX');
+    if (!first) return { tracked: false };
+
     try {
       await pgPool().query(
-        `INSERT INTO ab_test_results (variant, session_id, query, clicked_listing_id, click_position, results_count) VALUES ($1, $2, $3, $4, $5, $6)`,
-        [body.variant, String(body.session_id ?? '').slice(0, 255), String(body.query ?? '').slice(0, 200), listingId, position, listingId ? 1 : 0],
+        `INSERT INTO ab_test_results (variant, user_id, session_id, query, clicked_listing_id, click_position, results_count) VALUES ($1, $2, $3, $4, $5, $6, 1)`,
+        [body.variant, userId && UUID.test(userId) ? userId : null, (sessionId ?? '').slice(0, 255), String(body.query ?? '').slice(0, 200), listingId, position],
       );
       // Engagement signal for ranking. Not listing:views — that key is the listing's page-view
       // counter (drained into viewsCount), and the detail page already counts the visit.
-      if (listingId) {
-        await this.redisClient.multi().incr(`search:clicks:${listingId}`).expire(`search:clicks:${listingId}`, CLICK_SIGNAL_TTL).exec();
-      }
+      await this.redisClient.multi().incr(`search:clicks:${listingId}`).expire(`search:clicks:${listingId}`, CLICK_SIGNAL_TTL).exec();
       return { tracked: true };
     } catch (error) {
       this.logger.error(`Failed to track click: ${error.message}`);

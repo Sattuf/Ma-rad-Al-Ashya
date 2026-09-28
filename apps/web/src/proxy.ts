@@ -3,17 +3,6 @@ import type { NextRequest } from 'next/server';
 import { isAuthPage, requiresAuth } from '@/lib/route-access';
 import { safeNext } from '@/lib/safe-next';
 
-/** Reads the (unverified) JWT payload. Used only to route the UI; the API re-checks everything. */
-function jwtRole(token: string): string | undefined {
-  try {
-    const payload = token.split('.')[1];
-    if (!payload) return undefined;
-    return JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/'))).role;
-  } catch {
-    return undefined;
-  }
-}
-
 export function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
   const token = request.cookies.get('refresh_token')?.value || request.cookies.get('access_token')?.value;
@@ -28,10 +17,9 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL(safeNext(request.nextUrl.searchParams.get('next')), request.url));
   }
 
-  if (token && pathname.startsWith('/admin')) {
-    const role = jwtRole(token);
-    if (role !== undefined && role !== 'admin') return NextResponse.redirect(new URL('/', request.url));
-  }
+  // Admin pages need a session here; the admin role is checked by the admin layout (from
+  // the restored session) and enforced by AdminGuard on every admin API. The proxy cannot
+  // check it: only the refresh token is a cookie, and it carries no role.
 
   return NextResponse.next();
 }

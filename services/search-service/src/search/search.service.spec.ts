@@ -10,6 +10,13 @@ jest.mock('ioredis', () => {
       set: jest.fn(),
       del: jest.fn(),
       incr: jest.fn().mockResolvedValue('1'),
+      sadd: jest.fn(),
+      expire: jest.fn(),
+      sismember: jest.fn().mockResolvedValue(0),
+      multi: jest.fn().mockImplementation(() => {
+        const chain: any = { sadd: jest.fn(() => chain), expire: jest.fn(() => chain), incr: jest.fn(() => chain), exec: jest.fn().mockResolvedValue([]) };
+        return chain;
+      }),
       scan: jest.fn().mockResolvedValue(['0', []]),
       ping: jest.fn().mockResolvedValue('PONG'),
     };
@@ -50,6 +57,7 @@ describe('SearchService', () => {
           provide: RankingService,
           useValue: {
             getABVariant: jest.fn().mockResolvedValue('A'),
+            assignedVariant: jest.fn().mockResolvedValue('A'),
             getEngagementScores: jest.fn().mockResolvedValue(new Map()),
             buildFunctionScore: jest.fn().mockReturnValue({}),
           },
@@ -72,6 +80,7 @@ describe('SearchService', () => {
       jest.spyOn(redis(), 'get').mockImplementation(async (key: string) =>
         key === 'search:cache:version' ? '4' : JSON.stringify({ ids: ['a'], total: 1, page: 1, limit: 20 }),
       );
+      jest.spyOn(redis(), 'set').mockResolvedValue('OK');
       const result = await service.search({ q: 'جوال', session_id: 's1' });
       expect(result).toEqual({ ids: ['a'], total: 1, page: 1, limit: 20, variant: 'A' });
       expect(esService.client.search).not.toHaveBeenCalled();
@@ -102,13 +111,13 @@ describe('SearchService', () => {
 
   it('removes a deleted listing from ES and bumps the search cache version (no SCAN)', async () => {
     (esService.client.delete as jest.Mock).mockResolvedValue({});
-    jest.spyOn(service as any, 'invalidateCache').mockResolvedValue(undefined);
+    const scan = jest.spyOn(service['redisClient'], 'scan');
 
     await service.indexListing('delete', { id: '123' });
 
     expect(esService.client.delete).toHaveBeenCalledWith({ index: 'marad_listings', id: '123' });
     expect(service['redisClient'].incr).toHaveBeenCalledWith('search:cache:version');
-    expect(service['invalidateCache']).not.toHaveBeenCalledWith('search:*');
+    expect(scan).not.toHaveBeenCalled();
   });
 
   it('indexes status and category ids so sold listings drop out and parents match children', async () => {
@@ -117,18 +126,73 @@ describe('SearchService', () => {
     expect((esService.client.index as jest.Mock).mock.calls[0][0].document).toMatchObject({ status: 'sold', category_ids: ['c-child', 'c-parent'] });
   });
 
-  it('counts a click as a search signal, never as a page view', async () => {
-    const exec = jest.fn().mockResolvedValue([]);
-    const multi = { incr: jest.fn().mockReturnThis(), expire: jest.fn().mockReturnThis(), exec };
-    (service['redisClient'] as any).multi = jest.fn().mockReturnValue(multi);
-    mockPgQuery.mockReset().mockResolvedValue({ rows: [] });
+  describe('click validation', () => {
     const id = '3f2b8c1e-8a1d-4c55-9a7e-0b6f1f0e2d11';
+    const redis = () => service['redisClient'] as any;
+    const ranking = () => (service as any).rankingService;
+    const click = (over: Record<string, unknown> = {}) =>
+      service.trackClick({ variant: 'A', session_id: 's1', query: 'q', listing_id: id, position: 2, ...over } as any);
+    let multi: any;
 
-    await service.trackClick({ variant: 'A', session_id: 's', query: 'q', listing_id: id, position: 2 } as any);
+    beforeEach(() => {
+      mockPgQuery.mockReset().mockResolvedValue({ rows: [] });
+      multi = { incr: jest.fn().mockReturnThis(), expire: jest.fn().mockReturnThis(), exec: jest.fn().mockResolvedValue([]) };
+      redis().multi = jest.fn().mockReturnValue(multi);
+      redis().sismember = jest.fn().mockResolvedValue(1);
+      redis().set = jest.fn().mockResolvedValue('OK');
+      ranking().assignedVariant = jest.fn().mockResolvedValue('A');
+    });
 
-    expect(multi.incr).toHaveBeenCalledWith(`search:clicks:${id}`);
-    expect(service['redisClient'].incr).not.toHaveBeenCalledWith(`listing:views:${id}`);
-    await expect(service.trackClick({ variant: 'C', session_id: 's', query: 'q' } as any)).rejects.toThrow();
+    it('counts a valid click as a search signal, never as a page view', async () => {
+      await expect(click()).resolves.toEqual({ tracked: true });
+      expect(multi.incr).toHaveBeenCalledWith(`search:clicks:${id}`);
+      expect(redis().incr).not.toHaveBeenCalledWith(`listing:views:${id}`);
+      expect(mockPgQuery).toHaveBeenCalledTimes(1);
+    });
+
+    it('ignores a click claiming a variant the visitor was not assigned', async () => {
+      await expect(click({ variant: 'B' })).resolves.toEqual({ tracked: false });
+      expect(mockPgQuery).not.toHaveBeenCalled();
+    });
+
+    it('ignores a click on a listing that was never shown to the visitor', async () => {
+      redis().sismember = jest.fn().mockResolvedValue(0);
+      await expect(click()).resolves.toEqual({ tracked: false });
+      expect(multi.incr).not.toHaveBeenCalled();
+    });
+
+    it('counts one click per visitor per listing (no boosting by repetition)', async () => {
+      redis().set = jest.fn().mockResolvedValue(null);
+      await expect(click()).resolves.toEqual({ tracked: false });
+      expect(mockPgQuery).not.toHaveBeenCalled();
+    });
+
+    it('rejects unknown variants and ignores anonymous clicks', async () => {
+      await expect(click({ variant: 'C' })).rejects.toThrow();
+      await expect(click({ session_id: undefined })).resolves.toEqual({ tracked: false });
+    });
+  });
+
+  it('counts a repeated identical search once per visitor', async () => {
+    const redis = service['redisClient'] as any;
+    jest.spyOn(redis, 'get').mockResolvedValue(null);
+    (esService.client.search as jest.Mock).mockResolvedValue({ hits: { total: 1, hits: [{ _id: 'x' }] } });
+    redis.set = jest.fn().mockResolvedValueOnce('OK').mockResolvedValueOnce('OK').mockResolvedValueOnce('OK').mockResolvedValue(null);
+    redis.incr = jest.fn();
+
+    await service.search({ q: 'جوال', session_id: 's9' });
+    await service.search({ q: 'جوال', session_id: 's9' });
+
+    expect(redis.incr.mock.calls.filter((c: string[]) => c[0] === 'search:ab:A:total')).toHaveLength(1);
+  });
+
+  it('stops paging at the Elasticsearch result window', async () => {
+    jest.spyOn(service['redisClient'], 'get').mockResolvedValue(null);
+    (esService.client.search as jest.Mock).mockResolvedValue({ hits: { total: { value: 50000 }, hits: [] } });
+    const result = await service.search({ q: 'a', page: '100000' as any, limit: '20' as any });
+    const call = (esService.client.search as jest.Mock).mock.calls.at(-1)[0];
+    expect(call.from + call.size).toBeLessThanOrEqual(10000);
+    expect(result.total).toBe(10000);
   });
 
   it('should return health status correctly', async () => {
@@ -209,8 +273,13 @@ describe('SearchService', () => {
 
     it('reuses one connection pool for every click instead of a connection per request', async () => {
       const before = mockPoolCtor.mock.calls.length;
-      await service.trackClick({ variant: 'A', session_id: 's', query: 'q', listing_id: undefined } as any);
-      await service.trackClick({ variant: 'B', session_id: 's', query: 'q', listing_id: undefined } as any);
+      const redis = service['redisClient'] as any;
+      redis.sismember = jest.fn().mockResolvedValue(1);
+      redis.set = jest.fn().mockResolvedValue('OK');
+      (service as any).rankingService.assignedVariant = jest.fn().mockResolvedValue('A');
+      const listing = '3f2b8c1e-8a1d-4c55-9a7e-0b6f1f0e2d11';
+      await service.trackClick({ variant: 'A', session_id: 's1', query: 'q', listing_id: listing } as any);
+      await service.trackClick({ variant: 'A', session_id: 's2', query: 'q', listing_id: listing } as any);
       expect(mockPoolCtor.mock.calls.length - before).toBeLessThanOrEqual(1);
       expect(mockPgQuery).toHaveBeenCalledTimes(2);
       expect(mockPoolCtor.mock.calls.at(-1)?.[0]).toMatchObject({ max: expect.any(Number) });
