@@ -1,18 +1,14 @@
 import useSWRInfinite from 'swr/infinite';
-import { fetchMessagingPage, pageQuery } from './messagingPage';
+import { fetchMessagingPage, MessagingPage, pageUrl } from './messagingPage';
 import { Message } from '@/types/message';
 
 export const useMessages = (conversationId: string | null) => {
-  const getKey = (pageIndex: number, previousPageData: any) => {
+  const getKey = (_pageIndex: number, previousPageData: MessagingPage<Message> | null) => {
     if (!conversationId) return null;
-    if (previousPageData && !previousPageData.hasMore) return null; // reached the end
-    return `/messages/${conversationId}?${pageQuery(pageIndex)}`;
+    return pageUrl(`/messages/${conversationId}`, previousPageData);
   };
 
-  const { data, error, size, setSize, mutate } = useSWRInfinite<{
-    data: Message[];
-    hasMore: boolean;
-  }>(getKey, fetchMessagingPage, {
+  const { data, error, size, setSize, mutate } = useSWRInfinite<MessagingPage<Message>>(getKey, fetchMessagingPage, {
     revalidateOnFocus: false,
   });
 
@@ -23,7 +19,7 @@ export const useMessages = (conversationId: string | null) => {
     (size > 0 && data && typeof data[size - 1] === "undefined");
   const isEmpty = data?.[0]?.data.length === 0;
   const isReachingEnd =
-    isEmpty || (data && data[data.length - 1]?.data.length < 20) || (data && data[data.length - 1]?.hasMore === false);
+    isEmpty || (data && data[data.length - 1]?.hasMore === false);
 
   return {
     messages,

@@ -16,8 +16,6 @@ class MessagingRepository {
 
   Future<List<Conversation>> getConversations() async {
     try {
-      // In a real scenario, make a request to the messaging service via Gateway or direct.
-      // Gateway normally handles this if routed, assuming Gateway routes /api/v1/messaging to messaging service.
       final response = await apiClient.dio.get('/messaging/conversations');
       if (response.statusCode == 200) {
         final List data = response.data['data'] ?? [];
@@ -66,6 +64,6 @@ class MessagingRepository {
       '/messaging/conversations/$conversationId/messages/image',
       data: formData,
     );
-    return Message.fromJson(response.data['data']);
+    return Message.fromJson(response.data);
   }
 }

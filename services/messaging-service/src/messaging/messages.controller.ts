@@ -16,8 +16,8 @@ export class MessagesController {
     @Req() req: { user: AuthUser },
     @Param('conversationId') conversationId: string,
     @Query('limit') limit?: string,
-    @Query('skip') skip?: string,
+    @Query('cursor') cursor?: string,
   ) {
-    return this.messagingService.getMessages(conversationId, req.user.userId, Number(limit) || 50, Number(skip) || 0);
+    return this.messagingService.getMessages(conversationId, req.user.userId, limit, cursor);
   }
 }

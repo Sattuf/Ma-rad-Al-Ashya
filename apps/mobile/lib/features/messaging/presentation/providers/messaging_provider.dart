@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/repositories/messaging_repository.dart';
@@ -66,44 +67,68 @@ final chatProvider = StateNotifierProvider.family<ChatNotifier, ChatState, Strin
   return ChatNotifier(repo, socketService, conversationId);
 });
 
+const _pendingPrefix = 'pending-';
+
 class ChatNotifier extends StateNotifier<ChatState> {
   final MessagingRepository repo;
   final SocketService socketService;
   final String conversationId;
 
+  final List<StreamSubscription> _subscriptions = [];
+
   ChatNotifier(this.repo, this.socketService, this.conversationId) : super(ChatState()) {
+    socketService.connect();
+    socketService.joinConversation(conversationId);
     _initSocketListeners();
     loadMessages();
   }
 
-  void _initSocketListeners() {
-    socketService.onMessageReceived.listen((data) {
-      if (data['conversationId'] == conversationId) {
-        final newMessage = Message.fromJson(data);
-        state = state.copyWith(
-          messages: [newMessage, ...state.messages],
-        );
-      }
-    });
+  @override
+  void dispose() {
+    for (final s in _subscriptions) {
+      s.cancel();
+    }
+    socketService.leaveConversation(conversationId);
+    super.dispose();
+  }
 
-    socketService.onTypingStatus.listen((data) {
+  void _initSocketListeners() {
+    _subscriptions.add(socketService.onMessageReceived.listen((data) {
+      if (data['conversationId'] != conversationId) return;
+      final newMessage = Message.fromJson(data);
+      // The server echoes my own message back: replace its optimistic copy instead of
+      // showing it twice.
+      final pending = state.messages.indexWhere(
+        (m) => m.id.startsWith(_pendingPrefix) && m.senderId == newMessage.senderId && m.text == newMessage.text,
+      );
+      if (pending >= 0) {
+        final updated = [...state.messages]..[pending] = newMessage;
+        state = state.copyWith(messages: updated);
+      } else {
+        state = state.copyWith(messages: [newMessage, ...state.messages]);
+        socketService.markAsRead({'conversationId': conversationId});
+      }
+    }));
+
+    _subscriptions.add(socketService.onTypingStatus.listen((data) {
       if (data['conversationId'] == conversationId) {
         state = state.copyWith(isTyping: data['isTyping'] ?? false);
       }
-    });
-    
-    socketService.onMessageRead.listen((data) {
-       if (data['conversationId'] == conversationId) {
-         // Update messages as read
-         final updatedMessages = state.messages.map((m) {
-           if (m.senderId != data['userId']) {
-             return m.copyWith(isRead: true);
-           }
-           return m;
-         }).toList();
-         state = state.copyWith(messages: updatedMessages);
-       }
-    });
+    }));
+
+    // The other participant read up to a message id: mark mine up to it.
+    _subscriptions.add(socketService.onMessageRead.listen((data) {
+      if (data['conversationId'] != conversationId) return;
+      final upTo = BigInt.tryParse('${data['lastReadMessageId']}');
+      if (upTo == null) return;
+      state = state.copyWith(
+        messages: state.messages.map((m) {
+          final id = BigInt.tryParse(m.id);
+          final readNow = m.senderId != data['userId'] && id != null && id <= upTo;
+          return readNow ? m.copyWith(isRead: true) : m;
+        }).toList(),
+      );
+    }));
   }
 
   Future<void> loadMessages() async {
@@ -118,6 +143,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
         isLoading: false,
         nextCursor: nextCursor,
       );
+      socketService.markAsRead({'conversationId': conversationId});
     } catch (e) {
       state = state.copyWith(isLoading: false);
     }
@@ -141,24 +167,25 @@ class ChatNotifier extends StateNotifier<ChatState> {
   }
 
   void sendMessage(String text, String senderId, {String? imageUrl}) {
-    final payload = {
-      'conversationId': conversationId,
-      'senderId': senderId,
-      'text': text,
-      'imageUrl': imageUrl,
-      'createdAt': DateTime.now().toIso8601String(),
-    };
-    
-    // Optimistic update
-    final msg = Message.fromJson({...payload, 'id': DateTime.now().millisecondsSinceEpoch.toString()});
-    state = state.copyWith(messages: [msg, ...state.messages]);
+    // The server takes the sender from the verified token, never from the payload.
+    socketService.sendMessage({'conversationId': conversationId, 'content': text});
 
-    socketService.sendMessage(payload);
+    // Optimistic copy, replaced when the server echoes the stored message.
+    final msg = Message(
+      id: '$_pendingPrefix${DateTime.now().microsecondsSinceEpoch}',
+      conversationId: conversationId,
+      senderId: senderId,
+      text: text,
+      imageUrl: imageUrl,
+      createdAt: DateTime.now(),
+    );
+    state = state.copyWith(messages: [msg, ...state.messages]);
   }
 
   Future<void> sendImage(String filePath, String senderId) async {
-    // Optimistic loading message
-    final msgId = DateTime.now().millisecondsSinceEpoch.toString();
+    // Optimistic loading message (not matched against the echo: the upload's response
+    // replaces it below).
+    final msgId = 'upload-${DateTime.now().microsecondsSinceEpoch}';
     final tempMsg = Message(
       id: msgId,
       conversationId: conversationId,

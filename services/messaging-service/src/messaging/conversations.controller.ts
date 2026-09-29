@@ -47,9 +47,9 @@ export class ConversationsController {
   async getConversations(
     @Req() req: { user: AuthUser },
     @Query('limit') limit?: string,
-    @Query('skip') skip?: string,
+    @Query('cursor') cursor?: string,
   ) {
-    return this.messagingService.getConversations(req.user.userId, Number(limit) || 20, Number(skip) || 0);
+    return this.messagingService.getConversations(req.user.userId, limit, cursor);
   }
 
   @Get(':id/messages')
@@ -58,20 +58,20 @@ export class ConversationsController {
     @Req() req: { user: AuthUser },
     @Param('id') conversationId: string,
     @Query('limit') limit?: string,
-    @Query('skip') skip?: string,
+    @Query('cursor') cursor?: string,
   ) {
-    return this.messagingService.getMessages(conversationId, req.user.userId, Number(limit) || 50, Number(skip) || 0);
+    return this.messagingService.getMessages(conversationId, req.user.userId, limit, cursor);
   }
 
   @Post(':id/messages/image')
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_IMAGE_BYTES, files: 1 } }))
+  @UseInterceptors(FileInterceptor('image', { limits: { fileSize: MAX_IMAGE_BYTES, files: 1 } }))
   @ApiOperation({ summary: 'Send an image message' })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
     schema: {
       type: 'object',
       properties: {
-        file: {
+        image: {
           type: 'string',
           format: 'binary',
         },
@@ -91,9 +91,17 @@ export class ConversationsController {
     )
     file: Express.Multer.File,
   ) {
-    const message = await this.messagingService.sendImageMessage(conversationId, req.user.userId, file);
-    await this.messagingGateway.handleNewMessageSent(message);
-    return message;
+    const sent = await this.messagingService.sendImageMessage(conversationId, req.user.userId, file);
+    await this.messagingGateway.announceMessage(sent);
+    return sent.message;
+  }
+
+  @Post(':id/read')
+  @ApiOperation({ summary: 'Mark the conversation as read up to its latest message' })
+  async markRead(@Req() req: { user: AuthUser }, @Param('id') conversationId: string) {
+    const result = await this.messagingService.markRead(conversationId, req.user.userId);
+    this.messagingGateway.announceRead(conversationId, req.user.userId, result.lastReadMessageId);
+    return result;
   }
 
   @Post(':id/block')
@@ -109,6 +117,8 @@ export class ConversationsController {
     @Param('id') conversationId: string,
     @Param('messageId') messageId: string,
   ) {
-    return this.messagingService.deleteMessage(conversationId, messageId, req.user.userId);
+    await this.messagingService.deleteMessage(conversationId, messageId, req.user.userId);
+    this.messagingGateway.announceDeleted(conversationId, messageId);
+    return { deleted: true };
   }
 }

@@ -139,6 +139,9 @@ jobs:
       - name: listings-service (pagination, LIKE escaping, view sync)
         run: npm run test:int
         working-directory: services/listings-service
+      - name: messaging-service (concurrent sends, keyset paging, read positions, query plans)
+        run: npm run test:int
+        working-directory: services/messaging-service
 
   # ─────────────────────────────────────────────
   # خدمات Python

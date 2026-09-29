@@ -37,13 +37,17 @@ class SocketService {
 
     socket!.onConnect((_) {
       debugPrint('Socket connected');
+      // The server forgets room membership on every new connection: re-join.
+      for (final id in _rooms) {
+        socket!.emit('join_conversation', {'conversationId': id});
+      }
     });
 
     socket!.onDisconnect((_) {
       debugPrint('Socket disconnected');
     });
 
-    socket!.on('receive_message', (data) {
+    socket!.on('new_message', (data) {
       if (data is Map<String, dynamic>) {
         _messageController.add(data);
       }
@@ -60,6 +64,25 @@ class SocketService {
         _readController.add(data);
       }
     });
+  }
+
+  /// Conversations this client has open. Joined on every (re)connect, since connect()
+  /// is asynchronous and a reconnect starts with no rooms on the server.
+  final Set<String> _rooms = {};
+
+  /// Room membership is checked on the server; typing and read events need it.
+  void joinConversation(String conversationId) {
+    _rooms.add(conversationId);
+    if (socket?.connected ?? false) {
+      socket!.emit('join_conversation', {'conversationId': conversationId});
+    }
+  }
+
+  void leaveConversation(String conversationId) {
+    _rooms.remove(conversationId);
+    if (socket?.connected ?? false) {
+      socket!.emit('leave_conversation', {'conversationId': conversationId});
+    }
   }
 
   void sendMessage(Map<String, dynamic> data) {

@@ -18,12 +18,14 @@ class Conversation {
   });
 
   factory Conversation.fromJson(Map<String, dynamic> json) {
+    // messaging-service sends lastMessage as a message object ({content, type, …}).
+    final last = json['lastMessage'];
     return Conversation(
       id: json['id'] ?? '',
       otherUserId: json['otherUserId'] ?? '',
-      otherUserName: json['otherUserName'] ?? 'Unknown',
+      otherUserName: json['otherUserName'] ?? 'مستخدم',
       otherUserAvatar: json['otherUserAvatar'],
-      lastMessage: json['lastMessage'],
+      lastMessage: last is Map<String, dynamic> ? last['content'] as String? : last as String?,
       lastMessageAt: json['lastMessageAt'] != null
           ? DateTime.parse(json['lastMessageAt'])
           : null,
