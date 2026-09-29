@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const services = join(fileURLToPath(import.meta.url), '..', '..', 'services');
-const SHARED = ['src/common/security.ts', 'src/common/database.ts', 'src/common/stats.ts'];
+const SHARED = ['src/common/security.ts', 'src/common/database.ts', 'src/common/stats.ts', 'src/filters/sentry-exception.filter.ts'];
 let failed = false;
 
 for (const file of SHARED) {

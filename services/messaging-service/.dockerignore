@@ -1,0 +1,10 @@
+# Keep the build context to source: the host's node_modules (npm workspace leftovers)
+# would overwrite the dependencies installed in the image and break the build.
+node_modules/
+dist/
+coverage/
+.env
+.env.*
+!.env.example
+uploads/
+tmp/

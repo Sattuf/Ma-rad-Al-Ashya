@@ -115,7 +115,9 @@ describe('SearchService', () => {
 
     await service.indexListing('delete', { id: '123' });
 
-    expect(esService.client.delete).toHaveBeenCalledWith({ index: 'marad_listings', id: '123' });
+    // Waits until the deletion is searchable before bumping the version, so no stale page
+    // can be cached under the new version.
+    expect(esService.client.delete).toHaveBeenCalledWith({ index: 'marad_listings', id: '123', refresh: 'wait_for' });
     expect(service['redisClient'].incr).toHaveBeenCalledWith('search:cache:version');
     expect(scan).not.toHaveBeenCalled();
   });
