@@ -3,17 +3,24 @@ import 'package:flutter/foundation.dart';
 import 'package:marad_mobile/core/storage/secure_storage.dart';
 
 class ApiClient {
-  // Release builds pass the real gateway: --dart-define=API_URL=https://api.example.com/api/v1
-  // The defaults reach a gateway on the developer's machine (10.0.2.2 is the host from the Android emulator).
+  // Where the development server runs. On a real phone, pass the computer's Wi-Fi IP:
+  //   flutter run --dart-define=SERVER_HOST=192.168.1.20
+  // Default: the Android emulator's alias for the host machine (the browser for web).
+  static const String _serverHost = String.fromEnvironment(
+    'SERVER_HOST',
+    defaultValue: kIsWeb ? '127.0.0.1' : '10.0.2.2',
+  );
+
+  // Release builds pass the real addresses: --dart-define=API_URL=https://api.example.com/api/v1
   static const String baseUrl = String.fromEnvironment(
     'API_URL',
-    defaultValue: kIsWeb ? 'http://127.0.0.1:3000/api/v1' : 'http://10.0.2.2:3000/api/v1',
+    defaultValue: 'http://$_serverHost:3000/api/v1',
   );
 
   // messaging-service's socket.io endpoint; the gateway does not proxy websockets.
   static const String socketUrl = String.fromEnvironment(
     'SOCKET_URL',
-    defaultValue: kIsWeb ? 'http://127.0.0.1:3004' : 'http://10.0.2.2:3004',
+    defaultValue: 'http://$_serverHost:3004',
   );
 
   late final Dio dio;

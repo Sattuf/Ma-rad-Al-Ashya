@@ -60,7 +60,7 @@ npm run docker:up
 npm run dev:gateway
 npm run dev:web
 
-# تشغيل تطبيق الجوال (يصل افتراضياً إلى البوابة على جهازك من محاكي Android)
+# تشغيل تطبيق الجوال (المحاكي؛ للهاتف الحقيقي: docs/ANDROID_TESTING.md)
 cd apps/mobile && cp .env.example .env && flutter run
 
 # نسخة الإصدار: عنوان البوابة وخادم المحادثات الحقيقيان
@@ -72,6 +72,7 @@ flutter build apk --dart-define=API_URL=https://api.example.com/api/v1 \
 
 - [مخطط قاعدة البيانات](docs/database-schema.md)
 - [قاعدة بيانات واحدة: PostgreSQL](docs/POSTGRES.md)
+- [تشغيل التطبيق على هاتف Android](docs/ANDROID_TESTING.md)
 - [البنية المعمارية](docs/architecture.md)
 - [سجل التغييرات](docs/CHANGELOG.md)
 - [خطة التحسين وإعادة البناء](docs/REBUILD_PLAN.md)

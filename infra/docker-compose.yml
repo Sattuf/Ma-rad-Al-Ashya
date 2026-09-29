@@ -140,7 +140,8 @@ services:
       # Bearer token Prometheus uses to scrape the gateway's public /metrics.
       - METRICS_TOKEN=${METRICS_TOKEN:?set METRICS_TOKEN in infra/.env}
     ports:
-      - "127.0.0.1:3000:3000"
+      # DEVICE_BIND=0.0.0.0 in infra/.env exposes it on the Wi-Fi network (testing on a phone).
+      - "${DEVICE_BIND:-127.0.0.1}:3000:3000"
     volumes:
       - ../services/api-gateway/src:/app/src:delegated
     depends_on:
@@ -192,6 +193,8 @@ services:
     restart: unless-stopped
     command: npm run start:dev
     environment:
+      # Public gateway address used in locally stored image URLs (set to your Wi-Fi IP for a phone).
+      - PUBLIC_API_URL=${PUBLIC_API_URL:-http://localhost:3000/api/v1}
       - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET:?set JWT_ACCESS_SECRET in infra/.env}
       - INTERNAL_SECRET=${INTERNAL_SECRET:?set INTERNAL_SECRET in infra/.env}
       - PORT=3002
@@ -255,6 +258,8 @@ services:
     restart: unless-stopped
     command: npm run start:dev
     environment:
+      # Public gateway address used in locally stored image URLs (set to your Wi-Fi IP for a phone).
+      - PUBLIC_API_URL=${PUBLIC_API_URL:-http://localhost:3000/api/v1}
       - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET:?set JWT_ACCESS_SECRET in infra/.env}
       - INTERNAL_SECRET=${INTERNAL_SECRET:?set INTERNAL_SECRET in infra/.env}
       - PORT=3004
@@ -263,7 +268,7 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
     ports:
-      - "127.0.0.1:3004:3004"
+      - "${DEVICE_BIND:-127.0.0.1}:3004:3004"
     volumes:
       - ../services/messaging-service/src:/app/src:delegated
     depends_on:
@@ -356,6 +361,8 @@ services:
     restart: unless-stopped
     command: npm run start:dev
     environment:
+      # Public gateway address used in locally stored image URLs (set to your Wi-Fi IP for a phone).
+      - PUBLIC_API_URL=${PUBLIC_API_URL:-http://localhost:3000/api/v1}
       - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET:?set JWT_ACCESS_SECRET in infra/.env}
       - INTERNAL_SECRET=${INTERNAL_SECRET:?set INTERNAL_SECRET in infra/.env}
       - PORT=3007

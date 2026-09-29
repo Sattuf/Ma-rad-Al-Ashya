@@ -6,6 +6,17 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { randomUUID } from 'crypto';
 
+/**
+ * Public URL of a locally stored file (STORAGE_PROVIDER is not "s3", i.e. development):
+ * served by this service under /media and reached through the gateway, so phones and
+ * browsers load it from the same address as the API. PUBLIC_API_URL is the gateway as
+ * clients see it (http://<computer's Wi-Fi IP>:3000/api/v1 when testing on a phone).
+ */
+export function localMediaUrl(kind: string, filename: string): string {
+  const base = (process.env.PUBLIC_API_URL || 'http://localhost:3000/api/v1').replace(/\/+$/, '');
+  return `${base}/media/${kind}/${filename}`;
+}
+
 @Injectable()
 export class StorageService {
   private readonly logger = new Logger(StorageService.name);
@@ -55,7 +66,7 @@ export class StorageService {
       const filepath = path.join(tmpDir, path.basename(filename));
       fs.writeFileSync(filepath, compressedBuffer);
       
-      return `${process.env.USERS_SERVICE_URL || 'http://localhost:3007'}/tmp/${filename}`;
+      return localMediaUrl('avatars', path.basename(filename));
     }
   }
 }

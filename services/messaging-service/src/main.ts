@@ -1,6 +1,8 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { AppModule } from './app.module';
+import * as express from 'express';
+import { StorageService } from './messaging/storage.service';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 import * as Sentry from '@sentry/node';
@@ -17,6 +19,11 @@ async function bootstrap() {
   });
   app.useGlobalFilters(new SentryExceptionFilter());
   app.enableCors({ origin: corsOrigins() });
+  // Chat images stored locally: see storage.service localMediaUrl.
+  app.use(
+    '/media/messages',
+    express.static(StorageService.uploadDir, { index: false, fallthrough: false, maxAge: '7d', immutable: true }),
+  );
 
   const config = new DocumentBuilder()
     .setTitle('Messaging Service')

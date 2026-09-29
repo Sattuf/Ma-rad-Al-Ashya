@@ -3,6 +3,7 @@ import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import * as express from 'express';
+import * as path from 'path';
 
 import * as Sentry from '@sentry/node';
 import { SentryExceptionFilter } from './filters/sentry-exception.filter';
@@ -22,6 +23,11 @@ async function bootstrap() {
   app.use('/promotions/webhook', express.raw({ type: 'application/json' }));
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
+  // Locally stored images (development, no S3): see storage.service localMediaUrl.
+  app.use(
+    '/media/listings',
+    express.static(path.join(process.cwd(), 'tmp', 'listings'), { index: false, fallthrough: false, maxAge: '7d', immutable: true }),
+  );
 
   app.useGlobalPipes(new ValidationPipe({ whitelist: true }));
 
