@@ -78,6 +78,9 @@ services:
       interval: 15s
       timeout: 10s
       retries: 5
+      # The JVM can take over a minute to start on a laptop; failures during this grace
+      # period do not count, so search-service is not marked as failed before ES is up.
+      start_period: 90s
 
   localstack:
     image: localstack/localstack:latest
@@ -237,11 +240,17 @@ services:
       - PORT=3003
       - NODE_ENV=development
       - ELASTICSEARCH_NODE=http://elasticsearch:9200
+      # Search clicks and A/B results are written to Postgres (ab_test_results).
+      - DATABASE_URL=postgresql://marad_user:marad_dev_password@postgres:5432/marad_db
       - REDIS_HOST=redis
       - REDIS_PORT=6379
     volumes:
       - ../services/search-service/src:/app/src:delegated
     depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
       elasticsearch:
         condition: service_healthy
       redis:

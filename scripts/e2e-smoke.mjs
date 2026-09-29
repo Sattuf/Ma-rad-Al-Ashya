@@ -33,7 +33,16 @@ async function call(method, path, { token, body, form } = {}) {
   const headers = {};
   if (token) headers.authorization = `Bearer ${token}`;
   if (body !== undefined) headers['content-type'] = 'application/json';
-  const res = await fetch(`${API}${path}`, { method, headers, body: form ?? (body !== undefined ? JSON.stringify(body) : undefined) });
+  const send = () => fetch(`${API}${path}`, { method, headers, body: form ?? (body !== undefined ? JSON.stringify(body) : undefined) });
+  let res = await send();
+  // The gateway allows 20 credential requests a minute per address (anti brute-force);
+  // back-to-back runs hit it. Respect Retry-After once instead of failing.
+  if (res.status === 429 && path.startsWith('/auth/')) {
+    const wait = Math.min(Number(res.headers.get('retry-after')) || 60, 65);
+    console.log(`  (auth rate limit reached, waiting ${wait}s as the gateway asks)`);
+    await new Promise((r) => setTimeout(r, wait * 1000));
+    res = await send();
+  }
   const text = await res.text();
   let data = text;
   try {
@@ -157,7 +166,13 @@ check(detail.status === 200 && JSON.stringify(detail.data).includes('/media/list
 
 // Ranked search (search profile: Elasticsearch + search-service). Skipped when not running.
 const session = `smoke-${run}`;
-const searchRes = await call('GET', `/search?q=${encodeURIComponent('جوال')}&session_id=${session}&page=1&limit=10`);
+// Indexing runs in the background after publishing: the listing becomes searchable within
+// about a second (Elasticsearch refresh), so allow a few seconds before failing.
+let searchRes = await call('GET', `/search?q=${encodeURIComponent('جوال')}&session_id=${session}&page=1&limit=10`);
+for (let i = 0; i < 10 && searchRes.status === 200 && !searchRes.data.ids.includes(listingId); i++) {
+  await new Promise((r) => setTimeout(r, 500));
+  searchRes = await call('GET', `/search?q=${encodeURIComponent('جوال')}&session_id=${session}&page=1&limit=10`);
+}
 if (searchRes.status === 200) {
   check(searchRes.data.ids.includes(listingId), `ranked search finds the listing (variant ${searchRes.data.variant})`, searchRes.data);
   const click = await call('POST', '/search/track-click', {
