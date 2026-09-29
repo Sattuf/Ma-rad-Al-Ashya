@@ -46,6 +46,16 @@ class MessagingRepository {
     }
   }
 
+  /// Opens the conversation with [otherUserId] (the same one every time for a pair of users)
+  /// and returns its id.
+  Future<String> startConversation(String otherUserId, {String? listingId}) async {
+    final response = await apiClient.dio.post('/messaging/conversations', data: {
+      'participants': [otherUserId],
+      if (listingId != null) 'listingId': listingId,
+    });
+    return response.data['id'] as String;
+  }
+
   Future<void> deleteMessage(String conversationId, String messageId) async {
     await apiClient.dio.delete('/messaging/conversations/$conversationId/messages/$messageId');
   }

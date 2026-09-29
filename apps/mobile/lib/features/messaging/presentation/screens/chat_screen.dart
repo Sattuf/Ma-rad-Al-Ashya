@@ -174,14 +174,18 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               padding: const EdgeInsets.all(8.0),
               child: Row(
                 children: [
+                  // Icon-only buttons need a tooltip: it is their accessible name (TalkBack).
                   IconButton(
                     icon: const Icon(Icons.image),
+                    tooltip: 'إرسال صورة',
                     onPressed: _pickImage,
                   ),
                   Expanded(
                     child: TextField(
                       controller: _messageController,
                       onChanged: _onTextChanged,
+                      textInputAction: TextInputAction.send,
+                      onSubmitted: (_) => _sendMessage(),
                       decoration: InputDecoration(
                         hintText: 'اكتب رسالة...',
                         border: OutlineInputBorder(
@@ -196,6 +200,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   ),
                   IconButton(
                     icon: const Icon(Icons.send),
+                    tooltip: 'إرسال',
                     color: Theme.of(context).primaryColor,
                     onPressed: _sendMessage,
                   ),

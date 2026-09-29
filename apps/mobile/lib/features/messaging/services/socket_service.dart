@@ -22,15 +22,24 @@ class SocketService {
   final _readController = StreamController<Map<String, dynamic>>.broadcast();
   Stream<Map<String, dynamic>> get onMessageRead => _readController.stream;
 
-  void connect() async {
-    if (socket != null && socket!.connected) return;
+  /// One shared socket for the whole app, created once even if several screens call
+  /// connect() at the same time.
+  void connect() {
+    if (socket != null) {
+      if (!socket!.connected) socket!.connect();
+      return;
+    }
 
-    final token = await _storage.getAccessToken();
-
-    socket = io.io(ApiClient.socketUrl,io.OptionBuilder()
+    socket = io.io(ApiClient.socketUrl, io.OptionBuilder()
       .setTransports(['websocket'])
       .disableAutoConnect()
-      .setExtraHeaders({'Authorization': 'Bearer $token'})
+      // Called on every (re)connection, so a reconnect after the 15-minute access token
+      // expired sends the refreshed one (ApiClient stores it). The token goes in the
+      // socket.io auth payload, which works on Android, iOS and the web alike (browsers
+      // cannot set headers on a websocket).
+      .setAuthFn((send) {
+        _storage.getAccessToken().then((token) => send({'token': token ?? ''}));
+      })
       .build());
 
     socket!.connect();
@@ -85,10 +94,10 @@ class SocketService {
     }
   }
 
+  /// socket.io buffers emits while disconnected and sends them on reconnect, so a message
+  /// typed during a network blip is delivered instead of silently dropped.
   void sendMessage(Map<String, dynamic> data) {
-    if (socket?.connected ?? false) {
-      socket!.emit('send_message', data);
-    }
+    socket?.emit('send_message', data);
   }
 
   void sendTyping(Map<String, dynamic> data) {

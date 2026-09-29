@@ -10,6 +10,7 @@ import 'package:marad_mobile/features/auth/presentation/providers/auth_provider.
 import 'package:marad_mobile/features/transactions/presentation/providers/transactions_provider.dart';
 import 'package:marad_mobile/features/favorites/presentation/providers/favorites_provider.dart';
 import 'package:go_router/go_router.dart';
+import 'package:marad_mobile/features/messaging/data/repositories/messaging_repository.dart';
 
 import 'package:marad_mobile/core/services/analytics_service.dart';
 
@@ -168,14 +169,6 @@ class _ListingDetailsScreenState extends ConsumerState<ListingDetailsScreen> {
                         Text(listing.category?.name ?? 'غير محدد', style: const TextStyle(fontSize: 16)),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        const Icon(Icons.info_outline, color: Colors.grey),
-                        const SizedBox(width: 8),
-                        Text('الحالة: ${listing.condition}', style: const TextStyle(fontSize: 16)),
-                      ],
-                    ),
                     if (listing.isSellerVerified) ...[
                       const SizedBox(height: 8),
                       Row(
@@ -217,7 +210,41 @@ class _ListingDetailsScreenState extends ConsumerState<ListingDetailsScreen> {
             return SafeArea(
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
-                child: ElevatedButton(
+                child: Row(children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.chat_bubble_outline),
+                      label: const Text('راسل البائع', style: TextStyle(fontSize: 16)),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: () async {
+                        if (currentUserId == null) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('الرجاء تسجيل الدخول أولاً')),
+                          );
+                          return;
+                        }
+                        try {
+                          final conversationId = await ref
+                              .read(messagingRepositoryProvider)
+                              .startConversation(listing.userId, listingId: listing.id);
+                          if (context.mounted) {
+                            context.push('/messages/$conversationId', extra: 'البائع');
+                          }
+                        } catch (e) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(userMessage(e, 'تعذّر فتح المحادثة. حاول مجدداً.')), backgroundColor: Colors.red),
+                            );
+                          }
+                        }
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(child: ElevatedButton(
                   onPressed: () async {
                     if (currentUserId == null) {
                       ScaffoldMessenger.of(context).showSnackBar(
@@ -247,8 +274,9 @@ class _ListingDetailsScreenState extends ConsumerState<ListingDetailsScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  child: const Text('طلب شراء', style: TextStyle(fontSize: 18, color: Colors.white)),
-                ),
+                  child: const Text('طلب شراء', style: TextStyle(fontSize: 16, color: Colors.white)),
+                )),
+                ]),
               ),
             );
           }
