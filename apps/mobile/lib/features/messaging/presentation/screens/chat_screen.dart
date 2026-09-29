@@ -46,16 +46,30 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
   }
 
+  bool _isTyping = false;
+
+  /// "Typing" is a state: one event when it starts and one when it stops (2 s idle or
+  /// the message is sent), not one per keystroke — that was ~35 events per sentence,
+  /// broadcast to the room by the server.
   void _onTextChanged(String text) {
     final userId = ref.read(authProvider).user?['id'] ?? '';
     final notifier = ref.read(chatProvider(widget.conversationId).notifier);
 
-    notifier.sendTyping(true, userId);
+    if (!_isTyping && text.isNotEmpty) {
+      _isTyping = true;
+      notifier.sendTyping(true, userId);
+    }
 
     _typingTimer?.cancel();
-    _typingTimer = Timer(const Duration(seconds: 2), () {
-      notifier.sendTyping(false, userId);
-    });
+    _typingTimer = Timer(const Duration(seconds: 2), _stopTyping);
+  }
+
+  void _stopTyping() {
+    _typingTimer?.cancel();
+    if (!_isTyping) return;
+    _isTyping = false;
+    final userId = ref.read(authProvider).user?['id'] ?? '';
+    ref.read(chatProvider(widget.conversationId).notifier).sendTyping(false, userId);
   }
 
   void _sendMessage() {
@@ -66,6 +80,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     ref.read(chatProvider(widget.conversationId).notifier).sendMessage(text, userId);
 
     _messageController.clear();
+    _stopTyping();
     _scrollController.animateTo(
       0,
       duration: const Duration(milliseconds: 300),

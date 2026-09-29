@@ -1,5 +1,5 @@
-import 'dart:io';
 import 'package:dio/dio.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../../../core/network/api_client.dart';
 import '../models/listing.dart';
 
@@ -69,7 +69,7 @@ class ListingRepository {
     required String categoryId,
     required String condition,
     required String location,
-    required List<File> images,
+    required List<XFile> images,
   }) async {
     // listings-service takes the listing as JSON, then each image separately
     // (POST /listings/:id/images, field "file") — the same contract as the web app.
@@ -86,11 +86,12 @@ class ListingRepository {
       for (final image in images) {
         await _apiClient.dio.post(
           '/listings/$listingId/images',
+          // Bytes rather than a path: works on Android, iOS and the web alike.
           data: FormData.fromMap({
-            'file': await MultipartFile.fromFile(
-              image.path,
-              filename: image.path.split('/').last,
-              contentType: _imageContentType(image.path),
+            'file': MultipartFile.fromBytes(
+              await image.readAsBytes(),
+              filename: image.name,
+              contentType: _imageContentType(image.name),
             ),
           }),
         );

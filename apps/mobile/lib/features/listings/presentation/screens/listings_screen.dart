@@ -65,10 +65,12 @@ class _ListingsScreenState extends ConsumerState<ListingsScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.add),
+            tooltip: 'أضف إعلاناً',
             onPressed: () => context.push('/listings/create'),
           ),
           IconButton(
             icon: const Icon(Icons.list_alt),
+            tooltip: 'إعلاناتي',
             onPressed: () => context.push('/listings/my'),
           ),
         ],

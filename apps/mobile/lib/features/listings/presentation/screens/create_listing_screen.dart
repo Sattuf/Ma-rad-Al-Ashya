@@ -1,5 +1,6 @@
 import 'package:marad_mobile/core/utils/errors.dart';
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -23,7 +24,7 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
 
   String? _selectedCategory;
   String _selectedCondition = 'new';
-  final List<File> _images = [];
+  final List<XFile> _images = [];
   bool _isLoading = false;
 
   final ImagePicker _picker = ImagePicker();
@@ -34,12 +35,14 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
       return;
     }
 
-    final List<XFile> picked = await _picker.pickMultiImage();
+    // Phone photos are often over the server's 5 MB limit and it resizes to 1200 px
+    // anyway: shrink here, so uploads succeed and are quicker on mobile data.
+    final List<XFile> picked = await _picker.pickMultiImage(maxWidth: 1600, maxHeight: 1600, imageQuality: 85);
     if (picked.isNotEmpty) {
       setState(() {
         for (var file in picked) {
           if (_images.length < 10) {
-            _images.add(File(file.path));
+            _images.add(file);
           }
         }
       });
@@ -148,7 +151,9 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(12),
                           image: DecorationImage(
-                            image: FileImage(_images[index]),
+                            image: kIsWeb
+                                ? NetworkImage(_images[index].path) as ImageProvider
+                                : FileImage(File(_images[index].path)),
                             fit: BoxFit.cover,
                           ),
                         ),
