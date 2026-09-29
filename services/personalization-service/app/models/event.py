@@ -1,6 +1,7 @@
 from enum import Enum
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any
+from uuid import UUID
 from datetime import datetime
 
 class EventType(str, Enum):
@@ -12,9 +13,10 @@ class EventType(str, Enum):
 
 class EventCreate(BaseModel):
     event_type: EventType = Field(..., alias="eventType")
-    listing_id: Optional[str] = Field(default=None, alias="listingId")
-    category_id: Optional[str] = Field(default=None, alias="categoryId")
-    search_query: Optional[str] = Field(default=None, alias="searchQuery")
+    # Typed ids: malformed values get a 422 here instead of reaching Postgres.
+    listing_id: Optional[UUID] = Field(default=None, alias="listingId")
+    category_id: Optional[UUID] = Field(default=None, alias="categoryId")
+    search_query: Optional[str] = Field(default=None, alias="searchQuery", max_length=200)
     metadata: Optional[Dict[str, Any]] = Field(default=None)
 
     model_config = {

@@ -6,7 +6,6 @@ import { ar } from 'date-fns/locale';
 import { MessageSquare } from 'lucide-react';
 import { useConversations } from '@/hooks/useConversations';
 import { userApi } from '@/lib/api/users';
-import { useAuthStore } from '@/lib/store/auth-store';
 import { Button, EmptyState, ErrorState, Skeleton } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import type { Conversation } from '@/types/message';
@@ -16,11 +15,11 @@ interface ConversationListProps {
   onSelect: (id: string) => void;
 }
 
-function ConversationRow({ conv, me, selected, onSelect }: { conv: Conversation; me: string; selected: boolean; onSelect: () => void }) {
-  const otherId = conv.participants.find((p) => p !== me) ?? conv.participants[0];
+function ConversationRow({ conv, selected, onSelect }: { conv: Conversation; selected: boolean; onSelect: () => void }) {
+  const otherId = conv.otherUserId;
   // SWR dedupes by key, so the same person across conversations is fetched once.
   const { data: other } = useSWR(otherId ? ['/users', otherId] : null, () => userApi.getUser(otherId));
-  const unread = conv.unreadCounts?.[me] ?? 0;
+  const unread = conv.unreadCount;
   const name = other?.name || 'مستخدم';
   const last = conv.lastMessage;
 
@@ -66,7 +65,6 @@ function ConversationRow({ conv, me, selected, onSelect }: { conv: Conversation;
 }
 
 export function ConversationList({ selectedId, onSelect }: ConversationListProps) {
-  const me = useAuthStore((s) => s.user?.id) ?? '';
   const { conversations, error, isLoadingMore, isReachingEnd, setSize, size, mutate } = useConversations();
   const initialLoading = !error && conversations.length === 0 && isLoadingMore;
 
@@ -93,7 +91,7 @@ export function ConversationList({ selectedId, onSelect }: ConversationListProps
         ) : (
           <ul>
             {conversations.map((conv) => (
-              <ConversationRow key={conv.id} conv={conv} me={me} selected={selectedId === conv.id} onSelect={() => onSelect(conv.id)} />
+              <ConversationRow key={conv.id} conv={conv} selected={selectedId === conv.id} onSelect={() => onSelect(conv.id)} />
             ))}
           </ul>
         )}

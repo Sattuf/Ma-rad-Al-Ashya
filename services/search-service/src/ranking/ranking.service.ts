@@ -2,12 +2,16 @@ import { Injectable } from '@nestjs/common';
 import Redis from 'ioredis';
 import { RANKING_WEIGHTS, AB_VARIANT_TTL } from './ranking.config';
 
+// REDIS_URL, or REDIS_HOST/REDIS_PORT as docker-compose passes them (like the other services).
+const redisUrl = () =>
+  process.env.REDIS_URL || `redis://${process.env.REDIS_HOST || 'localhost'}:${process.env.REDIS_PORT || '6379'}`;
+
 @Injectable()
 export class RankingService {
   private readonly redisClient: Redis;
 
   constructor() {
-    this.redisClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+    this.redisClient = new Redis(redisUrl());
   }
 
   private variantKey(userId?: string, sessionId?: string) {
@@ -122,8 +126,11 @@ export class RankingService {
     functions.push({
       script_score: {
         script: {
+          // The indexed "id" keyword, not _id: Elasticsearch 8 refuses doc-value access to
+          // _id, which failed every variant A search (found running against a real cluster).
           source: `
-            String id = doc['_id'].value;
+            if (doc['id'].size() == 0) { return 0; }
+            String id = doc['id'].value;
             if (params.engagement.containsKey(id)) {
               def stats = params.engagement[id];
               return (stats.views * 0.1) + (stats.messages * 0.5);

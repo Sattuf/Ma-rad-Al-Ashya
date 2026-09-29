@@ -71,36 +71,46 @@ class ListingRepository {
     required String location,
     required List<File> images,
   }) async {
-    try {
-      final formData = FormData.fromMap({
-        'title': title,
-        'description': description,
-        'price': price,
-        'category_id': categoryId,
-        'condition': condition,
-        'location': location,
-      });
+    // listings-service takes the listing as JSON, then each image separately
+    // (POST /listings/:id/images, field "file") — the same contract as the web app.
+    // Condition and location are not stored by the service yet.
+    final created = await _apiClient.dio.post('/listings', data: {
+      'title': title,
+      'description': description,
+      'price': price,
+      'categoryId': categoryId,
+    });
+    final listingId = created.data['id'] as String;
 
-      for (int i = 0; i < images.length; i++) {
-        formData.files.add(
-          MapEntry(
-            'images',
-            await MultipartFile.fromFile(images[i].path, filename: images[i].path.split('/').last),
-          ),
+    try {
+      for (final image in images) {
+        await _apiClient.dio.post(
+          '/listings/$listingId/images',
+          data: FormData.fromMap({
+            'file': await MultipartFile.fromFile(
+              image.path,
+              filename: image.path.split('/').last,
+              contentType: _imageContentType(image.path),
+            ),
+          }),
         );
       }
-
-      final response = await _apiClient.dio.post(
-        '/listings',
-        data: formData,
-      );
-
-      if (response.statusCode == 201 || response.statusCode == 200) {
-        return Listing.fromJson(response.data);
-      }
-      throw Exception('Failed to create listing');
-    } catch (e) {
-      throw Exception('Error creating listing: $e');
+    } catch (_) {
+      // All or nothing: the screen tells the user nothing was saved, so remove the
+      // listing whose images did not all upload.
+      try {
+        await _apiClient.dio.delete('/listings/$listingId');
+      } catch (_) {}
+      rethrow;
     }
+
+    final full = await _apiClient.dio.get('/listings/$listingId');
+    return Listing.fromJson(full.data);
   }
+}
+
+/// listings-service accepts png and jpeg (image_picker produces jpeg); the part must say which.
+DioMediaType _imageContentType(String path) {
+  final ext = path.split('.').last.toLowerCase();
+  return DioMediaType('image', ext == 'png' ? 'png' : 'jpeg');
 }

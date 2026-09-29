@@ -7,6 +7,10 @@ import { RankingService } from '../ranking/ranking.service';
 import { SearchQueryDto } from './dto/search-query.dto';
 import { TrackClickDto } from './dto/track-click.dto';
 
+// REDIS_URL, or REDIS_HOST/REDIS_PORT as docker-compose passes them (like the other services).
+const redisUrl = () =>
+  process.env.REDIS_URL || `redis://${process.env.REDIS_HOST || 'localhost'}:${process.env.REDIS_PORT || '6379'}`;
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_SEARCH_PAGE = 50;
 const SEARCH_CACHE_VERSION_KEY = 'search:cache:version';
@@ -37,7 +41,7 @@ export class SearchService implements OnModuleDestroy {
     private readonly esService: ElasticsearchService,
     private readonly rankingService: RankingService
   ) {
-    this.redisClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+    this.redisClient = new Redis(redisUrl());
   }
 
   private generateCacheKey(prefix: string, params: any): string {
@@ -333,12 +337,20 @@ export class SearchService implements OnModuleDestroy {
     }
   }
 
+  /**
+   * Writes wait for the refresh that makes them searchable (refresh: 'wait_for') before the
+   * cache version is bumped. Otherwise a search in the following second is computed without
+   * the change and cached for 3 minutes under the new version: a seller could not find the
+   * listing they had just published. listings-service calls this without waiting for it,
+   * so publishing is not slowed down.
+   */
   async indexListing(action: 'create' | 'update' | 'delete', listing: any) {
     try {
       if (action === 'delete') {
         await this.esService.client.delete({
           index: this.indexName,
           id: listing.id.toString(),
+          refresh: 'wait_for',
         });
       } else {
         const document = {
@@ -367,6 +379,7 @@ export class SearchService implements OnModuleDestroy {
             index: this.indexName,
             id: listing.id.toString(),
             document,
+            refresh: 'wait_for',
           });
         } else {
           await this.esService.client.update({
@@ -374,6 +387,7 @@ export class SearchService implements OnModuleDestroy {
             id: listing.id.toString(),
             doc: document,
             doc_as_upsert: true,
+            refresh: 'wait_for',
           });
         }
       }

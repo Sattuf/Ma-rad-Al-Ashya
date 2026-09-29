@@ -77,12 +77,13 @@ DATABASE_URL=postgres://postgres:pg@localhost:5432/postgres REDIS_URL=redis://lo
 | النوع | العدد | ملاحظات |
 |---|---|---|
 | وحدة Node | 141 | 9 خدمات، منها 20 اختبار e2e للبوابة على خادم HTTP وهمي |
-| تكامل Node | 9 | auth (Redis)، listings (Postgres + Redis) |
+| تكامل Node | 19 | auth (Redis)، listings (Postgres + Redis)، messaging (Postgres: تزامن وصفحات وخطط استعلام) |
+| تكامل Python | 12 | personalization (user_events المقسّم)، fraud (الأجهزة والعناوين والسجل) |
 | Python | 15 | fraud، personalization |
 | Web | 2 | يحتاج توسيعاً (المرحلة 3) |
 
 ## 6. الخطوات التالية
 1. سكربت العقود + إصلاح الفروقات (مع خطوة البنية).
 2. ترحيلات موحدة، ووظيفة CI تطبّقها كلها على قاعدة فارغة (تفشل الآن لغياب جدول `users` الأساسي).
-3. اختبارات تكامل لـ transactions (قيد `UNIQUE` على التقييم، ذرية المعاملة) وmessaging (MongoDB).
+3. اختبارات تكامل لـ transactions (قيد `UNIQUE` على التقييم، ذرية المعاملة) وmessaging (Postgres ✅ مضاف: الإرسال المتزامن، والصفحات، وخطط الاستعلام).
 4. E2E للرحلات الحرجة، وتقرير k6 دوري على staging.

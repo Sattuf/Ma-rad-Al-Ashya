@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
-from database import connect_to_mongo, close_mongo_connection, connect_to_postgres, close_postgres_connection
+import database
 
 from routers import device, transaction, risk, admin
 from security import require_secret
@@ -15,11 +15,9 @@ sentry_sdk.init(dsn=os.getenv("SENTRY_DSN"), traces_sample_rate=0.1)
 async def lifespan(app: FastAPI):
     require_secret("JWT_ACCESS_SECRET")
     require_secret("INTERNAL_SECRET")
-    await connect_to_mongo()
-    await connect_to_postgres()
+    await database.connect_to_postgres()
     yield
-    await close_mongo_connection()
-    await close_postgres_connection()
+    await database.close_postgres_connection()
 
 app = FastAPI(title="Fraud Service", version="1.0.0", lifespan=lifespan)
 

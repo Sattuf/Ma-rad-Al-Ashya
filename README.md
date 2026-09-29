@@ -11,7 +11,7 @@
 | API Gateway | NestJS + Kong |
 | الخدمات المصغرة | Node.js + NestJS (TypeScript) |
 | الذكاء الآلي | Python + FastAPI + scikit-learn |
-| قاعدة البيانات | PostgreSQL + MongoDB |
+| قاعدة البيانات | PostgreSQL (قاعدة واحدة لكل البيانات) + Redis للكاش والعدّادات |
 | التخزين المؤقت | Redis |
 | محرك البحث | Elasticsearch |
 | الرسائل الفورية | Socket.io |
@@ -29,7 +29,7 @@ marad/
 │   ├── auth-service/           → خدمة المصادقة
 │   ├── listings-service/       → خدمة الإعلانات
 │   ├── search-service/         → خدمة البحث (Elasticsearch)
-│   ├── messaging-service/      → خدمة المحادثات (Socket.io + MongoDB)
+│   ├── messaging-service/      → خدمة المحادثات (Socket.io + PostgreSQL)
 │   ├── transactions-service/   → خدمة المعاملات
 │   ├── identity-service/       → خدمة التحقق من الهوية (Didit)
 │   ├── fraud-service/          → خدمة كشف الاحتيال (Python)
@@ -60,7 +60,7 @@ npm run docker:up
 npm run dev:gateway
 npm run dev:web
 
-# تشغيل تطبيق الجوال (يصل افتراضياً إلى البوابة على جهازك من محاكي Android)
+# تشغيل تطبيق الجوال (المحاكي؛ للهاتف الحقيقي: docs/ANDROID_TESTING.md)
 cd apps/mobile && cp .env.example .env && flutter run
 
 # نسخة الإصدار: عنوان البوابة وخادم المحادثات الحقيقيان
@@ -71,6 +71,8 @@ flutter build apk --dart-define=API_URL=https://api.example.com/api/v1 \
 ## 📝 التوثيق
 
 - [مخطط قاعدة البيانات](docs/database-schema.md)
+- [قاعدة بيانات واحدة: PostgreSQL](docs/POSTGRES.md)
+- [تشغيل التطبيق على هاتف Android](docs/ANDROID_TESTING.md)
 - [البنية المعمارية](docs/architecture.md)
 - [سجل التغييرات](docs/CHANGELOG.md)
 - [خطة التحسين وإعادة البناء](docs/REBUILD_PLAN.md)

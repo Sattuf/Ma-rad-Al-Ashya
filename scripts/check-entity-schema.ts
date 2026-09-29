@@ -20,6 +20,7 @@ const SERVICES = [
   'transactions-service',
   'moderation-service',
   'identity-service',
+  'messaging-service',
 ];
 
 // Postgres data_type values accepted for each TypeORM column type.
@@ -74,22 +75,32 @@ async function main() {
     await ds.initialize();
     try {
       for (const meta of ds.entityMetadatas) {
-        const rows: { column_name: string; data_type: string }[] = await ds.query(
-          `SELECT column_name, data_type FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1`,
+        const rows: { column_name: string; data_type: string; udt_name: string }[] = await ds.query(
+          `SELECT column_name, data_type, udt_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1`,
           [meta.tableName],
         );
         if (!rows.length) {
           problems.push(`${service}: table "${meta.tableName}" (${meta.name}) does not exist`);
           continue;
         }
-        const actual = new Map(rows.map((r) => [r.column_name, r.data_type]));
+        const actual = new Map(rows.map((r) => [r.column_name, r]));
         for (const col of meta.columns) {
-          const dbType = actual.get(col.databaseName);
-          if (!dbType) {
+          const found = actual.get(col.databaseName);
+          if (!found) {
             problems.push(`${service}: ${meta.tableName}.${col.databaseName} (${meta.name}.${col.propertyName}) is missing`);
             continue;
           }
           const declared = typeName(col.type);
+          // Arrays: both sides must be arrays, of the same element type (udt_name is "_uuid").
+          if (col.isArray || found.data_type === 'ARRAY') {
+            if (!col.isArray || found.data_type !== 'ARRAY' || found.udt_name !== `_${declared}`) {
+              problems.push(
+                `${service}: ${meta.tableName}.${col.databaseName} is ${found.udt_name}, entity declares ${declared}${col.isArray ? '[]' : ''}`,
+              );
+            }
+            continue;
+          }
+          const dbType = found.data_type;
           const allowed = COMPATIBLE[declared];
           if (allowed && !allowed.includes(dbType)) {
             problems.push(`${service}: ${meta.tableName}.${col.databaseName} is ${dbType}, entity declares ${declared}`);

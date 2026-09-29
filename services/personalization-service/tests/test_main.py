@@ -3,8 +3,11 @@ from httpx import AsyncClient, ASGITransport
 from jose import jwt
 from app.main import app
 from app.core.config import settings
+from tests.conftest import CATEGORY_1, LISTING_1
 
-def generate_test_token(user_id="user-123", email="user@example.com"):
+USER_ID = "5f0c3e1a-0000-4000-8000-000000000123"
+
+def generate_test_token(user_id=USER_ID, email="user@example.com"):
     payload = {
         "sub": user_id,
         "email": email,
@@ -25,7 +28,7 @@ async def test_health_check():
     assert data["service"] == "personalization-service"
     assert "timestamp" in data
     assert "details" in data
-    assert data["details"]["mongodb"] == "ok"
+    assert data["details"]["postgres"] == "ok"
     assert data["details"]["redis"] == "ok"
     assert data["details"]["elasticsearch"] == "ok"
 
@@ -37,8 +40,8 @@ async def test_create_event_authorized():
     
     event_data = {
         "eventType": "view",
-        "listingId": "listing-uuid-abc",
-        "categoryId": "category-uuid-123",
+        "listingId": LISTING_1,
+        "categoryId": CATEGORY_1,
         "metadata": {"custom_key": "custom_val"}
     }
     
@@ -48,18 +51,18 @@ async def test_create_event_authorized():
         
     assert response.status_code == 201
     data = response.json()
-    assert data["id"] == "event-uuid-123"
-    assert data["userId"] == "user-123"
+    assert data["id"] == "123"
+    assert data["userId"] == USER_ID
     assert data["eventType"] == "view"
-    assert data["listingId"] == "listing-uuid-abc"
-    assert data["categoryId"] == "category-uuid-123"
+    assert data["listingId"] == LISTING_1
+    assert data["categoryId"] == CATEGORY_1
 
 @pytest.mark.anyio
 async def test_create_event_unauthorized():
     """اختبار إنشاء حدث بدون مصادقة — Test creating event without authentication"""
     event_data = {
         "eventType": "view",
-        "listingId": "listing-uuid-abc"
+        "listingId": LISTING_1
     }
     
     transport = ASGITransport(app=app)
@@ -100,3 +103,37 @@ async def test_get_cold_start():
     assert data["based_on"] == "cold_start"
     assert len(data["listings"]) > 0
     assert data["listings"][0]["title"] == "Test Listing"
+
+
+@pytest.mark.anyio
+async def test_create_event_rejects_malformed_ids():
+    """A malformed id is a 422 at the edge, never a database error."""
+    headers = {"Authorization": f"Bearer {generate_test_token()}"}
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post("/events", json={"eventType": "view", "listingId": "1; DROP TABLE"}, headers=headers)
+    assert response.status_code == 422
+
+
+@pytest.mark.anyio
+async def test_only_strong_signals_invalidate_the_cache(mock_services):
+    """Browsing must not wipe the recommendations cache; favorites, messages, purchases do."""
+    headers = {"Authorization": f"Bearer {generate_test_token()}"}
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        await client.post("/events", json={"eventType": "view", "listingId": LISTING_1}, headers=headers)
+        mock_services["redis"].delete.assert_not_called()
+        await client.post("/events", json={"eventType": "favorite", "listingId": LISTING_1}, headers=headers)
+    mock_services["redis"].delete.assert_called_once_with(f"recommendations:{USER_ID}")
+
+
+@pytest.mark.anyio
+async def test_recommendations_use_aggregated_categories_and_exclude_seen(mock_services):
+    headers = {"Authorization": f"Bearer {generate_test_token()}"}
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/recommendations?limit=5", headers=headers)
+    assert response.json()["based_on"] == "frequent_categories"
+    query = mock_services["es"].search.call_args.kwargs["body"]["query"]["function_score"]["query"]["bool"]
+    assert {"terms": {"id": [LISTING_1]}} in query["must_not"]
+    assert CATEGORY_1 in str(query["must"])

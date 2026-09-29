@@ -5,8 +5,10 @@ import { CreateTransactionDto, CancelTransactionDto } from './dto/transaction.dt
 import { Request } from 'express';
 import { AuthUser, JwtAuthGuard } from '../common/security';
 
+// JwtAuthGuard puts the verified user on the request; @types/express does not declare it
+// (and its typings change between versions), so read it through an explicit shape.
 function getUserId(req: Request): string {
-  return (req['user'] as AuthUser).userId;
+  return (req as unknown as { user: AuthUser }).user.userId;
 }
 
 @ApiTags('Transactions')

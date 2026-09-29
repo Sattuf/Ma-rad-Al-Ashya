@@ -7,16 +7,17 @@ router = APIRouter(prefix="/fraud/risk", dependencies=[Depends(verify_admin)], t
 
 @router.get("/{user_id}", response_model=Dict)
 async def get_risk_score(user_id: str):
+    # Aggregated in Postgres: an index-only scan of (user_id) INCLUDE (risk_score).
     async with database.pg_pool.acquire() as conn:
-        records = await conn.fetch('''
-            SELECT risk_score FROM fraud_signals 
-            WHERE user_id = $1
-        ''', user_id)
-        
-    if not records:
+        row = await conn.fetchrow(
+            "SELECT coalesce(sum(risk_score), 0) AS total, count(*) AS n FROM fraud_signals WHERE user_id = $1",
+            user_id,
+        )
+
+    if not row["n"]:
         return {"user_id": user_id, "total_risk_score": 0.0, "risk_level": "LOW"}
-        
-    total_score = sum(record['risk_score'] for record in records)
+
+    total_score = float(row["total"])
     
     risk_level = "LOW"
     if total_score > 1.0:
@@ -28,5 +29,5 @@ async def get_risk_score(user_id: str):
         "user_id": user_id,
         "total_risk_score": round(total_score, 2),
         "risk_level": risk_level,
-        "signal_count": len(records)
+        "signal_count": row["n"]
     }

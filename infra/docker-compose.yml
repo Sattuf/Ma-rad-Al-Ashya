@@ -38,26 +38,6 @@ services:
       timeout: 5s
       retries: 5
 
-  mongodb:
-    image: mongo:7
-    container_name: marad-mongodb
-    restart: unless-stopped
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: marad_user
-      MONGO_INITDB_ROOT_PASSWORD: marad_dev_password
-      MONGO_INITDB_DATABASE: marad_messaging
-    ports:
-      - "127.0.0.1:27017:27017"
-    volumes:
-      - mongodb_data:/data/db
-    networks:
-      - marad-network
-    healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   redis:
     image: redis:7-alpine
     container_name: marad-redis
@@ -98,6 +78,9 @@ services:
       interval: 15s
       timeout: 10s
       retries: 5
+      # The JVM can take over a minute to start on a laptop; failures during this grace
+      # period do not count, so search-service is not marked as failed before ES is up.
+      start_period: 90s
 
   localstack:
     image: localstack/localstack:latest
@@ -160,7 +143,8 @@ services:
       # Bearer token Prometheus uses to scrape the gateway's public /metrics.
       - METRICS_TOKEN=${METRICS_TOKEN:?set METRICS_TOKEN in infra/.env}
     ports:
-      - "127.0.0.1:3000:3000"
+      # DEVICE_BIND=0.0.0.0 in infra/.env exposes it on the Wi-Fi network (testing on a phone).
+      - "${DEVICE_BIND:-127.0.0.1}:3000:3000"
     volumes:
       - ../services/api-gateway/src:/app/src:delegated
     depends_on:
@@ -212,6 +196,8 @@ services:
     restart: unless-stopped
     command: npm run start:dev
     environment:
+      # Public gateway address used in locally stored image URLs (set to your Wi-Fi IP for a phone).
+      - PUBLIC_API_URL=${PUBLIC_API_URL:-http://localhost:3000/api/v1}
       - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET:?set JWT_ACCESS_SECRET in infra/.env}
       - INTERNAL_SECRET=${INTERNAL_SECRET:?set INTERNAL_SECRET in infra/.env}
       - PORT=3002
@@ -254,11 +240,17 @@ services:
       - PORT=3003
       - NODE_ENV=development
       - ELASTICSEARCH_NODE=http://elasticsearch:9200
+      # Search clicks and A/B results are written to Postgres (ab_test_results).
+      - DATABASE_URL=postgresql://marad_user:marad_dev_password@postgres:5432/marad_db
       - REDIS_HOST=redis
       - REDIS_PORT=6379
     volumes:
       - ../services/search-service/src:/app/src:delegated
     depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
       elasticsearch:
         condition: service_healthy
       redis:
@@ -275,19 +267,23 @@ services:
     restart: unless-stopped
     command: npm run start:dev
     environment:
+      # Public gateway address used in locally stored image URLs (set to your Wi-Fi IP for a phone).
+      - PUBLIC_API_URL=${PUBLIC_API_URL:-http://localhost:3000/api/v1}
       - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET:?set JWT_ACCESS_SECRET in infra/.env}
       - INTERNAL_SECRET=${INTERNAL_SECRET:?set INTERNAL_SECRET in infra/.env}
       - PORT=3004
       - NODE_ENV=development
-      - MONGODB_URI=mongodb://marad_user:marad_dev_password@mongodb:27017/marad_messaging?authSource=admin
+      - DATABASE_URL=postgresql://marad_user:marad_dev_password@postgres:5432/marad_db
       - REDIS_HOST=redis
       - REDIS_PORT=6379
     ports:
-      - "127.0.0.1:3004:3004"
+      - "${DEVICE_BIND:-127.0.0.1}:3004:3004"
     volumes:
       - ../services/messaging-service/src:/app/src:delegated
     depends_on:
-      mongodb:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -374,6 +370,8 @@ services:
     restart: unless-stopped
     command: npm run start:dev
     environment:
+      # Public gateway address used in locally stored image URLs (set to your Wi-Fi IP for a phone).
+      - PUBLIC_API_URL=${PUBLIC_API_URL:-http://localhost:3000/api/v1}
       - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET:?set JWT_ACCESS_SECRET in infra/.env}
       - INTERNAL_SECRET=${INTERNAL_SECRET:?set INTERNAL_SECRET in infra/.env}
       - PORT=3007
@@ -480,7 +478,6 @@ services:
       - DATABASE_URL=postgresql://marad_user:marad_dev_password@postgres:5432/marad_db
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - MONGODB_URI=mongodb://marad_user:marad_dev_password@mongodb:27017/marad_db?authSource=admin
       - ELASTICSEARCH_NODE=http://elasticsearch:9200
     ports:
       - "127.0.0.1:8002:8002"
@@ -492,8 +489,6 @@ services:
       postgres:
         condition: service_healthy
       redis:
-        condition: service_healthy
-      mongodb:
         condition: service_healthy
     networks:
       - marad-network
@@ -557,8 +552,6 @@ secrets:
 volumes:
   postgres_data:
     name: marad-postgres-data
-  mongodb_data:
-    name: marad-mongodb-data
   redis_data:
     name: marad-redis-data
   es_data:

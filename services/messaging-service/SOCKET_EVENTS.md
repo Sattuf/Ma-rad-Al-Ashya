@@ -1,70 +1,80 @@
-# WebSocket Events
+# Messaging — realtime events and REST contract
 
 ## Connection
 
-Connect to the Socket.IO server at `/` (default path) or configure your client. Pass the `userId` in the query to identify the user for presence and message delivery.
+Authenticate with the access token, never with a user id: the server takes the user from
+the verified token.
 
 ```javascript
-const socket = io('http://localhost:3004', {
-  query: { userId: 'user-123' }
-});
+// Web
+const socket = io(SOCKET_URL, { auth: { token: accessToken } });
+// Mobile: an `Authorization: Bearer <token>` header in the handshake.
 ```
 
-## Client -> Server Events
+A rejected handshake arrives as `connect_error` and socket.io keeps retrying. Every socket
+joins its user's own room, so new messages also reach an open inbox. Conversation rooms are
+not kept across reconnects: re-emit `join_conversation` for open conversations on `connect`.
 
-### `join_conversation`
-Join a specific conversation room to receive messages and typing events.
-- **Payload**: `{ conversationId: string }`
+## Client → server
 
-### `send_message`
-Send a new message to a conversation.
-- **Payload**: `{ conversationId: string, senderId: string, content: string }`
-- **Response**: Emits `new_message` to the room.
+| Event | Payload | Notes |
+|---|---|---|
+| `join_conversation` | `{ conversationId }` or the id as a string | Checked against membership. Required before `mark_read` and `typing` |
+| `leave_conversation` | `{ conversationId }` | |
+| `send_message` | `{ conversationId, content }` | The ack is the stored message |
+| `mark_read` | `{ conversationId }` | Moves your read position to the latest message |
+| `typing` | `{ conversationId, isTyping }` | |
 
-### `mark_read`
-Mark all unread messages in a conversation as read by the user.
-- **Payload**: `{ conversationId: string, userId: string }`
-- **Response**: Emits `messages_read` to the room.
+## Server → client
 
-### `typing`
-Indicate that a user is typing (or stopped typing) in a conversation.
-- **Payload**: `{ conversationId: string, userId: string, isTyping: boolean }`
-- **Response**: Emits `user_typing` to the room.
+| Event | Payload |
+|---|---|
+| `new_message` | `Message` (to the conversation room and to both users' rooms) |
+| `message_read` | `{ conversationId, userId, lastReadMessageId }` — every message with id ≤ `lastReadMessageId` sent by the other user is now read |
+| `message_deleted` | `{ conversationId, messageId }` |
+| `typing` | `{ conversationId, userId, isTyping }` |
+| `presence_update` | `{ userId, status: 'online' \| 'offline' }` (to conversations that user had open) |
 
-### `update_presence`
-Manually update user's online presence (optional, as connection/disconnection handles basic presence).
-- **Payload**: `{ userId: string, status: string }`
+## REST (through the gateway: `/api/v1/conversations…`, mobile alias `/api/v1/messaging/conversations…`)
 
----
+| Method | Path | Result |
+|---|---|---|
+| POST | `/conversations` `{ participants: [otherUserId], listingId? }` | `Conversation` (one per pair of users) |
+| GET | `/conversations?limit=&cursor=` | `{ data: Conversation[], nextCursor }` — most recent activity first |
+| GET | `/conversations/:id/messages?limit=&cursor=` (also `/messages/:id`) | `{ data: Message[], nextCursor }` — newest first |
+| POST | `/conversations/:id/read` | `{ lastReadMessageId }` |
+| POST | `/conversations/:id/messages/image` (multipart field `image`) | `Message` |
+| POST | `/conversations/:id/block` | `Conversation` |
+| DELETE | `/conversations/:id/messages/:messageId` | `{ deleted: true }` — own messages, within 5 minutes |
 
-## Server -> Client Events
+Pages are keyset pages: pass `nextCursor` back as `cursor`; `null` means the end. There is no
+`skip`: every page costs the same, however deep.
 
-### `new_message`
-Received when a new message is sent to a joined conversation.
-- **Payload**: `Message` object
+```ts
+interface Message {
+  id: string;            // BIGINT as a string, increasing
+  conversationId: string;
+  senderId: string;
+  content: string;
+  type: 'text' | 'image';
+  imageUrl: string | null;
+  isRead: boolean;       // read by the other participant
+  createdAt: string;
+}
 
-### `messages_read`
-Received when a user marks messages as read in a joined conversation.
-- **Payload**: `{ conversationId: string, userId: string }`
+interface Conversation {
+  id: string;
+  participants: string[];            // [you, other]
+  otherUserId: string;
+  listingId: string | null;
+  lastMessage: Message | null;       // summary; imageUrl is not included
+  lastMessageAt: string | null;
+  unreadCount: number;               // yours
+  unreadCounts: Record<string, number>;
+  blocked: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+```
 
-### `user_typing`
-Received when another user starts or stops typing.
-- **Payload**: `{ conversationId: string, userId: string, isTyping: boolean }`
-
-### `presence_update`
-Received globally when a user connects or disconnects.
-- **Payload**: `{ userId: string, status: 'online' | 'offline' }`
-
----
-
-## REST API Integration
-
-Some messaging features are provided via REST endpoints to handle file uploads or access control effectively:
-
-- **Send Image Message**: `POST /conversations/:id/messages/image`
-  - Uploads an image using Multer and Sharp.
-  - Automatically emits a `new_message` event over WebSockets to other participants.
-- **Delete Message**: `DELETE /conversations/:id/messages/:messageId`
-  - Deletes a message (only allowed within 5 minutes of sending).
-- **Block Conversation**: `POST /conversations/:id/block`
-  - Blocks a conversation so no further messages can be sent.
+Storage: Postgres, `db/migrations/0003_messaging_and_user_events.sql` (design notes there).

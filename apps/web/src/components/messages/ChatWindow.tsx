@@ -59,7 +59,7 @@ export function ChatWindow({ conversationId, currentUserId }: ChatWindowProps) {
         );
         // Mark as read if we are viewing it
         if (message.senderId !== currentUserId) {
-          socket.emit('mark_read', { messageId: message.id, conversationId });
+          socket.emit('mark_read', { conversationId });
         }
       }
     };
@@ -69,7 +69,7 @@ export function ChatWindow({ conversationId, currentUserId }: ChatWindowProps) {
         mutate(
           (currentData) => {
             if (!currentData) return currentData;
-            return currentData.map((page: any) => ({
+            return currentData.map((page) => ({
               ...page,
               data: page.data.filter((m: Message) => m.id !== messageId)
             }));
@@ -92,10 +92,24 @@ export function ChatWindow({ conversationId, currentUserId }: ChatWindowProps) {
       }
     };
 
-    const handleMessageRead = ({ messageId, conversationId: cId, readAt }: any) => {
-      if (cId === conversationId) {
-        mutate();
-      }
+    // The other participant read up to a position: mark my messages up to it, locally.
+    const handleMessageRead = ({ conversationId: cId, userId, lastReadMessageId }: {
+      conversationId: string;
+      userId: string;
+      lastReadMessageId: string;
+    }) => {
+      if (cId !== conversationId || userId === currentUserId) return;
+      const upTo = BigInt(lastReadMessageId);
+      mutate(
+        (currentData) =>
+          currentData?.map((page) => ({
+            ...page,
+            data: page.data.map((m) =>
+              m.senderId === currentUserId && !m.isRead && BigInt(m.id) <= upTo ? { ...m, isRead: true } : m,
+            ),
+          })),
+        false,
+      );
     };
 
     socket.on('new_message', handleNewMessage);
@@ -146,7 +160,7 @@ export function ChatWindow({ conversationId, currentUserId }: ChatWindowProps) {
       mutate(
         (currentData) => {
           if (!currentData) return currentData;
-          return currentData.map((page: any) => ({
+          return currentData.map((page) => ({
             ...page,
             data: page.data.filter((m: Message) => m.id !== messageId)
           }));
@@ -207,7 +221,7 @@ export function ChatWindow({ conversationId, currentUserId }: ChatWindowProps) {
                       <span>{new Date(msg.createdAt).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })}</span>
                       {isMine && (
                         <span className="me-1 tracking-tighter">
-                          {msg.readAt ? '✓✓' : '✓'}
+                          {msg.isRead ? '✓✓' : '✓'}
                         </span>
                       )}
                     </div>

@@ -1,10 +1,25 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import sharp from 'sharp';
+// sharp's typings declare a default export, but require('sharp') returns the function
+// itself: a default import compiles to sharp_1.default, which is undefined at runtime
+// (these services do not use esModuleInterop). Types from the typings, value from require.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const sharp: typeof import('sharp').default = require('sharp');
 import * as path from 'path';
 import * as fs from 'fs';
 import { randomUUID } from 'crypto';
+
+/**
+ * Public URL of a locally stored file (STORAGE_PROVIDER is not "s3", i.e. development):
+ * served by this service under /media and reached through the gateway, so phones and
+ * browsers load it from the same address as the API. PUBLIC_API_URL is the gateway as
+ * clients see it (http://<computer's Wi-Fi IP>:3000/api/v1 when testing on a phone).
+ */
+export function localMediaUrl(kind: string, filename: string): string {
+  const base = (process.env.PUBLIC_API_URL || 'http://localhost:3000/api/v1').replace(/\/+$/, '');
+  return `${base}/media/${kind}/${filename}`;
+}
 
 @Injectable()
 export class StorageService {
@@ -55,7 +70,7 @@ export class StorageService {
       const filepath = path.join(tmpDir, path.basename(filename));
       fs.writeFileSync(filepath, compressedBuffer);
       
-      return `${process.env.USERS_SERVICE_URL || 'http://localhost:3007'}/tmp/${filename}`;
+      return localMediaUrl('avatars', path.basename(filename));
     }
   }
 }

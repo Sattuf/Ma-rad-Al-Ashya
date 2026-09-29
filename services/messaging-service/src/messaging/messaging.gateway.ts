@@ -11,7 +11,7 @@ import {
 } from '@nestjs/websockets';
 import { Logger } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
-import { MessagingService } from './messaging.service';
+import { MessagingService, SentMessage } from './messaging.service';
 
 import { RedisService } from '../redis/redis.service';
 import { FcmService } from '../fcm/fcm.service';
@@ -20,6 +20,8 @@ import { corsOrigins, extractBearerToken, verifyAccessToken } from '../common/se
 type ConversationRef = string | { conversationId?: string };
 
 const roomFor = (conversationId: string) => `conversation_${conversationId}`;
+/** Every socket of a user joins this room, so new messages reach an open inbox too. */
+const userRoom = (userId: string) => `user_${userId}`;
 
 @WebSocketGateway({ cors: { origin: corsOrigins() } })
 export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
@@ -64,6 +66,7 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
       client.disconnect(true);
       return;
     }
+    client.join(userRoom(client.data.userId));
     await this.redisService.addConnection(client.data.userId, client.id);
   }
 
@@ -101,7 +104,7 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
     if (typeof conversationId !== 'string') throw new WsException('conversationId is required');
 
     try {
-      await this.messagingService.getConversationForParticipant(conversationId, userId);
+      await this.messagingService.assertParticipant(conversationId, userId);
     } catch {
       throw new WsException('Conversation not found');
     }
@@ -128,46 +131,54 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
   ) {
     const senderId = this.requireUser(client);
     try {
-      const message = await this.messagingService.sendMessage(data?.conversationId, senderId, data?.content);
-      await this.handleNewMessageSent(message);
-      return message;
+      const sent = await this.messagingService.sendMessage(data?.conversationId, senderId, data?.content);
+      await this.announceMessage(sent);
+      return sent.message;
     } catch (err) {
       throw new WsException(err?.message ?? 'Failed to send message');
     }
   }
 
-  async handleNewMessageSent(message: any) {
-    const conversationId = message.conversationId.toString();
-    const senderId = message.senderId;
-    const content = message.content;
+  /**
+   * Delivers a stored message: to the open conversation and to every recipient's other
+   * sockets (inbox), in one emit (socket.io de-duplicates sockets across rooms). Offline
+   * recipients get a push notification. Recipients and listing come back from the insert
+   * statement itself, so no extra query here.
+   */
+  async announceMessage({ message, recipientIds, listingId }: SentMessage) {
+    this.server
+      .to([roomFor(message.conversationId), userRoom(message.senderId), ...recipientIds.map(userRoom)])
+      .emit('new_message', message);
 
-    this.server.to(roomFor(conversationId)).emit('new_message', message);
-
-    const conversation = await this.messagingService.getConversationById(conversationId);
-
-    if (conversation.listingId) {
-      await this.redisService.incr(`listing:messages:${conversation.listingId}`);
+    if (listingId) {
+      await this.redisService.incr(`listing:messages:${listingId}`);
     }
 
-    for (const p of conversation.participants) {
-      if (p !== senderId) {
-        const status = await this.redisService.getUserPresence(p);
-        if (status !== 'online') {
-          this.fcmService.sendNotification(p, 'New Message', content, {
-            conversationId,
-            messageId: message._id.toString(),
-          });
-        }
+    for (const recipientId of recipientIds) {
+      const status = await this.redisService.getUserPresence(recipientId);
+      if (status !== 'online') {
+        this.fcmService.sendNotification(recipientId, 'رسالة جديدة', message.content, {
+          conversationId: message.conversationId,
+          messageId: message.id,
+        });
       }
     }
+  }
+
+  announceRead(conversationId: string, userId: string, lastReadMessageId: string) {
+    this.server.to(roomFor(conversationId)).emit('message_read', { conversationId, userId, lastReadMessageId });
+  }
+
+  announceDeleted(conversationId: string, messageId: string) {
+    this.server.to(roomFor(conversationId)).emit('message_deleted', { conversationId, messageId });
   }
 
   @SubscribeMessage('mark_read')
   async handleMarkRead(@MessageBody() data: { conversationId: string }, @ConnectedSocket() client: Socket) {
     const userId = this.requireUser(client);
     const conversationId = this.requireJoined(client, data?.conversationId);
-    await this.messagingService.markRead(conversationId, userId);
-    this.server.to(roomFor(conversationId)).emit('messages_read', { conversationId, userId });
+    const { lastReadMessageId } = await this.messagingService.markRead(conversationId, userId);
+    this.announceRead(conversationId, userId, lastReadMessageId);
   }
 
   @SubscribeMessage('typing')
@@ -177,7 +188,7 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
   ) {
     const userId = this.requireUser(client);
     const conversationId = this.requireJoined(client, data?.conversationId);
-    client.to(roomFor(conversationId)).emit('user_typing', {
+    client.to(roomFor(conversationId)).emit('typing', {
       conversationId,
       userId,
       isTyping: data?.isTyping !== false,

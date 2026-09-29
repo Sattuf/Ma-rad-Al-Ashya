@@ -37,7 +37,6 @@ graph TB
 
     subgraph DataStores["مخازن البيانات — Data Stores"]
         PostgreSQL["🐘 PostgreSQL"]
-        MongoDB["🍃 MongoDB"]
         Redis["⚡ Redis"]
         Elasticsearch["🔎 Elasticsearch"]
     end
@@ -63,11 +62,11 @@ graph TB
     AuthService -->|SQL| PostgreSQL
     ListingsService -->|SQL| PostgreSQL
     TransactionsService -->|SQL| PostgreSQL
-    FraudService -->|SQL Read| PostgreSQL
-    PersonalizationService -->|SQL Read| PostgreSQL
+    MessagingService -->|SQL| PostgreSQL
+    FraudService -->|SQL| PostgreSQL
+    PersonalizationService -->|SQL| PostgreSQL
 
     SearchService --> Elasticsearch
-    MessagingService --> MongoDB
     MessagingService -->|Pub/Sub| Redis
     PersonalizationService -->|Cache| Redis
 
@@ -130,7 +129,7 @@ graph TB
 | الخاصية | القيمة |
 |---------|--------|
 | **التقنية** | NestJS |
-| **قاعدة البيانات** | MongoDB + Redis (Pub/Sub) |
+| **قاعدة البيانات** | PostgreSQL + Redis (الحضور) |
 | **البروتوكول** | WebSocket |
 | **المسؤولية** | المحادثات الفورية بين البائع والمشتري، إشعارات الرسائل |
 
@@ -205,7 +204,7 @@ graph LR
 
 ## ملكية البيانات — Data Ownership
 
-> المصدر الرسمي: رأس الملف `db/migrations/0001_baseline.sql`. **فقط المالك يكتب**؛ غيره يمر عبر واجهة المالك.
+> المصدر الرسمي: رؤوس ملفات `db/migrations/` (0001 و0003 و0004). **قاعدة البيانات الوحيدة هي PostgreSQL** ([POSTGRES.md](POSTGRES.md)). **فقط المالك يكتب**؛ غيره يمر عبر واجهة المالك.
 
 | الخدمة | المخزن | الجداول / المجموعات |
 |--------|--------|---------------------|
@@ -216,9 +215,9 @@ graph LR
 | `moderation-service` | PostgreSQL + Redis (Bull) | `reports`, `report_counts` |
 | `identity-service` | PostgreSQL | `kyc_verifications`, `kyc_audit_logs` (بيانات مشفّرة بـ KMS) |
 | `search-service` | Elasticsearch + PostgreSQL | فهرس `marad_listings` + `ab_test_results` |
-| `messaging-service` | MongoDB + Redis | `conversations`, `messages` + الحضور |
-| `fraud-service` | PostgreSQL + MongoDB | `fraud_signals` (كتابة) |
-| `personalization-service` | MongoDB + Redis + ES | `user_events` (كتابة) + قراءة الفهرس |
+| `messaging-service` | PostgreSQL + Redis | `conversations`, `conversation_members`, `messages` + الحضور |
+| `fraud-service` | PostgreSQL | `fraud_signals`, `device_accounts`, `ip_accounts`, `transaction_features` |
+| `personalization-service` | PostgreSQL + Redis + ES | `user_events` (مقسّم شهرياً) + قراءة الفهرس |
 
 **الترحيلات:** ملف SQL مرقّم في `db/migrations/NNNN_وصف.sql`، يطبّقه `db/migrate.mjs` (مع checksum وقفل استشاري وتنفيذ كل ملف في transaction). في Docker تعمل خدمة `migrate` مرة واحدة قبل أي خدمة تستخدم Postgres. في CI يُطبَّق كل شيء على قاعدة فارغة مرتين، ثم يتحقق `scripts/check-entity-schema.ts` من أن كل عمود في كيانات TypeORM موجود بنوع متوافق.
 

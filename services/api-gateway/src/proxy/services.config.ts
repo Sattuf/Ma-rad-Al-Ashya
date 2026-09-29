@@ -46,6 +46,10 @@ export const BLOCKED_ROUTES: { service: string; method: string; pattern: RegExp 
 export const ROUTE_OVERRIDES: { pattern: RegExp; service: string }[] = [
   // Reviews and ratings are owned by transactions-service but read under the user.
   { pattern: /^\/users\/[^/]+\/(reviews|rating-summary)\/?$/i, service: 'transactions-service' },
+  // Locally stored images (development without S3), each served by the service that stored it.
+  { pattern: /^\/media\/listings\/[^/]+$/, service: 'listings-service' },
+  { pattern: /^\/media\/messages\/[^/]+$/, service: 'messaging-service' },
+  { pattern: /^\/media\/avatars\/[^/]+$/, service: 'users-service' },
 ];
 
 export const SERVICES_CONFIG: ServiceConfig[] = [

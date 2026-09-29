@@ -1,4 +1,6 @@
 import { NestFactory } from '@nestjs/core';
+import * as express from 'express';
+import * as path from 'path';
 import { AppModule } from './app.module';
 
 import { ValidationPipe } from '@nestjs/common';
@@ -17,6 +19,11 @@ async function bootstrap() {
   });
   app.useGlobalFilters(new SentryExceptionFilter());
   app.enableCors({ origin: corsOrigins() });
+  // Locally stored avatars (development, no S3): see storage.service localMediaUrl.
+  app.use(
+    '/media/avatars',
+    express.static(path.join(process.cwd(), 'tmp', 'avatars'), { index: false, fallthrough: false, maxAge: '7d', immutable: true }),
+  );
   app.useGlobalPipes(new ValidationPipe({ whitelist: true }));
   await app.listen(process.env.PORT ?? 3000);
 }

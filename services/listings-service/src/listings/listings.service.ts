@@ -302,7 +302,10 @@ export class ListingsService {
       sortOrder: imageCount,
     });
 
-    return this.listingImagesRepository.save(image);
+    const saved = await this.listingImagesRepository.save(image);
+    // images_count is part of the search quality score.
+    void this.triggerSearchIndex('update', listing);
+    return saved;
   }
 
   async deleteImage(listingId: string, imageId: string, userId: string): Promise<void> {
@@ -313,6 +316,7 @@ export class ListingsService {
     if (!image) throw new NotFoundException('Image not found');
 
     await this.listingImagesRepository.remove(image);
+    void this.triggerSearchIndex('update', listing);
   }
 
   async findByUser(userId: string, query: Record<string, any> = {}): Promise<ListingsPage> {

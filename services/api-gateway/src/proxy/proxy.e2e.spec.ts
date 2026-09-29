@@ -112,6 +112,22 @@ describe('ProxyController (e2e)', () => {
     expect(seen[0].headers['x-gateway-service']).toBe('transactions-service');
   });
 
+  it.each([
+    ['listings', 'listings-service'],
+    ['messages', 'messaging-service'],
+    ['avatars', 'users-service'],
+  ])('routes locally stored %s images to %s with the full path', async (kind, service) => {
+    await request(app.getHttpServer()).get(`/api/v1/media/${kind}/abc.jpeg`);
+    expect(seen[0].url).toBe(`/media/${kind}/abc.jpeg`);
+    expect(seen[0].headers['x-gateway-service']).toBe(service);
+  });
+
+  it('answers 404 for other media paths instead of guessing a service', async () => {
+    const res = await request(app.getHttpServer()).get('/api/v1/media/secrets/x');
+    expect(res.status).toBe(404);
+    expect(seen).toHaveLength(0);
+  });
+
   it('still strips the prefix for other users routes', async () => {
     await request(app.getHttpServer()).get('/api/v1/users/profile');
     expect(seen[0].url).toBe('/profile');

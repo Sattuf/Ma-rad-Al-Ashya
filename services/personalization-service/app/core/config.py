@@ -1,11 +1,16 @@
 import os
+from urllib.parse import quote
 from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     PORT: int = 8002
     ENV: str = "development"
     
-    MONGODB_URI: str = "mongodb://marad_user:marad_dev_password@localhost:27017/marad_db?authSource=admin"
+    # Postgres (db/migrations/0003: user_events). DATABASE_URL, or built from DB_* like the
+    # Node services (common/database.ts).
+    DATABASE_URL: str = ""
+    DB_POOL_MAX: int = 10
+    DB_STATEMENT_TIMEOUT_MS: int = 5000
     REDIS_URL: str = ""
     ELASTICSEARCH_URL: str = "http://localhost:9200"
     # Required: no default, a committed secret is a public secret.
@@ -25,8 +30,6 @@ class Settings(BaseSettings):
         
         # Adapt defaults for Docker container running on the marad network
         if in_docker:
-            if "localhost" in self.MONGODB_URI:
-                self.MONGODB_URI = self.MONGODB_URI.replace("localhost", "mongodb")
             if "localhost" in self.ELASTICSEARCH_URL:
                 self.ELASTICSEARCH_URL = self.ELASTICSEARCH_URL.replace("localhost", "elasticsearch")
 
@@ -34,6 +37,15 @@ class Settings(BaseSettings):
         es_node = os.getenv("ELASTICSEARCH_NODE")
         if es_node:
             self.ELASTICSEARCH_URL = es_node
+
+        if not self.DATABASE_URL:
+            user = os.getenv("DB_USER") or os.getenv("DATABASE_USER") or "postgres"
+            password = os.getenv("DB_PASSWORD") or os.getenv("DATABASE_PASSWORD") or ""
+            host = os.getenv("DB_HOST") or os.getenv("DATABASE_HOST") or ("postgres" if in_docker else "localhost")
+            port = os.getenv("DB_PORT") or os.getenv("DATABASE_PORT") or "5432"
+            name = os.getenv("DB_NAME") or os.getenv("DATABASE_NAME") or "marad_db"
+            auth = f"{quote(user)}:{quote(password)}@" if password else f"{quote(user)}@"
+            self.DATABASE_URL = f"postgresql://{auth}{host}:{port}/{name}"
 
         # Build REDIS_URL if not explicitly provided
         if not self.REDIS_URL:

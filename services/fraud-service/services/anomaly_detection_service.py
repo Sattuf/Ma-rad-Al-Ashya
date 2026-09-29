@@ -1,7 +1,6 @@
 import os
 import joblib
 import pandas as pd
-from datetime import datetime
 import database
 from schemas import TransactionAnalyzeRequest, TransactionAnalyzeResponse
 
@@ -60,25 +59,28 @@ async def analyze_transaction(request: TransactionAnalyzeRequest) -> Transaction
     else:
         message = "Model not loaded. Defaulting to normal."
         
-    # 1. Save transaction features to MongoDB
-    await database.mongo_db.transaction_features.insert_one({
-        "transaction_id": request.transaction_id,
-        "user_id": request.user_id,
-        "amount": amount,
-        "mcc": request.merchant_category_code,
-        "country": request.location_country,
-        "is_anomaly": is_anomaly,
-        "anomaly_score": anomaly_score,
-        "timestamp": datetime.utcnow()
-    })
-    
-    # 2. If anomaly, save signal to Postgres
-    if is_anomaly:
-        async with database.pg_pool.acquire() as conn:
-            await conn.execute('''
-                INSERT INTO fraud_signals (user_id, signal_type, description, risk_score)
-                VALUES ($1, $2, $3, $4)
-            ''', request.user_id, "TRANSACTION_ANOMALY", message, float(min(1.0, max(0.5, anomaly_score))))
+    # Features and, for an anomaly, the signal: one round trip, one transaction.
+    async with database.pg_pool.acquire() as conn:
+        await conn.execute(
+            '''
+            WITH features AS (
+              INSERT INTO transaction_features
+                (transaction_id, user_id, amount, mcc, country, is_anomaly, anomaly_score)
+              VALUES ($1, $2, $3, $4, $5, $6, $7)
+            )
+            INSERT INTO fraud_signals (user_id, signal_type, description, risk_score)
+            SELECT $2, 'TRANSACTION_ANOMALY', $8, $9 WHERE $6
+            ''',
+            request.transaction_id,
+            request.user_id,
+            amount,
+            request.merchant_category_code,
+            request.location_country,
+            is_anomaly,
+            anomaly_score,
+            message,
+            float(min(1.0, max(0.5, anomaly_score))),
+        )
             
     return TransactionAnalyzeResponse(
         is_anomaly=is_anomaly,
