@@ -29,14 +29,10 @@ def test_device_check_unauthorized():
 @pytest.fixture(autouse=True)
 def mock_db(monkeypatch):
     # Mock database connections to avoid real DB calls during tests
-    from database import connect_to_mongo, connect_to_postgres, close_mongo_connection, close_postgres_connection
-    
     async def mock_connect(): pass
     async def mock_close(): pass
-    
-    monkeypatch.setattr("database.connect_to_mongo", mock_connect)
+
     monkeypatch.setattr("database.connect_to_postgres", mock_connect)
-    monkeypatch.setattr("database.close_mongo_connection", mock_close)
     monkeypatch.setattr("database.close_postgres_connection", mock_close)
 
 def test_admin_dashboard_unauthorized():
@@ -77,8 +73,9 @@ def test_risk_score(monkeypatch):
                 return self
             async def __aexit__(self, exc_type, exc, tb):
                 pass
-            async def fetch(self, query, *args):
-                return [{"risk_score": 0.5}, {"risk_score": 0.6}]
+            async def fetchrow(self, query, *args):
+                # Two signals (0.5 + 0.6), aggregated by Postgres.
+                return {"total": 1.1, "n": 2}
         return MockConn()
         
     class MockPool:
@@ -93,6 +90,7 @@ def test_risk_score(monkeypatch):
     data = response.json()
     assert data["total_risk_score"] == 1.1
     assert data["risk_level"] == "HIGH"
+    assert data["signal_count"] == 2
 
 
 def test_admin_rejects_token_signed_with_old_default_secret():

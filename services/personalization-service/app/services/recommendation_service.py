@@ -1,12 +1,15 @@
 import json
 import logging
-from collections import Counter
 from elasticsearch import AsyncElasticsearch
 import redis.asyncio as aioredis
 from app.core.config import settings
 from app.services.event_service import event_service
 
 logger = logging.getLogger("recommendation_service")
+
+# Views and searches no longer invalidate the cache (event_service.STRONG_SIGNALS), so this
+# bounds how stale recommendations can get for someone who is only browsing.
+RECOMMENDATIONS_TTL_SECONDS = 900
 
 class RecommendationService:
     def __init__(self):
@@ -85,32 +88,27 @@ class RecommendationService:
         except Exception as e:
             logger.error(f"Failed to read from Redis cache: {str(e)}")
 
-        # 2. Query MongoDB for last 50 events of user_id
+        # 2. Category scores and seen listings, aggregated in Postgres in one query
+        #    (recency-decayed, weighted by signal strength: event_service.SIGNALS_SQL).
         try:
-            cursor = event_service.collection.find({"user_id": user_id}).sort("created_at", -1).limit(50)
-            events = await cursor.to_list(length=50)
+            signals = await event_service.user_signals(user_id)
         except Exception as e:
-            logger.error(f"Failed to query MongoDB events for user {user_id}: {str(e)}")
-            events = []
+            logger.error(f"Failed to read events for user {user_id}: {str(e)}")
+            signals = {"categories": [], "seen_listings": []}
 
-        # 3. Extract most frequent category_ids
-        category_ids = [e.get("category_id") for e in events if e.get("category_id")]
-        viewed_ids = list(set([e.get("listing_id") for e in events if e.get("listing_id")]))
+        frequent_categories = signals["categories"]
+        viewed_ids = signals["seen_listings"]
 
-        if not category_ids:
+        if not frequent_categories:
             logger.info(f"No category events found for user {user_id}, calling cold start")
             cold_start_res = await self.get_cold_start(limit=limit)
             result = {"listings": cold_start_res, "based_on": "cold_start"}
             # Cache it
             try:
-                await self.redis_client.set(cache_key, json.dumps(result), ex=3600)
+                await self.redis_client.set(cache_key, json.dumps(result), ex=RECOMMENDATIONS_TTL_SECONDS)
             except Exception as e:
                 logger.error(f"Failed to write to Redis cache: {str(e)}")
             return result
-
-        # Count frequencies
-        counter = Counter(category_ids)
-        frequent_categories = [cat for cat, count in counter.most_common()]
 
         # 4. Build Elasticsearch query
         # Must match active, non-expired, and frequent categories
@@ -253,9 +251,9 @@ class RecommendationService:
         else:
             result = {"listings": listings, "based_on": "frequent_categories"}
 
-        # 5. Cache result in Redis (TTL 1 hour / 3600 seconds)
+        # 5. Cache the result
         try:
-            await self.redis_client.set(cache_key, json.dumps(result), ex=3600)
+            await self.redis_client.set(cache_key, json.dumps(result), ex=RECOMMENDATIONS_TTL_SECONDS)
         except Exception as e:
             logger.error(f"Failed to cache recommendations in Redis: {str(e)}")
 

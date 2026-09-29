@@ -108,22 +108,52 @@ CREATE TABLE user_events_default PARTITION OF user_events DEFAULT;
 -- Creates this month's partition and the next `months_ahead` ones. Idempotent and safe
 -- to call from several pods at once (advisory lock). personalization-service calls it at
 -- startup and daily.
+--
+-- It also adopts rows that reached the default partition (a month whose partition was not
+-- created in time). Postgres refuses to create a partition while the default partition
+-- holds rows in its range, so without this one late partition would break maintenance for
+-- good. The rows are moved into a new table which is then attached, all in this
+-- transaction; in steady state the default partition is empty and this costs nothing.
 CREATE FUNCTION ensure_user_event_partitions(months_ahead INTEGER DEFAULT 2)
 RETURNS void
 LANGUAGE plpgsql
 AS $$
 DECLARE
   month_start DATE;
+  month_end   DATE;
   part_name   TEXT;
 BEGIN
   PERFORM pg_advisory_xact_lock(727002);
-  FOR i IN 0..months_ahead LOOP
-    month_start := (date_trunc('month', now()) + make_interval(months => i))::date;
+  FOR month_start IN
+    SELECT (date_trunc('month', now()) + make_interval(months => i))::date FROM generate_series(0, months_ahead) i
+    UNION
+    SELECT DISTINCT date_trunc('month', created_at)::date FROM user_events_default
+    ORDER BY 1
+  LOOP
+    month_end := (month_start + INTERVAL '1 month')::date;
     part_name := format('user_events_y%sm%s', to_char(month_start, 'YYYY'), to_char(month_start, 'MM'));
-    IF to_regclass(part_name) IS NULL THEN
+    -- A partition of this user_events (by catalog, not by name lookup, which would follow
+    -- search_path and could find a same-named table in another schema).
+    CONTINUE WHEN EXISTS (
+      SELECT 1 FROM pg_inherits i JOIN pg_class c ON c.oid = i.inhrelid
+      WHERE i.inhparent = 'user_events'::regclass AND c.relname = part_name
+    );
+
+    IF EXISTS (SELECT 1 FROM user_events_default WHERE created_at >= month_start AND created_at < month_end) THEN
+      EXECUTE format('CREATE TABLE %I (LIKE user_events INCLUDING DEFAULTS INCLUDING CONSTRAINTS)', part_name);
+      EXECUTE format(
+        'WITH moved AS (DELETE FROM user_events_default WHERE created_at >= %L AND created_at < %L RETURNING *)
+         INSERT INTO %I SELECT * FROM moved',
+        month_start, month_end, part_name
+      );
+      EXECUTE format(
+        'ALTER TABLE user_events ATTACH PARTITION %I FOR VALUES FROM (%L) TO (%L)',
+        part_name, month_start, month_end
+      );
+    ELSE
       EXECUTE format(
         'CREATE TABLE %I PARTITION OF user_events FOR VALUES FROM (%L) TO (%L)',
-        part_name, month_start, (month_start + INTERVAL '1 month')::date
+        part_name, month_start, month_end
       );
     END IF;
   END LOOP;

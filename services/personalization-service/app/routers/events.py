@@ -15,7 +15,7 @@ async def create_event(
     # Call the event service to write event and clear Redis cache
     saved = await event_service.save_event(
         user_id=user_id,
-        event_type=event.event_type,
+        event_type=event.event_type.value,
         listing_id=event.listing_id,
         category_id=event.category_id,
         search_query=event.search_query,

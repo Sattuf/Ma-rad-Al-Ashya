@@ -6,24 +6,26 @@ os.environ.setdefault("JWT_ACCESS_SECRET", "test-access-secret-not-for-productio
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
+LISTING_1 = "c9a6b5a3-0000-4000-8000-000000000001"
+CATEGORY_1 = "a1b2c3d4-0000-4000-8000-000000000001"
+
 @pytest.fixture(autouse=True)
 def mock_services(monkeypatch):
-    # Mock MongoDB db and collection
-    mock_db = AsyncMock()
-    mock_db.command.return_value = {"ok": 1.0}
-    
-    mock_collection = AsyncMock()
-    # Mock cursor return value for event querying
-    mock_cursor = MagicMock()
-    mock_cursor.sort.return_value = mock_cursor
-    mock_cursor.limit.return_value = mock_cursor
-    mock_cursor.to_list = AsyncMock(return_value=[
-        {"event_type": "view", "listing_id": "listing-1", "category_id": "category-1"}
-    ])
-    mock_collection.find.return_value = mock_cursor
-    mock_collection.insert_one = AsyncMock(return_value=MagicMock(inserted_id="event-uuid-123"))
-    mock_collection.create_index = AsyncMock(return_value="index_created")
-    
+    # Mock the Postgres pool: an insert returns the new row, the signals query the
+    # aggregated categories / seen listings (the SQL itself runs in test_db_integration.py).
+    from datetime import datetime, timezone
+    mock_db = MagicMock()
+    mock_db.connect = AsyncMock()
+    mock_db.close = AsyncMock()
+    mock_db.fetchval = AsyncMock(return_value=0)
+
+    async def fetchrow(query, *args):
+        if "INSERT INTO user_events" in query:
+            return {"id": 123, "created_at": datetime(2026, 9, 29, tzinfo=timezone.utc)}
+        return {"categories": [CATEGORY_1], "seen": [LISTING_1]}
+
+    mock_db.fetchrow = AsyncMock(side_effect=fetchrow)
+
     # Mock Redis client
     mock_redis = AsyncMock()
     mock_redis.ping.return_value = True
@@ -51,11 +53,14 @@ def mock_services(monkeypatch):
         }
     }
     
+    import app.core.db as db_module
+    import app.main as main_module
+    import app.services.event_service as event_module
     from app.services.event_service import event_service
     from app.services.recommendation_service import recommendation_service
-    
-    monkeypatch.setattr(event_service, "db", mock_db)
-    monkeypatch.setattr(event_service, "collection", mock_collection)
+
+    for module in (db_module, main_module, event_module):
+        monkeypatch.setattr(module, "db", mock_db)
     monkeypatch.setattr(event_service, "redis_client", mock_redis)
     
     monkeypatch.setattr(recommendation_service, "es_client", mock_es)
@@ -63,7 +68,6 @@ def mock_services(monkeypatch):
     
     return {
         "db": mock_db,
-        "collection": mock_collection,
         "redis": mock_redis,
         "es": mock_es
     }
