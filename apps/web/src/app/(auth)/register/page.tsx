@@ -90,35 +90,44 @@ export default function RegisterPage() {
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">الاسم الكامل</label>
+          <label htmlFor="register-fullName" className="block text-sm font-medium text-gray-700 mb-1">الاسم الكامل</label>
           <input
             {...register('fullName')}
+            id="register-fullName"
+            aria-invalid={errors.fullName ? true : undefined}
+            aria-describedby={errors.fullName ? 'register-fullName-error' : undefined}
             type="text"
             className={`w-full px-4 py-3 rounded-xl border focus:ring-2 focus:ring-focus-ring focus:outline-none transition-all ${
               errors.fullName ? 'border-red-500' : 'border-gray-200'
             }`}
             placeholder="أحمد محمد"
           />
-          {errors.fullName && <p className="text-red-500 text-xs mt-1">{errors.fullName.message}</p>}
+          {errors.fullName && <p id="register-fullName-error" className="text-red-500 text-xs mt-1">{errors.fullName.message}</p>}
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">البريد الإلكتروني (اختياري)</label>
+          <label htmlFor="register-email" className="block text-sm font-medium text-gray-700 mb-1">البريد الإلكتروني (اختياري)</label>
           <input
             {...register('email')}
+            id="register-email"
+            aria-invalid={errors.email ? true : undefined}
+            aria-describedby={errors.email ? 'register-email-error' : undefined}
             type="email"
             className={`w-full px-4 py-3 rounded-xl border focus:ring-2 focus:ring-focus-ring focus:outline-none transition-all ${
               errors.email ? 'border-red-500' : 'border-gray-200'
             }`}
             placeholder="example@mail.com"
           />
-          {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email.message}</p>}
+          {errors.email && <p id="register-email-error" className="text-red-500 text-xs mt-1">{errors.email.message}</p>}
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">رقم الهاتف (اختياري)</label>
+          <label htmlFor="register-phone" className="block text-sm font-medium text-gray-700 mb-1">رقم الهاتف (اختياري)</label>
           <input
             {...register('phone')}
+            id="register-phone"
+            aria-invalid={errors.phone ? true : undefined}
+            aria-describedby={errors.phone ? 'register-phone-error' : undefined}
             type="tel"
             dir="ltr"
             className={`w-full px-4 py-3 rounded-xl border focus:ring-2 focus:ring-focus-ring focus:outline-none transition-all text-start ${
@@ -126,20 +135,23 @@ export default function RegisterPage() {
             }`}
             placeholder="+966500000000"
           />
-          {errors.phone && <p className="text-red-500 text-xs mt-1">{errors.phone.message}</p>}
+          {errors.phone && <p id="register-phone-error" className="text-red-500 text-xs mt-1">{errors.phone.message}</p>}
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">كلمة المرور</label>
+          <label htmlFor="register-password" className="block text-sm font-medium text-gray-700 mb-1">كلمة المرور</label>
           <input
             {...register('password')}
+            id="register-password"
+            aria-invalid={errors.password ? true : undefined}
+            aria-describedby={errors.password ? 'register-password-error' : undefined}
             type="password"
             className={`w-full px-4 py-3 rounded-xl border focus:ring-2 focus:ring-focus-ring focus:outline-none transition-all ${
               errors.password ? 'border-red-500' : 'border-gray-200'
             }`}
             placeholder="••••••••"
           />
-          {errors.password && <p className="text-red-500 text-xs mt-1">{errors.password.message}</p>}
+          {errors.password && <p id="register-password-error" className="text-red-500 text-xs mt-1">{errors.password.message}</p>}
         </div>
 
         <button

@@ -34,6 +34,13 @@ async function bootstrap() {
   app.getHttpAdapter().getInstance().set('trust proxy', parseInt(process.env.TRUST_PROXY_HOPS || '0', 10));
   // Swagger UI needs inline scripts, so CSP is relaxed outside production only.
   app.use(helmet({ contentSecurityPolicy: process.env.NODE_ENV === 'production' ? undefined : false }));
+  // Photos are embedded by the website, which is served from another origin than the API:
+  // helmet's `Cross-Origin-Resource-Policy: same-origin` makes browsers refuse them. Only
+  // media is opened up; access to private media is still decided by the owning service.
+  app.use('/api/v1/media', (_req: express.Request, res: express.Response, next: express.NextFunction) => {
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    next();
+  });
 
   // Webhooks are verified against the exact bytes the vendor signed, so keep them raw.
   app.use(['/api/v1/promotions/webhook', '/api/v1/identity/kyc/webhook'], express.raw({ type: 'application/json', limit: '1mb' }));

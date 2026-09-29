@@ -165,10 +165,11 @@ export default function AdminReportDetailPage({ params }: { params: Promise<{ id
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label className="block text-gray-400 text-sm mb-2">الحالة</label>
-              <select 
+              <label htmlFor="report-status" className="block text-gray-400 text-sm mb-2">الحالة</label>
+              <select
+                id="report-status"
                 value={status}
-                onChange={(e) => setStatus(e.target.value as any)}
+                onChange={(e) => setStatus(e.target.value as typeof status)}
                 className="w-full bg-gray-900 border border-gray-700 text-white rounded-lg px-4 py-2.5 outline-none focus:border-primary transition-colors"
               >
                 <option value="pending">معلق</option>
@@ -179,10 +180,11 @@ export default function AdminReportDetailPage({ params }: { params: Promise<{ id
             </div>
 
             <div>
-              <label className="block text-gray-400 text-sm mb-2">الإجراء المتخذ</label>
-              <select 
+              <label htmlFor="report-action" className="block text-gray-400 text-sm mb-2">الإجراء المتخذ</label>
+              <select
+                id="report-action"
                 value={actionTaken}
-                onChange={(e) => setActionTaken(e.target.value as any)}
+                onChange={(e) => setActionTaken(e.target.value as typeof actionTaken)}
                 className="w-full bg-gray-900 border border-gray-700 text-white rounded-lg px-4 py-2.5 outline-none focus:border-primary transition-colors"
               >
                 <option value="none">لا يوجد إجراء</option>
@@ -194,8 +196,9 @@ export default function AdminReportDetailPage({ params }: { params: Promise<{ id
             </div>
 
             <div>
-              <label className="block text-gray-400 text-sm mb-2">ملاحظات الإدارة (داخلية)</label>
-              <textarea 
+              <label htmlFor="report-admin-note" className="block text-gray-400 text-sm mb-2">ملاحظات الإدارة (داخلية)</label>
+              <textarea
+                id="report-admin-note"
                 value={adminNote}
                 onChange={(e) => setAdminNote(e.target.value)}
                 rows={4}

@@ -166,8 +166,9 @@ export default function EditProfilePage() {
         {/* Form Fields */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700">الاسم الكامل</label>
+            <label htmlFor="profile-name" className="block text-sm font-medium text-gray-700">الاسم الكامل</label>
             <input
+              id="profile-name"
               {...register('name')}
               type="text"
               className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-brand-600/20 focus:border-primary transition-colors outline-none text-gray-900"
@@ -192,8 +193,9 @@ export default function EditProfilePage() {
           </div>
 
           <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700">الموقع</label>
+            <label htmlFor="profile-location" className="block text-sm font-medium text-gray-700">الموقع</label>
             <input
+              id="profile-location"
               {...register('location')}
               type="text"
               className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-brand-600/20 focus:border-primary transition-colors outline-none text-gray-900"

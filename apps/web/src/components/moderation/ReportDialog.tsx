@@ -89,10 +89,11 @@ export function ReportDialog({ targetType, targetId, onClose }: ReportDialogProp
             )}
             
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="report-reason" className="block text-sm font-medium text-gray-700 mb-1">
                 سبب البلاغ
               </label>
-              <select 
+              <select
+                id="report-reason"
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
                 className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
@@ -104,10 +105,11 @@ export function ReportDialog({ targetType, targetId, onClose }: ReportDialogProp
             </div>
 
             <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="report-details" className="block text-sm font-medium text-gray-700 mb-1">
                 تفاصيل إضافية (اختياري)
               </label>
               <textarea
+                id="report-details"
                 value={description}
                 onChange={(e) => setDescription(e.target.value.slice(0, 500))}
                 rows={4}

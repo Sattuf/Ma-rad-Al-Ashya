@@ -5,67 +5,23 @@ export interface TrackingData {
   searchQuery?: string;
 }
 
-export function trackEvent(
-  eventType: string,
-  data?: TrackingData
-) {
-  const url = `${API_URL}/recommendations/events`;
-  const timestamp = new Date().toISOString();
-  
-  let userId: string | null = null;
-  let token: string | null = null;
+/**
+ * Fire-and-forget behaviour event for recommendations. The gateway routes `/events` to the
+ * personalization service, which takes the user from the token and the fields flat
+ * (same shape as the mobile app sends). Anonymous visitors are not tracked.
+ */
+export function trackEvent(eventType: string, data?: TrackingData) {
+  if (typeof window === 'undefined') return;
+  const token = localStorage.getItem('access_token');
+  if (!token) return;
 
-  if (typeof window !== 'undefined') {
-    token = localStorage.getItem('access_token');
-    // Try to extract userId from token or store if needed
-    try {
-      const userStr = localStorage.getItem('user');
-      if (userStr) {
-        const parsed = JSON.parse(userStr);
-        userId = parsed.id || null;
-      }
-    } catch (e) {
-      // ignore
-    }
-  }
-
-  const payload = {
-    eventType,
-    userId,
-    data,
-    timestamp,
-  };
-
-  const bodyString = JSON.stringify(payload);
-
-  // Print tracking event in console for debugging / visibility
-  console.log(`[Analytics Event Tracked]: ${eventType}`, payload);
-
-  if (typeof window !== 'undefined') {
-    // If browser supports sendBeacon and we don't need auth headers (or send it as simple text/plain Blob)
-    // we can use sendBeacon. Otherwise fetch with keepalive: true is ideal.
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    try {
-      fetch(url, {
-        method: 'POST',
-        headers,
-        body: bodyString,
-        keepalive: true,
-      }).catch((err) => {
-        // Silent catch for network disconnects/etc.
-      });
-    } catch (err) {
-      // Fallback to sendBeacon if fetch with keepalive throws
-      if (navigator.sendBeacon) {
-        const blob = new Blob([bodyString], { type: 'application/json' });
-        navigator.sendBeacon(url, blob);
-      }
-    }
-  }
+  // keepalive lets a click event finish even when it navigates away from the page.
+  fetch(`${API_URL}/events`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ eventType, ...data }),
+    keepalive: true,
+  }).catch(() => {
+    // Analytics must never break the page.
+  });
 }
