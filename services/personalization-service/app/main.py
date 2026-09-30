@@ -1,4 +1,9 @@
-import asyncio
+# Logging first, before modules that may log while loading.
+from app.core.logging_setup import setup_logging
+
+setup_logging("personalization-service")
+
+import asyncio  # noqa: E402
 import logging
 from contextlib import asynccontextmanager, suppress
 from fastapi import FastAPI
@@ -10,8 +15,14 @@ from app.routers import events, recommendations
 import os
 import sentry_sdk
 from prometheus_fastapi_instrumentator import Instrumentator
+from app.core.logging_setup import RequestContextMiddleware, scrub_sentry_event
 
-sentry_sdk.init(dsn=os.getenv("SENTRY_DSN"), traces_sample_rate=0.1)
+sentry_sdk.init(
+    dsn=os.getenv("SENTRY_DSN"),
+    traces_sample_rate=0.1,
+    before_send=scrub_sentry_event,
+    before_send_transaction=scrub_sentry_event,
+)
 
 logger = logging.getLogger("personalization")
 MAINTENANCE_INTERVAL_SECONDS = 24 * 3600
@@ -50,6 +61,8 @@ app = FastAPI(
 )
 
 Instrumentator().instrument(app).expose(app)
+# Added last so it runs first: everything after it sees the request ID.
+app.add_middleware(RequestContextMiddleware)
 
 app.include_router(events.router)
 app.include_router(recommendations.router)

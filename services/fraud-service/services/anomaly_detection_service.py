@@ -1,3 +1,4 @@
+import logging
 import os
 import joblib
 import pandas as pd
@@ -6,14 +7,15 @@ from schemas import TransactionAnalyzeRequest, TransactionAnalyzeResponse
 
 MODEL_PATH = os.path.join(os.path.dirname(__file__), "..", "ml", "anomaly_model.pkl")
 model = None
+logger = logging.getLogger("fraud.anomaly")
 
 def load_model():
     global model
     if os.path.exists(MODEL_PATH):
         model = joblib.load(MODEL_PATH)
-        print("Loaded anomaly detection model")
+        logger.info("Loaded anomaly detection model")
     else:
-        print("Anomaly detection model not found. Call train endpoint first.")
+        logger.warning("Anomaly detection model not found. Call train endpoint first.")
 
 # Run once at startup
 load_model()

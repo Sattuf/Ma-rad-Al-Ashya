@@ -108,7 +108,7 @@ export class AuthService {
           user_id: user.id,
         }),
       }).catch(err => {
-        console.error('Failed to send fraud device check', err.message);
+        this.logger.warn(`Failed to send fraud device check: ${err.message}`);
       });
     });
 

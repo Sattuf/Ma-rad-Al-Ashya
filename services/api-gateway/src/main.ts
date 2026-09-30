@@ -7,6 +7,7 @@ import helmet from 'helmet';
 
 import * as Sentry from '@sentry/node';
 import { SentryExceptionFilter } from './filters/sentry-exception.filter';
+import { JsonLogger, installRequestIdPropagation, requestContextMiddleware, scrubSentryEvent } from './common/logging';
 
 const DEV_CORS_ORIGINS = ['http://localhost:3100', 'http://localhost:8080', 'http://localhost:5000'];
 
@@ -19,11 +20,17 @@ function corsOrigins(): string[] {
 }
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { bodyParser: false });
+  const jsonLogger = new JsonLogger('api-gateway');
+  const app = await NestFactory.create(AppModule, { bodyParser: false, logger: jsonLogger });
+  // First middleware: every later step, including body parsing errors, has the request ID.
+  app.use(requestContextMiddleware(jsonLogger));
+  installRequestIdPropagation();
   
   Sentry.init({
     dsn: process.env.SENTRY_DSN,
     tracesSampleRate: 0.1,
+    beforeSend: scrubSentryEvent,
+    beforeSendTransaction: scrubSentryEvent,
   });
   app.useGlobalFilters(new SentryExceptionFilter());
 

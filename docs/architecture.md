@@ -245,8 +245,28 @@ graph LR
 | مؤشرات الأعمال | كل خدمة تحسب مؤشرات جداولها في `GET …/admin/stats` (مشرف فقط، كاش 60s، نافذة 30 يوماً مفهرسة) | لوحة `/admin` في الويب |
 | مقاييس الطلبات | البوابة تقيس المعدل والأخطاء وزمن الاستجابة لكل خدمة، وكاش الاستجابات، وصحة كل خدمة | Prometheus ← Grafana (`operations.json`) |
 | مقاييس العمليات | `/metrics` داخلي في كل خدمة؛ البوابة ترفض تمريره للعامة، و`/metrics` البوابة يتطلب `METRICS_TOKEN` | Prometheus |
+| السجلات | سطر JSON لكل حدث في كل الخدمات الـ11، وسطر `HTTP` لكل طلب (المسار بلا query، الحالة، المدة) | stdout ← `docker logs` |
+| الأخطاء | كل 5xx غير متوقع يُرسل مع وسم `request_id`، بعد تنظيف بيانات الطلب | Sentry |
 
 التفاصيل في [DASHBOARD.md](DASHBOARD.md).
+
+### السجلات ومعرّف الطلب — Logs and request IDs
+
+كل طلب يحمل `X-Request-ID`: البوابة تأخذه من العميل إن كان صالحاً (8–128 حرفاً من `A-Za-z0-9._:-`) وإلا تولّده، وتعيده في الاستجابة، وتمرّره للخدمات. كل خدمة تكتبه في كل سطر سجل أثناء معالجة الطلب، وتمرّره تلقائياً في استدعاءاتها للخدمات الأخرى (`fetch` و axios/`HttpService`، للمضيفات الداخلية فقط). لتتبّع طلب واحد عبر كل الخدمات:
+
+```bash
+docker compose -f infra/docker-compose.yml logs --no-log-prefix | grep '"requestId":"<id>"'
+```
+
+```json
+{"time":"2026-09-30T12:00:00.123Z","level":"info","service":"listings-service","context":"HTTP","requestId":"4b1e…","msg":"request","method":"POST","path":"/listings","status":201,"durationMs":42.7}
+```
+
+- **لا يُسجَّل أبداً:** قيم الحقول الحساسة (كلمات المرور، OTP، التوكنات، الأسرار، الهواتف، أرقام الهوية والبطاقات، ترويسات `authorization`/`cookie`/التواقيع)، وداخل النصوص: JWT وقيم `Bearer` ومعاملات `?token=`/`?code=` وأرقام الهواتف، والبريد يُختصر إلى `s***@example.com`. القواعد نفسها تُطبّق على أحداث Sentry.
+- **المستويات:** `LOG_LEVEL` = `debug` | `info` | `warn` | `error` (الافتراضي `info` في الإنتاج و`debug` محلياً). `LOG_FORMAT=pretty` لسطر مقروء أثناء التطوير.
+- **استعلامات SQL:** لا تُسجَّل قيم المعاملات أبداً (فيها بريد وهواتف وتجزئات كلمات مرور). الاستعلامات الفاشلة، والأبطأ من `DB_SLOW_QUERY_MS` (افتراضياً 1000)، تُسجَّل دائماً؛ وكل استعلام على مستوى debug فقط مع `LOG_SQL=true`.
+- **في الكود:** `new Logger('Context').log(...)` كما هو؛ ولإضافة حقول: `this.logger.log({ msg: 'listing published', listingId })`. لا تستخدم `console.log` في الخدمات.
+- الملفات: `src/common/logging.ts` (NestJS) و`logging_setup.py` (خدمتا Python)، بصيغة واحدة.
 
 ---
 
@@ -259,7 +279,7 @@ graph LR
 | مزوّد خارجي → خدمة | توقيع HMAC على الجسم الخام (Stripe، Didit) |
 | مدير | دور `admin` داخل JWT (`AdminGuard`) |
 
-الملفات المشتركة (`common/security.ts`, `common/database.ts`) منسوخة في كل خدمة لأن سياق بناء Docker هو مجلد الخدمة؛ `scripts/check-shared-copies.mjs` يمنع اختلاف النسخ.
+الملفات المشتركة (`common/security.ts`, `common/database.ts`, `common/logging.ts`) منسوخة في كل خدمة لأن سياق بناء Docker هو مجلد الخدمة؛ `scripts/check-shared-copies.mjs` يمنع اختلاف النسخ.
 
 ---
 

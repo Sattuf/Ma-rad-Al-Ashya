@@ -1,5 +1,6 @@
 import { ExceptionFilter, Catch, ArgumentsHost, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import * as Sentry from '@sentry/node';
+import { currentRequestId } from '../common/logging';
 
 @Catch()
 export class SentryExceptionFilter implements ExceptionFilter {
@@ -11,7 +12,7 @@ export class SentryExceptionFilter implements ExceptionFilter {
 
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
-      if (status >= 500) Sentry.captureException(exception);
+      if (status >= 500) Sentry.captureException(exception, { tags: { request_id: currentRequestId() } });
       response.status(status).json(exception.getResponse());
       return;
     }
@@ -28,10 +29,12 @@ export class SentryExceptionFilter implements ExceptionFilter {
 
     // Anything else is a bug: report it and keep the stack in the logs. The client only
     // gets a generic message (no internals leak).
-    Sentry.captureException(exception);
+    Sentry.captureException(exception, { tags: { request_id: currentRequestId() } });
     const request = ctx.getRequest();
     const err = exception instanceof Error ? exception : new Error(String(exception));
-    this.logger.error(`${request?.method} ${request?.url}: ${err.message}`, err.stack);
+    // Path only: query strings can carry tokens.
+    const path = String(request?.originalUrl ?? request?.url ?? '').split('?')[0];
+    this.logger.error(`${request?.method} ${path}: ${err.message}`, err.stack);
     response.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
       statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
       message: 'Internal server error',

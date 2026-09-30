@@ -6,6 +6,39 @@
  * The pool is bounded and every statement has a timeout so a traffic spike
  * queues in the service instead of exhausting Postgres connections.
  */
+import { Logger as NestLogger } from '@nestjs/common';
+import type { Logger as TypeOrmLogger } from 'typeorm';
+
+/**
+ * Routes TypeORM through the service logger (JSON, request ID). Query parameters are never
+ * logged: they hold e-mails, phone numbers and password hashes. Every statement is logged at
+ * debug level only with LOG_SQL=true; failures and slow statements (DB_SLOW_QUERY_MS) always.
+ */
+export class SqlLogger implements TypeOrmLogger {
+  private readonly logger = new NestLogger('SQL');
+  private readonly logAll = process.env.LOG_SQL === 'true';
+
+  logQuery(query: string) {
+    if (this.logAll) this.logger.debug({ msg: 'query', query });
+  }
+  logQueryError(error: string | Error, query: string) {
+    this.logger.error({ msg: `query failed: ${error instanceof Error ? error.message : error}`, query });
+  }
+  logQuerySlow(time: number, query: string) {
+    this.logger.warn({ msg: 'slow query', durationMs: time, query });
+  }
+  logSchemaBuild(message: string) {
+    this.logger.log(message);
+  }
+  logMigration(message: string) {
+    this.logger.log(message);
+  }
+  log(level: 'log' | 'info' | 'warn', message: unknown) {
+    if (level === 'warn') this.logger.warn(String(message));
+    else this.logger.log(String(message));
+  }
+}
+
 function intEnv(name: string, fallback: number): number {
   const parsed = parseInt(process.env[name] ?? '', 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
@@ -27,6 +60,9 @@ export function postgresConnectionOptions(defaultDatabase = 'marad_db') {
     type: 'postgres' as const,
     ...connection,
     synchronize: false,
+    logging: true,
+    logger: new SqlLogger(),
+    maxQueryExecutionTime: intEnv('DB_SLOW_QUERY_MS', 1_000),
     extra: {
       max: intEnv('DB_POOL_MAX', 10),
       idleTimeoutMillis: 30_000,

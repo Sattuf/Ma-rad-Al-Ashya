@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from './entities/user.entity';
@@ -13,6 +13,8 @@ import { internalHeaders } from '../common/security';
 
 @Injectable()
 export class UsersService {
+  private readonly logger = new Logger(UsersService.name);
+
   private redis: Redis;
 
   constructor(
@@ -126,7 +128,8 @@ export class UsersService {
       const listings = response.data.filter((l: any) => l !== null);
       return { data: listings, total };
     } catch (error) {
-      console.error('Failed to fetch favorite listings data', error);
+      // The message only: the axios error carries the request config, internal secret included.
+      this.logger.warn(`Failed to fetch favorite listings data: ${(error as Error).message}`);
       return { data: [], total };
     }
   }

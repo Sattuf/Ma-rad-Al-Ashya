@@ -5,11 +5,16 @@ import { ValidationPipe, Logger } from '@nestjs/common';
 
 import * as Sentry from '@sentry/node';
 import { SentryExceptionFilter } from './filters/sentry-exception.filter';
+import { JsonLogger, installRequestIdPropagation, requestContextMiddleware, scrubSentryEvent } from './common/logging';
 import { assertRequiredSecrets, corsOrigins, isProduction } from './common/security';
 
 async function bootstrap() {
   assertRequiredSecrets('JWT_ACCESS_SECRET', 'JWT_REFRESH_SECRET', 'INTERNAL_SECRET');
-  const app = await NestFactory.create(AppModule);
+  const jsonLogger = new JsonLogger('auth-service');
+  const app = await NestFactory.create(AppModule, { logger: jsonLogger });
+  // First middleware: every later step, including body parsing errors, has the request ID.
+  app.use(requestContextMiddleware(jsonLogger));
+  installRequestIdPropagation();
   // Only reachable through the gateway, which sets X-Forwarded-For: trust that one hop
   // (TRUST_PROXY_HOPS=1 in docker-compose) so lockouts are keyed by the real client IP.
   app.getHttpAdapter().getInstance().set('trust proxy', parseInt(process.env.TRUST_PROXY_HOPS || '0', 10));
@@ -17,6 +22,8 @@ async function bootstrap() {
   Sentry.init({
     dsn: process.env.SENTRY_DSN,
     tracesSampleRate: 0.1,
+    beforeSend: scrubSentryEvent,
+    beforeSendTransaction: scrubSentryEvent,
   });
   app.useGlobalFilters(new SentryExceptionFilter());
 
