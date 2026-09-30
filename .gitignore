@@ -72,3 +72,6 @@ Desktop.ini
 
 # Kubernetes secrets
 infra/k8s/secrets/
+# Alert notifier secrets (Telegram token, SMTP password)
+infra/secrets/*
+!infra/secrets/README.md

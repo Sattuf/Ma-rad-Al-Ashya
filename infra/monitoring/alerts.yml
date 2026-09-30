@@ -1,0 +1,61 @@
+# Alert rules — few on purpose: each one means a person should act now.
+# Tested by alerts.test.yml (promtool test rules), run in CI.
+# Thresholds are starting points: tune them from real traffic, not guesses.
+groups:
+  - name: marad
+    rules:
+      - alert: ServiceDown
+        expr: up{job=~"api-gateway|services"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ with $labels.service }}{{ . }}{{ else }}{{ $labels.job }}{{ end }} is down"
+          description: "Prometheus has not reached {{ $labels.instance }} for 2 minutes. Check: docker compose ps, then its logs in Grafana (Logs dashboard)."
+
+      # Share of requests the gateway could not complete (5xx or no answer at all), per service.
+      # Needs at least ~15 requests in 5 minutes: one failure out of three is not an outage.
+      - alert: HighErrorRate
+        expr: |
+          (
+            sum by (service) (rate(gateway_upstream_request_duration_seconds_count{status_class=~"5xx|error"}[5m]))
+            / sum by (service) (rate(gateway_upstream_request_duration_seconds_count[5m]))
+          ) > 0.02
+          and sum by (service) (rate(gateway_upstream_request_duration_seconds_count[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.service }}: {{ $value | humanizePercentage }} of requests fail"
+          description: "More than 2% of requests to {{ $labels.service }} failed for 5 minutes. Find the errors: Logs dashboard, service={{ $labels.service }}, level=error."
+
+      # Search is the page users wait on most.
+      - alert: SearchSlow
+        expr: |
+          histogram_quantile(0.95, sum by (service, le) (rate(gateway_upstream_request_duration_seconds_bucket{service="search-service"}[5m]))) > 1
+          and sum by (service) (rate(gateway_upstream_request_duration_seconds_count{service="search-service"}[5m])) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Search is slow: 95% of requests take up to {{ $value | humanizeDuration }}"
+          description: "The 95th percentile of search latency has been above 1s for 10 minutes. Check Elasticsearch health and the search-service logs."
+
+      # A full disk stops Postgres, uploads and builds at once.
+      # Per device: the same disk is often mounted several times (/, /var/lib/docker...).
+      # Read-only filesystems (images, tool disks) are full by design and cannot fill up.
+      - alert: DiskAlmostFull
+        expr: |
+          min by (instance, device) (
+            (
+              node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs"}
+              / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs"}
+            )
+            and on (instance, device, mountpoint) node_filesystem_readonly == 0
+          ) < 0.10
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Disk {{ $labels.device }} is almost full ({{ $value | humanizePercentage }} free)"
+          description: "Free space: docker image prune -f; docker builder prune -af; old logs and uploads."

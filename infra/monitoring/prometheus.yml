@@ -5,6 +5,15 @@ global:
   scrape_interval: 15s
   evaluation_interval: 15s
 
+# What pages someone, and why: alerts.yml (tested by alerts.test.yml).
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
+
 scrape_configs:
   - job_name: 'prometheus'
     static_configs:
@@ -37,3 +46,8 @@ scrape_configs:
       - source_labels: [__address__]
         regex: '([^:]+):\d+'
         target_label: service
+
+  # Host disk, memory and CPU (the DiskAlmostFull alert).
+  - job_name: 'node'
+    static_configs:
+      - targets: ['node-exporter:9100']

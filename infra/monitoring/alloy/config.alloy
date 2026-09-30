@@ -1,0 +1,50 @@
+// Alloy — reads the logs of every marad-* container and ships them to Loki.
+//
+// Labels (few values, used to select streams): container, service, level.
+// requestId is structured metadata, not a label (one value per request would
+// explode the index): {service=~".+"} | request_id="<id>"
+// Lines that are not JSON (postgres, redis, elasticsearch) keep only `container`.
+
+discovery.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+}
+
+discovery.relabel "marad" {
+  targets = discovery.docker.containers.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/marad-.*"
+    action        = "keep"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/marad-(.*)"
+    target_label  = "container"
+  }
+}
+
+loki.source.docker "marad" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.marad.output
+  forward_to = [loki.process.json.receiver]
+}
+
+loki.process "json" {
+  stage.json {
+    expressions = { level = "level", service = "service", request_id = "requestId" }
+  }
+  stage.labels {
+    values = { level = "", service = "" }
+  }
+  stage.structured_metadata {
+    values = { request_id = "" }
+  }
+  forward_to = [loki.write.local.receiver]
+}
+
+loki.write "local" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

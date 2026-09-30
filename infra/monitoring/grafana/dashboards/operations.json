@@ -745,5 +745,13 @@
   },
   "annotations": {
     "list": []
-  }
+  },
+  "links": [
+    {
+      "title": "Logs",
+      "type": "link",
+      "url": "/d/marad-logs",
+      "icon": "doc"
+    }
+  ]
 }

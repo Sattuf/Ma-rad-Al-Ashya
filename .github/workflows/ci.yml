@@ -38,6 +38,32 @@ jobs:
           fi
 
   # ─────────────────────────────────────────────
+  # المراقبة: قواعد التنبيه مختبرة، وكل ملفات الإعداد صالحة
+  # ─────────────────────────────────────────────
+  monitoring-config:
+    name: "Monitoring — alert rules and configs"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra/monitoring
+    steps:
+      - uses: actions/checkout@v4
+      - name: Alert rules behave as intended (promtool test rules)
+        run: docker run --rm -v "$PWD":/m -w /m --entrypoint promtool prom/prometheus:v3.5.0 test rules alerts.test.yml
+      - name: Prometheus config is valid
+        run: |
+          echo ci > /tmp/metrics_token
+          docker run --rm -v "$PWD":/etc/prometheus -v /tmp/metrics_token:/run/secrets/metrics_token --entrypoint promtool prom/prometheus:v3.5.0 check config /etc/prometheus/prometheus.yml
+      - name: Alertmanager config is valid
+        run: docker run --rm -v "$PWD/alertmanager":/c --entrypoint amtool prom/alertmanager:v0.28.1 check-config /c/alertmanager.yml
+      - name: Loki config is valid
+        run: docker run --rm -v "$PWD/loki":/c grafana/loki:3.6.0 -config.file=/c/loki.yml -verify-config
+      - name: Alloy config is valid
+        run: docker run --rm -v "$PWD/alloy":/c grafana/alloy:v1.11.0 validate /c/config.alloy
+      - name: Grafana dashboards are valid JSON
+        run: for f in grafana/dashboards/*.json; do python3 -m json.tool "$f" > /dev/null || exit 1; done
+
+  # ─────────────────────────────────────────────
   # خدمات Node ضمن مساحة العمل (workspace) — فحص الأنواع + اختبارات الوحدة
   # ─────────────────────────────────────────────
   node-workspace:

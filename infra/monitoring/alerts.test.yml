@@ -1,0 +1,109 @@
+# promtool test rules alerts.test.yml
+rule_files:
+  - alerts.yml
+evaluation_interval: 1m
+
+tests:
+  - name: a service down for 2 minutes alerts, a blip does not
+    interval: 1m
+    input_series:
+      - series: 'up{job="services", instance="listings-service:3002", service="listings-service"}'
+        values: '1 0 0 0 0'
+      - series: 'up{job="services", instance="search-service:3003", service="search-service"}'
+        values: '1 0 1 1 1'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: ServiceDown
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: ServiceDown
+        exp_alerts:
+          - exp_labels: { severity: critical, job: services, instance: "listings-service:3002", service: listings-service }
+            exp_annotations:
+              summary: "listings-service is down"
+              description: "Prometheus has not reached listings-service:3002 for 2 minutes. Check: docker compose ps, then its logs in Grafana (Logs dashboard)."
+
+  - name: 5% errors on real traffic alerts; errors on a trickle of traffic do not
+    interval: 1m
+    input_series:
+      # listings: 60 req/min, 3 of them fail (5%)
+      - series: 'gateway_upstream_request_duration_seconds_count{service="listings-service", status_class="2xx"}'
+        values: '0+57x15'
+      - series: 'gateway_upstream_request_duration_seconds_count{service="listings-service", status_class="5xx"}'
+        values: '0+3x15'
+      # auth: 1 req/min, all failing: too little traffic to page anyone
+      - series: 'gateway_upstream_request_duration_seconds_count{service="auth-service", status_class="error"}'
+        values: '0+1x15'
+      # search: 60 req/min, 1% fail: below the threshold
+      - series: 'gateway_upstream_request_duration_seconds_count{service="search-service", status_class="2xx"}'
+        values: '0+59.4x15'
+      - series: 'gateway_upstream_request_duration_seconds_count{service="search-service", status_class="5xx"}'
+        values: '0+0.6x15'
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: HighErrorRate
+        exp_alerts:
+          - exp_labels: { severity: critical, service: listings-service }
+            exp_annotations:
+              summary: "listings-service: 5% of requests fail"
+              description: "More than 2% of requests to listings-service failed for 5 minutes. Find the errors: Logs dashboard, service=listings-service, level=error."
+
+  - name: slow search alerts after 10 minutes
+    interval: 1m
+    input_series:
+      # 60 req/min, all between 1s and 2.5s
+      - series: 'gateway_upstream_request_duration_seconds_bucket{service="search-service", method="GET", status_class="2xx", le="1"}'
+        values: '0x25'
+      - series: 'gateway_upstream_request_duration_seconds_bucket{service="search-service", method="GET", status_class="2xx", le="2.5"}'
+        values: '0+60x25'
+      - series: 'gateway_upstream_request_duration_seconds_bucket{service="search-service", method="GET", status_class="2xx", le="+Inf"}'
+        values: '0+60x25'
+      - series: 'gateway_upstream_request_duration_seconds_count{service="search-service", method="GET", status_class="2xx"}'
+        values: '0+60x25'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: SearchSlow
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: SearchSlow
+        exp_alerts:
+          - exp_labels: { severity: warning, service: search-service }
+            exp_annotations:
+              summary: "Search is slow: 95% of requests take up to 2.425s"
+              description: "The 95th percentile of search latency has been above 1s for 10 minutes. Check Elasticsearch health and the search-service logs."
+
+  - name: disk under 10% free alerts, once per device, never for read-only disks
+    interval: 1m
+    input_series:
+      - series: 'node_filesystem_avail_bytes{mountpoint="/", fstype="ext4", device="/dev/vda"}'
+        values: '30x10'
+      - series: 'node_filesystem_size_bytes{mountpoint="/", fstype="ext4", device="/dev/vda"}'
+        values: '400x10'
+      # the same disk mounted a second time: still one alert
+      - series: 'node_filesystem_avail_bytes{mountpoint="/var/lib/docker", fstype="ext4", device="/dev/vda"}'
+        values: '30x10'
+      - series: 'node_filesystem_size_bytes{mountpoint="/var/lib/docker", fstype="ext4", device="/dev/vda"}'
+        values: '400x10'
+      - series: 'node_filesystem_readonly{mountpoint="/", fstype="ext4", device="/dev/vda"}'
+        values: '0x10'
+      - series: 'node_filesystem_readonly{mountpoint="/var/lib/docker", fstype="ext4", device="/dev/vda"}'
+        values: '0x10'
+      # a read-only disk that is full by design: no alert
+      - series: 'node_filesystem_avail_bytes{mountpoint="/opt/tools", fstype="ext4", device="/dev/vdc"}'
+        values: '0x10'
+      - series: 'node_filesystem_size_bytes{mountpoint="/opt/tools", fstype="ext4", device="/dev/vdc"}'
+        values: '100x10'
+      - series: 'node_filesystem_readonly{mountpoint="/opt/tools", fstype="ext4", device="/dev/vdc"}'
+        values: '1x10'
+      - series: 'node_filesystem_avail_bytes{mountpoint="/tmp", fstype="tmpfs"}'
+        values: '0x10'
+      - series: 'node_filesystem_size_bytes{mountpoint="/tmp", fstype="tmpfs"}'
+        values: '100x10'
+    alert_rule_test:
+      - eval_time: 7m
+        alertname: DiskAlmostFull
+        exp_alerts:
+          - exp_labels: { severity: critical, device: /dev/vda }
+            exp_annotations:
+              summary: "Disk /dev/vda is almost full (7.5% free)"
+              description: "Free space: docker image prune -f; docker builder prune -af; old logs and uploads."

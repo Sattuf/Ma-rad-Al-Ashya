@@ -4,7 +4,7 @@
 # الاستخدام:
 #   docker compose -f infra/docker-compose.yml up -d                     → الخدمات الأساسية فقط
 #   docker compose -f infra/docker-compose.yml --profile search up -d    → + Elasticsearch + Search Service
-#   docker compose -f infra/docker-compose.yml --profile monitoring up -d → + Prometheus + Grafana
+#   docker compose -f infra/docker-compose.yml --profile monitoring up -d → + Prometheus + Grafana + Loki + Alertmanager
 #   docker compose -f infra/docker-compose.yml --profile identity up -d  → + LocalStack + Identity Service
 #   docker compose -f infra/docker-compose.yml --profile ai up -d        → + Fraud + Personalization
 #   docker compose -f infra/docker-compose.yml --profile all up -d       → كل شيء
@@ -408,6 +408,7 @@ services:
       context: ../services/moderation-service
       dockerfile: Dockerfile
     container_name: marad-moderation-service
+    restart: unless-stopped
     ports:
       - "127.0.0.1:3008:3008"
     environment:
@@ -503,7 +504,7 @@ services:
   # ============================================================================
 
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v3.5.0
     container_name: marad-prometheus
     restart: unless-stopped
     profiles: ["monitoring", "all"]
@@ -511,6 +512,7 @@ services:
       - "127.0.0.1:9090:9090"
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
       - prometheus_data:/prometheus
     secrets:
       - metrics_token
@@ -537,6 +539,77 @@ services:
       - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
     depends_on:
       - prometheus
+      - loki
+    networks:
+      - marad-network
+
+  # Alerts from Prometheus → grouped, de-duplicated, sent to the team (see alertmanager.yml).
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    container_name: marad-alertmanager
+    restart: unless-stopped
+    profiles: ["monitoring", "all"]
+    ports:
+      - "127.0.0.1:9093:9093"
+    volumes:
+      - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      # Notifier secrets (Telegram token, SMTP password): files in infra/secrets/, not in git.
+      - ./secrets:/etc/alertmanager/secrets:ro
+      - alertmanager_data:/alertmanager
+    networks:
+      - marad-network
+
+  # Host metrics: disk space, memory, CPU.
+  node-exporter:
+    image: prom/node-exporter:v1.9.1
+    container_name: marad-node-exporter
+    restart: unless-stopped
+    profiles: ["monitoring", "all"]
+    command: ['--path.rootfs=/host']
+    pid: host
+    volumes:
+      - /:/host:ro
+    networks:
+      - marad-network
+
+  # Loki runs as uid 10001 but a new volume is owned by root: hand it over once, before start.
+  loki-init:
+    image: busybox:1.37
+    profiles: ["monitoring", "all"]
+    command: ['chown', '-R', '10001:10001', '/loki']
+    volumes:
+      - loki_data:/loki
+
+  # Log storage, queried from Grafana (Logs dashboard, Explore).
+  loki:
+    image: grafana/loki:3.6.0
+    container_name: marad-loki
+    restart: unless-stopped
+    profiles: ["monitoring", "all"]
+    command: ['-config.file=/etc/loki/loki.yml']
+    volumes:
+      - ./monitoring/loki/loki.yml:/etc/loki/loki.yml:ro
+      - loki_data:/loki
+    depends_on:
+      loki-init:
+        condition: service_completed_successfully
+    networks:
+      - marad-network
+
+  # Collects the logs of every marad-* container and ships them to Loki.
+  alloy:
+    image: grafana/alloy:v1.11.0
+    container_name: marad-alloy
+    restart: unless-stopped
+    profiles: ["monitoring", "all"]
+    command: ['run', '--storage.path=/var/lib/alloy', '/etc/alloy/config.alloy']
+    volumes:
+      - ./monitoring/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      # Read-only access to container logs and metadata.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - alloy_data:/var/lib/alloy
+    depends_on:
+      - loki
     networks:
       - marad-network
 
@@ -565,6 +638,12 @@ volumes:
     name: marad-prometheus-data
   grafana_data:
     name: marad-grafana-data
+  loki_data:
+    name: marad-loki-data
+  alloy_data:
+    name: marad-alloy-data
+  alertmanager_data:
+    name: marad-alertmanager-data
   listings_media:
     name: marad-listings-media
   messages_media:

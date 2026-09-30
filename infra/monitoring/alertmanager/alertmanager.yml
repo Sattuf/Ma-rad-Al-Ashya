@@ -1,0 +1,39 @@
+# Alertmanager — groups alerts and decides who is told.
+#
+# Out of the box alerts are visible at http://localhost:9093 (and Prometheus /alerts) but
+# nobody is notified. To get messages, uncomment one notifier under `receivers` below.
+# Secrets are read from files mounted under /etc/alertmanager/secrets (see docker-compose),
+# never written here.
+route:
+  receiver: team
+  group_by: [alertname, service]
+  group_wait: 30s        # wait for related alerts, send them as one message
+  group_interval: 5m
+  repeat_interval: 4h    # remind while it is still broken
+  routes:
+    - matchers: [severity="warning"]
+      receiver: team
+      repeat_interval: 12h
+
+receivers:
+  - name: team
+    # Telegram: create a bot with @BotFather, put its token in infra/secrets/telegram_bot_token,
+    # and set chat_id (message the bot, then open https://api.telegram.org/bot<token>/getUpdates).
+    # telegram_configs:
+    #   - bot_token_file: /etc/alertmanager/secrets/telegram_bot_token
+    #     chat_id: 123456789
+    #     parse_mode: HTML
+    #
+    # E-mail:
+    # email_configs:
+    #   - to: ops@example.com
+    #     from: alerts@example.com
+    #     smarthost: smtp.example.com:587
+    #     auth_username: alerts@example.com
+    #     auth_password_file: /etc/alertmanager/secrets/smtp_password
+
+inhibit_rules:
+  # A service that is down also fails its requests: report the cause, not both.
+  - source_matchers: [alertname="ServiceDown"]
+    target_matchers: [alertname=~"HighErrorRate|SearchSlow"]
+    equal: [service]
