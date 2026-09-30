@@ -19,7 +19,7 @@ class SearchRepository {
   /// that order. If search is unavailable the query runs on /listings instead, with an empty
   /// variant, so results still show but the search is not part of the experiment.
   ///
-  /// [sort], [condition] and [abVariant] are ignored: the ranking is the experiment, and the
+  /// [sort] and [abVariant] are ignored: the ranking is the experiment, and the
   /// client never chooses its variant.
   Future<SearchResponse> searchListings({
     required String query,
@@ -38,6 +38,7 @@ class SearchRepository {
       if (categoryId != null && categoryId.isNotEmpty) 'categoryId': categoryId,
       if (minPrice != null) 'minPrice': minPrice,
       if (maxPrice != null) 'maxPrice': maxPrice,
+      if (condition != null && condition.isNotEmpty) 'condition': condition,
     };
     if (!ranked || query.trim().length < 2) return _plainSearch(query, page, limit, filters);
     try {

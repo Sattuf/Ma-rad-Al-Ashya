@@ -16,6 +16,16 @@ export class SentryExceptionFilter implements ExceptionFilter {
       return;
     }
 
+    // Express middleware (static files, body parser) reports client errors as plain errors
+    // carrying a 4xx status: a missing file is a 404, malformed JSON a 400, too large a 413.
+    // Those are the client's, not bugs: answer with that status and do not alert.
+    const { status: rawStatus, statusCode } = (exception ?? {}) as { status?: unknown; statusCode?: unknown };
+    const clientStatus = rawStatus ?? statusCode;
+    if (typeof clientStatus === 'number' && clientStatus >= 400 && clientStatus < 500) {
+      response.status(clientStatus).json({ statusCode: clientStatus, message: clientStatus === 404 ? 'Not found' : 'Bad request' });
+      return;
+    }
+
     // Anything else is a bug: report it and keep the stack in the logs. The client only
     // gets a generic message (no internals leak).
     Sentry.captureException(exception);

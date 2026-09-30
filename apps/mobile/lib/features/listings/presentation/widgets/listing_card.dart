@@ -95,17 +95,18 @@ class ListingCard extends ConsumerWidget {
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Colors.grey[200],
-                              borderRadius: BorderRadius.circular(8),
+                          if (listing.conditionLabel != null)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.grey[200],
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                listing.conditionLabel!,
+                                style: const TextStyle(fontSize: 12),
+                              ),
                             ),
-                            child: Text(
-                              listing.condition,
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                          ),
                         ],
                       ),
                     ],

@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
-import { Listing, ListingStatus } from './entities/listing.entity';
+import { Listing, ListingCondition, ListingStatus } from './entities/listing.entity';
 import { ListingImage } from './entities/listing-image.entity';
 import { StorageService } from '../storage/storage.service';
 import Redis from 'ioredis';
@@ -18,6 +18,14 @@ const DEFAULT_PAGE_SIZE = 20;
 const PUBLIC_STATUSES: string[] = [ListingStatus.ACTIVE, ListingStatus.SOLD];
 /** Statuses an owner may set directly (deletion goes through DELETE). */
 const OWNER_SETTABLE_STATUSES: string[] = [ListingStatus.ACTIVE, ListingStatus.SOLD];
+
+const CONDITIONS: string[] = Object.values(ListingCondition);
+
+/** Collapses whitespace; blank means "not specified" (NULL). */
+function normalizeLocation(value: string | null | undefined): string | null {
+  const v = typeof value === 'string' ? value.trim().replace(/\s+/g, ' ') : '';
+  return v || null;
+}
 
 export interface ListingsPage {
   data: Listing[];
@@ -128,6 +136,7 @@ export class ListingsService {
   async create(userId: string, createDto: CreateListingDto): Promise<Listing> {
     const listing = this.listingsRepository.create({
       ...createDto,
+      location: normalizeLocation(createDto.location),
       userId,
       status: ListingStatus.ACTIVE,
     });
@@ -172,6 +181,7 @@ export class ListingsService {
     const maxPrice = Number(query.maxPrice);
     if (Number.isFinite(minPrice) && minPrice > 0) qb.andWhere('listing.price >= :minPrice', { minPrice });
     if (Number.isFinite(maxPrice) && maxPrice > 0) qb.andWhere('listing.price <= :maxPrice', { maxPrice });
+    if (CONDITIONS.includes(query.condition)) qb.andWhere('listing.condition = :condition', { condition: query.condition });
 
     qb.orderBy('listing.createdAt', 'DESC')
       .addOrderBy('listing.id', 'DESC')
@@ -244,6 +254,8 @@ export class ListingsService {
     if (listing.userId !== userId) throw new BadRequestException('Not authorized');
 
     Object.assign(listing, updateDto);
+    // Absent = unchanged; '' or null = cleared.
+    if (updateDto.location !== undefined) listing.location = normalizeLocation(updateDto.location);
     const updatedListing = await this.listingsRepository.save(listing);
     void this.triggerSearchIndex('update', updatedListing);
     return updatedListing;

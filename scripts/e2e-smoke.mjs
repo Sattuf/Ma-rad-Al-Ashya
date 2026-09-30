@@ -145,16 +145,27 @@ const category = categories.data.find((c) => c.slug === 'electronics')?.children
 
 const created = await call('POST', '/listings', {
   token: seller.token,
-  body: { title: `جوال للتجربة ${run}`, description: 'بحالة ممتازة، مع الشاحن والعلبة.', price: 250, categoryId: category.id },
+  body: {
+    title: `جوال للتجربة ${run}`, description: 'بحالة ممتازة، مع الشاحن والعلبة.', price: 250, categoryId: category.id,
+    condition: 'used', location: '  حلب   - الجميلية ',
+  },
 });
 check(created.status === 201, 'seller publishes a listing', created.data);
 const listingId = created.data.id;
+check(created.data.condition === 'used' && created.data.location === 'حلب - الجميلية', 'condition and (tidied) location are stored', created.data);
+const badCondition = await call('POST', '/listings', {
+  token: seller.token,
+  body: { title: 'x', description: 'y', price: 1, condition: 'broken' },
+});
+check(badCondition.status === 400, 'an unknown condition is refused', badCondition.status);
 
 const upload = await call('POST', `/listings/${listingId}/images`, { token: seller.token, form: imageForm('file') });
 check(upload.status === 201, 'seller uploads a listing image', upload.data);
 check(upload.data.imageUrl?.startsWith(API + '/media/listings/'), 'image URL goes through the gateway', upload.data.imageUrl);
 await fetchImage(upload.data.imageUrl, 'listing image');
 await fetchImage(upload.data.thumbnailUrl, 'listing thumbnail');
+const missing = await fetch(`${API}/media/listings/00000000-0000-4000-8000-000000000000.jpeg`);
+check(missing.status === 404, 'a missing photo is a 404, not a server error', missing.status);
 
 // The gateway caches public listing pages for 30 s by design; a fresh query string skips
 // that cache so the check sees the listing published a moment ago.
@@ -163,6 +174,13 @@ const browseItems = browse.data?.data ?? browse.data?.items ?? browse.data;
 check(browse.status === 200 && JSON.stringify(browseItems).includes(listingId), 'a guest sees the listing when browsing');
 const detail = await call('GET', `/listings/${listingId}`);
 check(detail.status === 200 && JSON.stringify(detail.data).includes('/media/listings/'), 'listing details include its image', detail.data);
+check(detail.data.condition === 'used' && detail.data.location === 'حلب - الجميلية', 'listing details include condition and location', detail.data);
+const asUsed = await call('GET', `/listings?userId=${seller.id}&condition=used&fresh=${run}`);
+const asNew = await call('GET', `/listings?userId=${seller.id}&condition=new&fresh=${run}`);
+check(
+  asUsed.data.data.some((l) => l.id === listingId) && !asNew.data.data.some((l) => l.id === listingId),
+  'browsing filters by condition (used: shown, new: hidden)',
+);
 
 // Ranked search (search profile: Elasticsearch + search-service). Skipped when not running.
 const session = `smoke-${run}`;
@@ -183,6 +201,10 @@ if (searchRes.status === 200) {
     body: { query: 'جوال', listing_id: listingId, position: 0, variant: searchRes.data.variant === 'A' ? 'B' : 'A', session_id: session },
   });
   check(forged.data?.tracked === false, 'a click claiming the other variant is rejected', forged.data);
+  // No session id: ranked but not counted in the experiment.
+  const searchUsed = await call('GET', `/search?q=${encodeURIComponent('جوال')}&condition=used&limit=50`);
+  const searchNew = await call('GET', `/search?q=${encodeURIComponent('جوال')}&condition=new&limit=50`);
+  check(searchUsed.data.ids.includes(listingId) && !searchNew.data.ids.includes(listingId), 'ranked search filters by condition');
 } else {
   console.log(`- ranked search skipped (search profile not running: ${searchRes.status})`);
 }

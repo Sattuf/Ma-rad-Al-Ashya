@@ -2,6 +2,11 @@ import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateCol
 import { Category } from '../../categories/entities/category.entity';
 import { ListingImage } from './listing-image.entity';
 
+export enum ListingCondition {
+  NEW = 'new',
+  USED = 'used',
+}
+
 export enum ListingStatus {
   ACTIVE = 'active',
   SOLD = 'sold',
@@ -35,6 +40,14 @@ export class Listing {
 
   @Column({ default: 'USD' })
   currency: string;
+
+  /** NULL for listings created before sellers were asked ("not specified"). */
+  @Column({ type: 'varchar', length: 10, nullable: true })
+  condition: ListingCondition | null;
+
+  /** Free text: city / neighbourhood, as the seller typed it. */
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  location: string | null;
 
   @Column({ type: 'varchar', default: ListingStatus.ACTIVE })
   status: ListingStatus;

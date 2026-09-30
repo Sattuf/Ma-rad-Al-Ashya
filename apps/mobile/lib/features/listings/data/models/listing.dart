@@ -6,7 +6,8 @@ class Listing {
   final String description;
   final double price;
   final String currency;
-  final String condition;
+  /// 'new' or 'used'; null for listings published before sellers were asked.
+  final String? condition;
   final String status;
   final List<String> images;
   final Category? category;
@@ -21,7 +22,7 @@ class Listing {
     required this.description,
     required this.price,
     this.currency = 'USD',
-    required this.condition,
+    this.condition,
     required this.status,
     required this.images,
     this.category,
@@ -48,7 +49,7 @@ class Listing {
       description: json['description'] as String? ?? '',
       price: rawPrice is num ? rawPrice.toDouble() : double.tryParse('${rawPrice ?? ''}') ?? 0.0,
       currency: json['currency'] as String? ?? 'USD',
-      condition: json['condition'] as String? ?? 'used',
+      condition: json['condition'] as String?,
       status: json['status'] as String? ?? 'active',
       images: images.map((e) => e['url'] as String).where((u) => u.isNotEmpty).toList(),
       category: json['category'] != null ? Category.fromJson(json['category']) : null,
@@ -58,6 +59,13 @@ class Listing {
       createdAt: created != null ? DateTime.parse(created as String) : DateTime.now(),
     );
   }
+
+  /// Arabic label for the UI, null when the seller did not say.
+  String? get conditionLabel => switch (condition) {
+        'new' => 'جديد',
+        'used' => 'مستعمل',
+        _ => null,
+      };
 
   Map<String, dynamic> toJson() {
     return {

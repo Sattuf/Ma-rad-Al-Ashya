@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import useSWR from 'swr';
-import { BadgeCheck, Eye, Flag, Heart, ImageOff, MessageCircle, Pencil, Rocket, Share2, ShoppingCart } from 'lucide-react';
+import { BadgeCheck, Eye, Flag, Heart, ImageOff, MapPin, MessageCircle, Pencil, Rocket, Share2, ShoppingCart } from 'lucide-react';
 import { useListingDetail } from '@/hooks/useListings';
 import { useFavoriteCheck } from '@/hooks/useFavorite';
 import { useAuthStore } from '@/lib/store/auth-store';
@@ -16,7 +16,7 @@ import { trackEvent } from '@/lib/analytics';
 import RelatedListings from '@/components/listings/RelatedListings';
 import { ReportDialog } from '@/components/moderation/ReportDialog';
 import { Alert, Badge, Button, Card, ErrorState, Skeleton } from '@/components/ui';
-import { formatPrice } from '@/types/listing';
+import { conditionLabel, formatPrice } from '@/types/listing';
 import { cn } from '@/lib/cn';
 
 const dateFormat = new Intl.DateTimeFormat('ar', { dateStyle: 'medium' });
@@ -166,6 +166,12 @@ export default function ListingDetailPage() {
             <div className="mb-2 flex flex-wrap items-center gap-2 text-sm text-fg-subtle">
               {listing.category?.name && <Badge tone="primary">{listing.category.name}</Badge>}
               {listing.status === 'sold' && <Badge>تم البيع</Badge>}
+              {conditionLabel(listing.condition) && <Badge>{conditionLabel(listing.condition)}</Badge>}
+              {listing.location && (
+                <span className="inline-flex items-center gap-1">
+                  <MapPin className="h-4 w-4" aria-hidden /> {listing.location}
+                </span>
+              )}
               <span>نُشر {dateFormat.format(new Date(listing.createdAt))}</span>
               <span className="inline-flex items-center gap-1">
                 <Eye className="h-4 w-4" aria-hidden /> {listing.viewsCount.toLocaleString('ar')} مشاهدة

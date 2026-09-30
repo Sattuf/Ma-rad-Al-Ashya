@@ -11,6 +11,7 @@ import { useCategories } from '@/hooks/useCategories';
 import { listingsApi } from '@/lib/api/listings';
 import { Alert, Button, Card, ErrorState, Input, Skeleton } from '@/components/ui';
 import { cn } from '@/lib/cn';
+import { CONDITION_LABELS, type ListingCondition } from '@/types/listing';
 
 const MAX_IMAGES = 10;
 
@@ -21,6 +22,9 @@ const schema = z.object({
     .string()
     .trim()
     .refine((v) => Number.isFinite(Number(v)) && Number(v) > 0, 'السعر يجب أن يكون رقماً أكبر من صفر'),
+  // Optional: listings published before the field have none until the seller picks one.
+  condition: z.enum(['new', 'used']).nullish(),
+  location: z.string().trim().max(100, 'الموقع طويل جداً (100 حرف كحد أقصى)'),
   description: z.string().trim().min(20, 'صف السلعة في 20 حرفاً على الأقل'),
 });
 type FormValues = z.infer<typeof schema>;
@@ -48,6 +52,8 @@ export default function EditListingPage() {
         categoryId: listing.categoryId ?? '',
         price: String(listing.price),
         description: listing.description,
+        condition: listing.condition ?? null,
+        location: listing.location ?? '',
       });
     }
   }, [listing, reset]);
@@ -61,6 +67,8 @@ export default function EditListingPage() {
         description: values.description,
         price: Number(values.price),
         categoryId: values.categoryId,
+        ...(values.condition && { condition: values.condition }),
+        location: values.location.trim(),
       });
       await mutate();
       router.push('/my-listings');
@@ -184,6 +192,28 @@ export default function EditListingPage() {
             {errors.categoryId && <p className="text-xs text-danger">{errors.categoryId.message}</p>}
           </div>
           <Input label={`السعر (${listing.currency})`} type="number" inputMode="decimal" min={0} step="0.01" {...register('price')} error={errors.price?.message} />
+          <fieldset className="flex flex-col gap-2">
+            <legend className="mb-1 text-sm font-medium text-fg">حالة السلعة</legend>
+            <div className="flex gap-3">
+              {(Object.keys(CONDITION_LABELS) as ListingCondition[]).map((value) => (
+                <label
+                  key={value}
+                  className="flex min-h-11 flex-1 cursor-pointer items-center justify-center gap-2 rounded-control border border-line bg-surface px-4 text-fg has-[:checked]:border-primary has-[:checked]:bg-primary-soft has-[:checked]:font-semibold has-[:checked]:text-on-primary-soft"
+                >
+                  <input type="radio" value={value} {...register('condition')} className="accent-primary" />
+                  {CONDITION_LABELS[value]}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          <Input
+            label="الموقع (اختياري)"
+            placeholder="المدينة - الحي، مثال: دمشق - المزة"
+            maxLength={100}
+            autoComplete="address-level2"
+            {...register('location')}
+            error={errors.location?.message}
+          />
           <div className="flex flex-col gap-1">
             <label htmlFor="description" className="text-sm font-medium text-fg">الوصف</label>
             <textarea

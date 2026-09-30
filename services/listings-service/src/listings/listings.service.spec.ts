@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { ListingsService } from './listings.service';
-import { Listing, ListingStatus } from './entities/listing.entity';
+import { Listing, ListingCondition, ListingStatus } from './entities/listing.entity';
 import { ListingImage } from './entities/listing-image.entity';
 import { StorageService } from '../storage/storage.service';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
@@ -107,10 +107,36 @@ describe('ListingsService', () => {
       expect(result).toEqual(savedListing);
       expect(mockListingRepository.create).toHaveBeenCalledWith({
         ...createDto,
+        location: null,
         userId,
         status: ListingStatus.ACTIVE,
       });
       expect(mockListingRepository.save).toHaveBeenCalledWith(savedListing);
+    });
+
+    it('stores condition and a tidied location; a blank location is "not specified"', async () => {
+      mockListingRepository.create.mockImplementation((v) => v);
+      mockListingRepository.save.mockImplementation(async (v) => v);
+
+      const withBoth = await service.create('user-1', {
+        title: 'T', description: 'D', price: 5, condition: ListingCondition.USED, location: '  دمشق   -  المزة ',
+      });
+      expect(withBoth).toMatchObject({ condition: 'used', location: 'دمشق - المزة' });
+
+      const blank = await service.create('user-1', { title: 'T', description: 'D', price: 5, location: '   ' });
+      expect(blank.location).toBeNull();
+    });
+  });
+
+  describe('update', () => {
+    it('clears the location with an empty string and leaves it alone when absent', async () => {
+      const listing = { id: 'l1', userId: 'u1', status: ListingStatus.ACTIVE, location: 'حلب', condition: 'new' };
+      mockListingRepository.findOne.mockResolvedValue({ ...listing });
+      mockListingRepository.save.mockImplementation(async (v) => v);
+
+      expect((await service.update('l1', 'u1', { title: 'x' })).location).toBe('حلب');
+      mockListingRepository.findOne.mockResolvedValue({ ...listing });
+      expect((await service.update('l1', 'u1', { location: '' })).location).toBeNull();
     });
   });
 
@@ -210,6 +236,18 @@ describe('ListingsService', () => {
       await service.findAll({ categoryId });
 
       expect(qb.andWhere).toHaveBeenCalledWith(expect.stringContaining('c.parent_id = :categoryId'), { categoryId });
+    });
+
+    it('filters by condition, and ignores values outside new/used', async () => {
+      const qb = queryBuilder();
+      mockListingRepository.createQueryBuilder.mockReturnValue(qb);
+      await service.findAll({ condition: 'new' });
+      expect(qb.andWhere).toHaveBeenCalledWith('listing.condition = :condition', { condition: 'new' });
+
+      const qb2 = queryBuilder();
+      mockListingRepository.createQueryBuilder.mockReturnValue(qb2);
+      await service.findAll({ condition: "new' OR 1=1" });
+      expect(qb2.andWhere).not.toHaveBeenCalled();
     });
 
     it('ignores non-uuid category and user filters instead of failing in Postgres', async () => {

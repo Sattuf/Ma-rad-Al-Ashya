@@ -11,7 +11,7 @@ import { listingsApi } from '@/lib/api/listings';
 import { useCategories } from '@/hooks/useCategories';
 import { Alert, Button, Card, Input } from '@/components/ui';
 import { cn } from '@/lib/cn';
-import { formatPrice } from '@/types/listing';
+import { CONDITION_LABELS, conditionLabel, formatPrice, type ListingCondition } from '@/types/listing';
 import { errorMessage } from '@/lib/errors';
 
 // Mirrors listings-service limits (CreateListingDto, image upload pipe).
@@ -26,6 +26,8 @@ const schema = z.object({
     .trim()
     .min(1, 'أدخل السعر')
     .refine((v) => Number.isFinite(Number(v)) && Number(v) > 0, 'السعر يجب أن يكون رقماً أكبر من صفر'),
+  condition: z.enum(['new', 'used'], { error: 'اختر حالة السلعة' }),
+  location: z.string().trim().max(100, 'الموقع طويل جداً (100 حرف كحد أقصى)'),
   description: z.string().trim().min(20, 'صف السلعة في 20 حرفاً على الأقل: الحالة، العمر، سبب البيع'),
 });
 type FormValues = z.infer<typeof schema>;
@@ -98,6 +100,8 @@ export default function CreateListingPage() {
         description: values.description.trim(),
         price: Number(values.price),
         categoryId: values.categoryId,
+        condition: values.condition,
+        ...(values.location?.trim() && { location: values.location.trim() }),
       });
       listingId = listing.id;
 
@@ -172,6 +176,31 @@ export default function CreateListingPage() {
 
             <Input label="السعر (دولار أمريكي)" type="number" inputMode="decimal" min={0} step="0.01" {...register('price')} error={errors.price?.message} />
 
+            <fieldset className="flex flex-col gap-2" aria-describedby={errors.condition ? 'condition-error' : undefined}>
+              <legend className="mb-1 text-sm font-medium text-fg">حالة السلعة</legend>
+              <div className="flex gap-3">
+                {(Object.keys(CONDITION_LABELS) as ListingCondition[]).map((value) => (
+                  <label
+                    key={value}
+                    className="flex min-h-11 flex-1 cursor-pointer items-center justify-center gap-2 rounded-control border border-line bg-surface px-4 text-fg has-[:checked]:border-primary has-[:checked]:bg-primary-soft has-[:checked]:font-semibold has-[:checked]:text-on-primary-soft"
+                  >
+                    <input type="radio" value={value} {...register('condition')} className="accent-primary" />
+                    {CONDITION_LABELS[value]}
+                  </label>
+                ))}
+              </div>
+              {errors.condition && <p id="condition-error" className="text-xs text-danger">{errors.condition.message}</p>}
+            </fieldset>
+
+            <Input
+              label="الموقع (اختياري)"
+              placeholder="المدينة - الحي، مثال: دمشق - المزة"
+              maxLength={100}
+              autoComplete="address-level2"
+              {...register('location')}
+              error={errors.location?.message}
+            />
+
             <div className="flex flex-col gap-1">
               <label htmlFor="description" className="text-sm font-medium text-fg">الوصف</label>
               <textarea
@@ -237,6 +266,9 @@ export default function CreateListingPage() {
                 <p className="text-xs text-fg-subtle">{category?.name}</p>
                 <h2 className="font-semibold text-fg">{values.title}</h2>
                 <p className="text-lg font-bold text-primary">{formatPrice(values.price ?? '0', 'USD')}</p>
+                <p className="text-sm text-fg-muted">
+                  {[conditionLabel(values.condition), values.location?.trim()].filter(Boolean).join(' · ')}
+                </p>
               </div>
             </div>
             <p className="whitespace-pre-line text-sm text-fg-muted">{values.description}</p>

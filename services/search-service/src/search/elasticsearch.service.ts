@@ -62,6 +62,7 @@ export class ElasticsearchService implements OnModuleInit {
                 category: { type: 'keyword' },
                 category_ids: { type: 'keyword' },
                 status: { type: 'keyword' },
+                condition: { type: 'keyword' },
                 tags: { type: 'keyword' },
                 createdAt: { type: 'date' },
                 updatedAt: { type: 'date' },
@@ -76,7 +77,7 @@ export class ElasticsearchService implements OnModuleInit {
         // Fields added after the index was first created (adding fields is allowed in place).
         await this.client.indices.putMapping({
           index: this.indexName,
-          properties: { category_ids: { type: 'keyword' }, status: { type: 'keyword' } },
+          properties: { category_ids: { type: 'keyword' }, status: { type: 'keyword' }, condition: { type: 'keyword' } },
         });
         this.logger.log(`Index ${this.indexName} already exists; mapping ensured`);
       }

@@ -57,6 +57,19 @@ void main() {
       expect(listing.images, ['https://cdn/1.jpg', 'https://cdn/2.jpg']);
     });
 
+    test('condition: Arabic label, and no made-up value when the seller did not say', () {
+      Listing parse(Object? condition) => Listing.fromJson({
+            'id': 'l1', 'title': 't', 'price': '1.00', 'userId': 'u1',
+            if (condition != null) 'condition': condition,
+            'location': 'دمشق - المزة',
+          });
+      expect(parse('new').conditionLabel, 'جديد');
+      expect(parse('used').conditionLabel, 'مستعمل');
+      expect(parse(null).condition, isNull);
+      expect(parse(null).conditionLabel, isNull);
+      expect(parse('used').location, 'دمشق - المزة');
+    });
+
     test('toJson returns a valid map', () {
       final listing = Listing(
         id: '123',

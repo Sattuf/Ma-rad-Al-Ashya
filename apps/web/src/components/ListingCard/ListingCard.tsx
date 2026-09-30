@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { Heart, ImageOff } from 'lucide-react';
-import { Listing, coverImage, formatPrice } from '@/types/listing';
+import { Listing, conditionLabel, coverImage, formatPrice } from '@/types/listing';
 import { useFavoriteCheck } from '@/hooks/useFavorite';
 import { useAuthStore } from '@/lib/store/auth-store';
 import { Badge } from '@/components/ui';
@@ -66,6 +66,11 @@ export function ListingCard({ listing, onClick }: ListingCardProps) {
           </Link>
         </h3>
         <p className="mt-auto pt-2 text-lg font-bold text-primary">{formatPrice(listing.price, listing.currency)}</p>
+        {(listing.condition || listing.location) && (
+          <p className="truncate text-xs text-fg-muted">
+            {[conditionLabel(listing.condition), listing.location].filter(Boolean).join(' · ')}
+          </p>
+        )}
       </div>
     </article>
   );

@@ -215,6 +215,9 @@ services:
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}
     volumes:
       - ../services/listings-service/src:/app/src:delegated
+      # Uploaded photos (local storage, no S3) must outlive the container: a rebuild or
+      # redeploy would otherwise delete every listing photo.
+      - listings_media:/app/tmp/listings
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -280,6 +283,7 @@ services:
       - "${DEVICE_BIND:-127.0.0.1}:3004:3004"
     volumes:
       - ../services/messaging-service/src:/app/src:delegated
+      - messages_media:/app/uploads
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -388,6 +392,7 @@ services:
       - "127.0.0.1:3007:3007"
     volumes:
       - ../services/users-service/src:/app/src:delegated
+      - avatars_media:/app/tmp/avatars
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -560,3 +565,9 @@ volumes:
     name: marad-prometheus-data
   grafana_data:
     name: marad-grafana-data
+  listings_media:
+    name: marad-listings-media
+  messages_media:
+    name: marad-messages-media
+  avatars_media:
+    name: marad-avatars-media

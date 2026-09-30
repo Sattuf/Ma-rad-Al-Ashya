@@ -169,6 +169,16 @@ class _ListingDetailsScreenState extends ConsumerState<ListingDetailsScreen> {
                         Text(listing.category?.name ?? 'غير محدد', style: const TextStyle(fontSize: 16)),
                       ],
                     ),
+                    if (listing.conditionLabel != null) ...[
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          const Icon(Icons.sell_outlined, color: Colors.grey),
+                          const SizedBox(width: 8),
+                          Text('الحالة: ${listing.conditionLabel}', style: const TextStyle(fontSize: 16)),
+                        ],
+                      ),
+                    ],
                     if (listing.isSellerVerified) ...[
                       const SizedBox(height: 8),
                       Row(

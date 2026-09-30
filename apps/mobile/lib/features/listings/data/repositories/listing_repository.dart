@@ -73,12 +73,13 @@ class ListingRepository {
   }) async {
     // listings-service takes the listing as JSON, then each image separately
     // (POST /listings/:id/images, field "file") — the same contract as the web app.
-    // Condition and location are not stored by the service yet.
     final created = await _apiClient.dio.post('/listings', data: {
       'title': title,
       'description': description,
       'price': price,
       'categoryId': categoryId,
+      'condition': condition,
+      if (location.trim().isNotEmpty) 'location': location.trim(),
     });
     final listingId = created.data['id'] as String;
 

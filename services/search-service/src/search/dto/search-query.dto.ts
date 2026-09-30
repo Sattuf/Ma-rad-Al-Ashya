@@ -8,6 +8,9 @@ export class SearchQueryDto {
   @ApiPropertyOptional({ description: 'Category id; a parent includes its subcategories' })
   categoryId?: string;
 
+  @ApiPropertyOptional({ enum: ['new', 'used'] })
+  condition?: string;
+
   @ApiPropertyOptional()
   minPrice?: number;
 

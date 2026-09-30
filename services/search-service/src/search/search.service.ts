@@ -67,6 +67,7 @@ export class SearchService implements OnModuleDestroy {
   async search(dto: SearchQueryDto, userId?: string) {
     const query = typeof dto.q === 'string' ? dto.q.trim().slice(0, 100) : '';
     const categoryId = typeof dto.categoryId === 'string' && UUID.test(dto.categoryId) ? dto.categoryId : undefined;
+    const condition = dto.condition === 'new' || dto.condition === 'used' ? dto.condition : undefined;
     const minPrice = toPositiveNumber(dto.minPrice);
     const maxPrice = toPositiveNumber(dto.maxPrice);
     const limit = Math.min(MAX_SEARCH_PAGE, Math.max(1, Math.floor(Number(dto.limit)) || 20));
@@ -78,8 +79,8 @@ export class SearchService implements OnModuleDestroy {
 
     const variant = await this.rankingService.getABVariant(userId, sessionId);
     const version = await this.searchCacheVersion();
-    const cacheKey = this.generateCacheKey(`search_v3:${version}`, { query, categoryId, minPrice, maxPrice, page, limit, variant });
-    const fingerprint = crypto.createHash('md5').update(JSON.stringify([query.toLowerCase(), categoryId, minPrice, maxPrice])).digest('hex');
+    const cacheKey = this.generateCacheKey(`search_v3:${version}`, { query, categoryId, condition, minPrice, maxPrice, page, limit, variant });
+    const fingerprint = crypto.createHash('md5').update(JSON.stringify([query.toLowerCase(), categoryId, condition, minPrice, maxPrice])).digest('hex');
 
     /**
      * A "search" for the experiment = the first page of a (visitor, query) pair, counted once
@@ -115,6 +116,8 @@ export class SearchService implements OnModuleDestroy {
     }
     // A parent category matches its subcategories (category_ids holds [id, parentId]).
     if (categoryId) filter.push({ term: { category_ids: categoryId } });
+    // Listings without a condition (older ones) never match a condition filter.
+    if (condition) filter.push({ term: { condition } });
     if (minPrice !== undefined || maxPrice !== undefined) {
       filter.push({ range: { price: { ...(minPrice !== undefined && { gte: minPrice }), ...(maxPrice !== undefined && { lte: maxPrice }) } } });
     }
@@ -364,6 +367,7 @@ export class SearchService implements OnModuleDestroy {
           category: listing.category?.name ?? undefined,
           category_ids: (listing.category_ids ?? [listing.categoryId]).filter(Boolean),
           status: listing.status ?? 'active',
+          condition: listing.condition ?? undefined,
           tags: listing.tags || [],
           createdAt: listing.createdAt,
           updatedAt: listing.updatedAt,

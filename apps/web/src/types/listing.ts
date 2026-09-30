@@ -19,6 +19,14 @@ export interface Category {
 }
 
 export type ListingStatus = 'active' | 'sold' | 'expired' | 'deleted';
+export type ListingCondition = 'new' | 'used';
+
+export const CONDITION_LABELS: Record<ListingCondition, string> = { new: 'جديد', used: 'مستعمل' };
+
+/** Arabic label, or null when the seller did not say (listings from before the field). */
+export function conditionLabel(condition?: string | null): string | null {
+  return condition === 'new' || condition === 'used' ? CONDITION_LABELS[condition] : null;
+}
 
 export interface Listing {
   id: string;
@@ -29,6 +37,9 @@ export interface Listing {
   price: number | string;
   currency: string;
   status: ListingStatus;
+  condition?: ListingCondition | null;
+  /** City / neighbourhood as typed by the seller. */
+  location?: string | null;
   viewsCount: number;
   categoryId?: string | null;
   category?: Category | null;
@@ -44,6 +55,7 @@ export interface ListingsQuery {
   categoryId?: string;
   minPrice?: number;
   maxPrice?: number;
+  condition?: ListingCondition;
   userId?: string;
   /** Comma-separated listing ids (max 20); batch lookup that does not count views. */
   ids?: string;
@@ -55,6 +67,9 @@ export interface CreateListingInput {
   price: number;
   currency?: string;
   categoryId?: string;
+  condition?: ListingCondition;
+  /** Empty string clears it. */
+  location?: string;
 }
 
 export function coverImage(listing: Pick<Listing, 'images'>, size: 'thumb' | 'full' = 'thumb'): string | null {
