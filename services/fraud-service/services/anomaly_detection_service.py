@@ -1,5 +1,6 @@
 import logging
 import os
+import zlib
 import joblib
 import pandas as pd
 import database
@@ -17,6 +18,10 @@ def load_model():
     else:
         logger.warning("Anomaly detection model not found. Call train endpoint first.")
 
+def _stable_bucket(value: str, buckets: int = 1000) -> int:
+    return zlib.crc32(value.encode("utf-8")) % buckets
+
+
 # Run once at startup
 load_model()
 
@@ -29,10 +34,10 @@ async def analyze_transaction(request: TransactionAnalyzeRequest) -> Transaction
     
     amount = float(request.amount)
     
-    # Convert MCC to numeric hash-like feature
-    mcc_numeric = hash(request.merchant_category_code) % 1000
-    # Convert Country to numeric hash-like feature
-    country_numeric = hash(request.location_country) % 1000
+    # Categorical values → stable numbers. Not Python's hash(): it is salted per process,
+    # so the same category would map to a different number after every restart.
+    mcc_numeric = _stable_bucket(request.merchant_category_code)
+    country_numeric = _stable_bucket(request.location_country)
     
     features = pd.DataFrame([{
         "amount": amount,

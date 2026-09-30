@@ -1,9 +1,10 @@
 'use client';
 
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
 import useSWR from 'swr';
 import { RefreshCw } from 'lucide-react';
-import { adminDashboardApi, type ModerationStats } from '@/lib/api/admin-dashboard';
+import { DASHBOARD_WINDOWS, adminDashboardApi, type DashboardWindow, type ModerationStats } from '@/lib/api/admin-dashboard';
 import { listingsApi } from '@/lib/api/listings';
 import { userApi } from '@/lib/api/users';
 import { Button, ErrorState, Skeleton } from '@/components/ui';
@@ -22,6 +23,53 @@ const REASONS: Record<string, string> = {
   wrong_category: 'قسم خاطئ',
   other: 'أخرى',
 };
+
+/** "7 أيام" but "30 يوماً" / "90 يوماً" (Arabic counted noun). */
+const daysLabel = (n: number) => (n >= 3 && n <= 10 ? `${n} أيام` : `${n} يوماً`);
+
+const WINDOW_KEY = 'admin-dashboard-window';
+
+/** The chosen window, remembered per browser (storage can be unavailable: fall back to 30). */
+function useDashboardWindow(): [DashboardWindow, (d: DashboardWindow) => void] {
+  const [days, setDays] = useState<DashboardWindow>(30);
+  useEffect(() => {
+    try {
+      const saved = Number(localStorage.getItem(WINDOW_KEY));
+      if ((DASHBOARD_WINDOWS as readonly number[]).includes(saved)) setDays(saved as DashboardWindow);
+    } catch {
+      /* private mode or blocked storage */
+    }
+  }, []);
+  const choose = (d: DashboardWindow) => {
+    setDays(d);
+    try {
+      localStorage.setItem(WINDOW_KEY, String(d));
+    } catch {
+      /* not remembered, still applied */
+    }
+  };
+  return [days, choose];
+}
+
+function WindowPicker({ value, onChange }: { value: DashboardWindow; onChange: (d: DashboardWindow) => void }) {
+  return (
+    <div role="group" aria-label="الفترة" className="inline-flex rounded-control border border-line bg-surface p-0.5">
+      {DASHBOARD_WINDOWS.map((d) => (
+        <button
+          key={d}
+          type="button"
+          aria-pressed={value === d}
+          onClick={() => onChange(d)}
+          className={`min-h-10 rounded-control px-3 text-sm ${
+            value === d ? 'bg-surface-muted font-semibold text-fg' : 'text-fg-muted hover:text-fg'
+          }`}
+        >
+          {daysLabel(d)}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -66,10 +114,11 @@ function useReportedNames(moderation?: ModerationStats) {
 }
 
 export default function AdminDashboardPage() {
-  const moderation = useSWR('admin-stats-moderation', adminDashboardApi.moderation, SWR_OPTIONS);
-  const users = useSWR('admin-stats-users', adminDashboardApi.users, SWR_OPTIONS);
-  const listings = useSWR('admin-stats-listings', adminDashboardApi.listings, SWR_OPTIONS);
-  const deals = useSWR('admin-stats-transactions', adminDashboardApi.transactions, SWR_OPTIONS);
+  const [days, setDays] = useDashboardWindow();
+  const moderation = useSWR(['admin-stats-moderation', days], () => adminDashboardApi.moderation(days), SWR_OPTIONS);
+  const users = useSWR(['admin-stats-users', days], () => adminDashboardApi.users(days), SWR_OPTIONS);
+  const listings = useSWR(['admin-stats-listings', days], () => adminDashboardApi.listings(days), SWR_OPTIONS);
+  const deals = useSWR(['admin-stats-transactions', days], () => adminDashboardApi.transactions(days), SWR_OPTIONS);
   const fraud = useSWR('admin-stats-fraud', adminDashboardApi.fraud, SWR_OPTIONS);
   const names = useReportedNames(moderation.data);
 
@@ -91,11 +140,14 @@ export default function AdminDashboardPage() {
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-fg">لوحة التحكم</h1>
-          <p className="text-fg-muted">آخر 30 يوماً، بتوقيت UTC. تتحدّث الأرقام كل دقيقة.</p>
+          <p className="text-fg-muted">آخر {daysLabel(days)}، بتوقيت UTC. تتحدّث الأرقام كل دقيقة.</p>
         </div>
-        <Button variant="secondary" onClick={refresh} loading={refreshing}>
-          <RefreshCw className="h-4 w-4" aria-hidden /> تحديث
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <WindowPicker value={days} onChange={setDays} />
+          <Button variant="secondary" onClick={refresh} loading={refreshing}>
+            <RefreshCw className="h-4 w-4" aria-hidden /> تحديث
+          </Button>
+        </div>
       </header>
 
       {/* KPI row: the queue that needs action first, then growth. */}
@@ -157,7 +209,7 @@ export default function AdminDashboardPage() {
           {reportSeries ? (
             <ChartCard
               title="البلاغات: الواردة مقابل المعالَجة"
-              subtitle={`يومياً، آخر 30 يوماً (اليوم الأخير لم يكتمل بعد)${m?.avgReviewHours30d != null ? ` · متوسط زمن المراجعة ${fmt.hours(m.avgReviewHours30d)}` : ''}`}
+              subtitle={`يومياً، آخر ${daysLabel(days)} (اليوم الأخير لم يكتمل بعد)${m?.avgReviewHours != null ? ` · متوسط زمن المراجعة ${fmt.hours(m.avgReviewHours)}` : ''}`}
               table={<TrendTable series={reportSeries} />}
             >
               <TrendChart series={reportSeries} />
@@ -215,9 +267,9 @@ export default function AdminDashboardPage() {
             <>
               <Fact label="إعلانات منشورة" value={fmt.compact(listings.data.listings.active)} hint={`${fmt.int(listings.data.listings.sold)} مباعة · ${fmt.int(listings.data.listings.expired)} منتهية`} />
               <Fact
-                label="إيراد الترويج · 30 يوماً"
-                value={fmt.money(listings.data.promotions.revenueLast30Days, listings.data.promotions.currency)}
-                hint={`${fmt.int(listings.data.promotions.paidLast30Days)} عملية دفع · ${fmt.int(listings.data.promotions.active)} ترويج نشط`}
+                label={`إيراد الترويج · ${daysLabel(days)}`}
+                value={fmt.money(listings.data.promotions.revenueInWindow, listings.data.promotions.currency)}
+                hint={`${fmt.int(listings.data.promotions.paidInWindow)} عملية دفع · ${fmt.int(listings.data.promotions.active)} ترويج نشط`}
               />
             </>
           )}
@@ -226,13 +278,13 @@ export default function AdminDashboardPage() {
               <Fact
                 label="نسبة إتمام الصفقات"
                 value={deals.data.completionRate == null ? '—' : fmt.percent(deals.data.completionRate)}
-                hint="من الصفقات التي بدأت وانتهت خلال 30 يوماً"
+                hint={`من الصفقات التي بدأت وانتهت خلال ${daysLabel(days)}`}
               />
               <Fact label="صفقات مفتوحة" value={fmt.int(deals.data.openDeals)} hint="بانتظار تأكيد أحد الطرفين" />
               <Fact
-                label="متوسط التقييم · 30 يوماً"
-                value={deals.data.averageRatingLast30Days == null ? '—' : `${fmt.decimal(deals.data.averageRatingLast30Days)} من 5`}
-                hint={`${fmt.int(deals.data.reviewsLast30Days)} تقييم`}
+                label={`متوسط التقييم · ${daysLabel(days)}`}
+                value={deals.data.averageRatingInWindow == null ? '—' : `${fmt.decimal(deals.data.averageRatingInWindow)} من 5`}
+                hint={`${fmt.int(deals.data.reviewsInWindow)} تقييم`}
               />
             </>
           )}
@@ -294,10 +346,10 @@ export default function AdminDashboardPage() {
             ) : (
               <Skeleton className="h-28" />
             )}
-            {m && m.reasons30d.length > 0 && (
+            {m && m.reasons.length > 0 && (
               <div className="rounded-card border border-line bg-surface p-5">
-                <h3 className="mb-3 font-semibold text-fg">أسباب البلاغات · 30 يوماً</h3>
-                <BarList valueLabel="البلاغات" items={m.reasons30d.map((r) => ({ id: r.reason, label: REASONS[r.reason] ?? r.reason, value: r.count }))} />
+                <h3 className="mb-3 font-semibold text-fg">أسباب البلاغات · {daysLabel(days)}</h3>
+                <BarList valueLabel="البلاغات" items={m.reasons.map((r) => ({ id: r.reason, label: REASONS[r.reason] ?? r.reason, value: r.count }))} />
               </div>
             )}
           </div>

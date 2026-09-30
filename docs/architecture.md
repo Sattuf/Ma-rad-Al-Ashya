@@ -122,6 +122,18 @@ graph TB
 | **قاعدة البيانات** | Elasticsearch |
 | **المسؤولية** | البحث النصي الكامل (Full-text Search)، التصفية المتقدمة، البحث الجغرافي |
 
+**الفهرس `marad_listings`:** تعريف حقوله في `MAPPING_PROPERTIES` (`elasticsearch.service.ts`). عند الإقلاع تُنشئه الخدمة أو تضيف الحقول الجديدة إليه، وتعيد المحاولة إلى أن يستجيب Elasticsearch (قد يقلع بعدها). الكتابة تنتظر وجود الفهرس بتعريفه، وإلا لأنشأه Elasticsearch بأنواع مخمَّنة (`text` بدل `keyword`) تُفسد الفلاتر.
+
+نوع حقل موجود لا يمكن تغييره في مكانه. إن سجّلت الخدمة `has wrong field types`، أعد بناء الفهرس من Postgres (المصدر الأساسي):
+
+```bash
+docker exec marad-search-service node -e "fetch('http://elasticsearch:9200/marad_listings',{method:'DELETE'}).then(r=>r.text()).then(console.log)"
+docker restart marad-search-service                                   # يُنشئ الفهرس بتعريفه
+docker exec marad-listings-service node dist/scripts/reindex-search.js  # يعيد فهرسة كل الإعلانات
+```
+
+البحث يعيد نتائج ناقصة بين الحذف ونهاية إعادة الفهرسة (ثوانٍ لبضع مئات الإعلانات)، فاختر وقتاً هادئاً.
+
 ---
 
 ### 5. خدمة المراسلة — messaging-service
@@ -161,9 +173,15 @@ graph TB
 |---------|--------|
 | **التقنية** | Python FastAPI |
 | **المنفذ** | `8001` |
-| **قاعدة البيانات** | PostgreSQL (قراءة فقط) |
+| **قاعدة البيانات** | PostgreSQL (جداول `device_accounts`, `ip_accounts`, `transaction_features`, `fraud_signals`) |
 | **مكتبات ML** | scikit-learn |
 | **المسؤولية** | تحليل الإعلانات والسلوكيات المشبوهة، تصنيف مخاطر الاحتيال |
+
+**ما يصلها:**
+- عند التسجيل، من auth-service: بصمة الجهاز (`device_id`) والـ IP والمتصفح. دون بصمة لا يُرسل شيء، لأن معرّفاً بديلاً كان سيربط حسابات لا علاقة بينها.
+- عند إتمام صفقة، من transactions-service: المشتري وسعر الإعلان وعملته وقسمه (بدل «رمز فئة التاجر») والبلد (`MARKET_COUNTRY`، افتراضياً `SY`).
+
+كلاهما لا ينتظر الرد ولا يُفشل العملية. الرفض (4xx/5xx) يُسجَّل تحذيراً، ولا يمر بصمت كما كان يحدث حين كانت كل الطلبات تُرفض بـ 422.
 
 ---
 

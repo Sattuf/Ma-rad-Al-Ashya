@@ -123,6 +123,41 @@ describe('AuthService', () => {
     });
   });
 
+  describe('sendDeviceCheck', () => {
+    const realFetch = global.fetch;
+    afterEach(() => {
+      global.fetch = realFetch;
+    });
+
+    it('sends the fingerprint as device_id with the user agent', async () => {
+      const fetchMock = jest.fn().mockResolvedValue({ ok: true, status: 200 });
+      global.fetch = fetchMock as any;
+      await service.sendDeviceCheck('user-1', 'fp-abc', '10.0.0.1', 'Mozilla/5.0');
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const [url, init] = fetchMock.mock.calls[0];
+      expect(url).toMatch(/\/fraud\/device\/check$/);
+      expect(JSON.parse(init.body)).toEqual({ user_id: 'user-1', device_id: 'fp-abc', ip_address: '10.0.0.1', user_agent: 'Mozilla/5.0' });
+    });
+
+    it('sends nothing without a fingerprint', async () => {
+      const fetchMock = jest.fn();
+      global.fetch = fetchMock as any;
+      await service.sendDeviceCheck('user-1', undefined, '10.0.0.1');
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('logs a refused check instead of ignoring it, and never throws', async () => {
+      global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 422 }) as any;
+      const warn = jest.spyOn((service as any).logger, 'warn').mockImplementation(() => undefined);
+      await expect(service.sendDeviceCheck('user-1', 'fp', '')).resolves.toBeUndefined();
+      expect(warn).toHaveBeenCalledWith('Fraud device check refused: HTTP 422');
+
+      global.fetch = jest.fn().mockRejectedValue(new Error('ECONNREFUSED')) as any;
+      await expect(service.sendDeviceCheck('user-1', 'fp', '')).resolves.toBeUndefined();
+      expect(warn).toHaveBeenCalledWith('Failed to send fraud device check: ECONNREFUSED');
+    });
+  });
+
   describe('login', () => {
     it('should login successfully and return tokens for correct credentials', async () => {
       usersService.findOneByEmail.mockResolvedValue(mockUser);

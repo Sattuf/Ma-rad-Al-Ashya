@@ -6,6 +6,7 @@ import { ReportsController } from './reports.controller';
 import { ReportsService } from './reports.service';
 import { Report } from './entities/report.entity';
 import { ReportCount } from './entities/report-count.entity';
+import { QueueMetrics } from './queue-metrics';
 
 @Module({
   imports: [
@@ -16,7 +17,7 @@ import { ReportCount } from './entities/report-count.entity';
     HttpModule
   ],
   controllers: [ReportsController],
-  providers: [ReportsService],
+  providers: [ReportsService, QueueMetrics],
   exports: [ReportsService]
 })
 export class ReportsModule {}

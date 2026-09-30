@@ -7,7 +7,8 @@
  * queues in the service instead of exhausting Postgres connections.
  */
 import { Logger as NestLogger } from '@nestjs/common';
-import type { Logger as TypeOrmLogger } from 'typeorm';
+import { Gauge } from 'prom-client';
+import type { DataSource, Logger as TypeOrmLogger } from 'typeorm';
 
 /**
  * Routes TypeORM through the service logger (JSON, request ID). Query parameters are never
@@ -70,4 +71,35 @@ export function postgresConnectionOptions(defaultDatabase = 'marad_db') {
       statement_timeout: intEnv('DB_STATEMENT_TIMEOUT_MS', 5_000),
     },
   };
+}
+
+interface PgPoolCounts {
+  totalCount?: number;
+  idleCount?: number;
+  waitingCount?: number;
+}
+
+/**
+ * Connection pool gauges, read from pg's pool on each scrape (call once, from main.ts):
+ * db_pool_connections{state="in_use"|"idle"|"waiting"} and db_pool_max.
+ * `waiting` above 0 means requests are queueing for a connection: the pool (DB_POOL_MAX)
+ * or slow queries are the bottleneck, before it shows as latency or errors.
+ */
+export function registerPoolMetrics(dataSource: DataSource): void {
+  const pool = () => (dataSource.driver as unknown as { master?: PgPoolCounts }).master;
+  new Gauge({
+    name: 'db_pool_connections',
+    help: 'Postgres pool connections by state (in_use, idle, waiting = requests queued for a connection)',
+    labelNames: ['state'] as const,
+    collect() {
+      const p = pool();
+      if (!p) return;
+      const total = p.totalCount ?? 0;
+      const idle = p.idleCount ?? 0;
+      this.set({ state: 'in_use' }, Math.max(0, total - idle));
+      this.set({ state: 'idle' }, idle);
+      this.set({ state: 'waiting' }, p.waitingCount ?? 0);
+    },
+  });
+  new Gauge({ name: 'db_pool_max', help: 'Configured size of the Postgres pool (DB_POOL_MAX)' }).set(intEnv('DB_POOL_MAX', 10));
 }

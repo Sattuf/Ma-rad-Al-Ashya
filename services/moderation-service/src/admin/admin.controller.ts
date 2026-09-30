@@ -2,6 +2,7 @@ import { Controller, Get, Put, Param, Body, Query, UseGuards, Request } from '@n
 import { ReportsService } from '../reports/reports.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AdminGuard } from './guards/admin.guard';
+import { parseStatsWindow } from '../common/stats';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 
 @ApiTags('admin')
@@ -31,7 +32,7 @@ export class AdminController {
 
   @Get('dashboard/stats')
   @ApiOperation({ summary: 'Get dashboard stats' })
-  getDashboardStats() {
-    return this.reportsService.getAdminStats();
+  getDashboardStats(@Query('days') days?: string) {
+    return this.reportsService.getAdminStats(parseStatsWindow(days));
   }
 }

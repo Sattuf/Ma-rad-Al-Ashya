@@ -173,27 +173,49 @@ export class TransactionsService {
     const saved = await this.transactionRepo.save(tx);
 
     if (saved.status === TransactionStatus.COMPLETED) {
-      // Fire-and-forget fraud analysis
-      setImmediate(() => {
-        fetch(`${process.env.FRAUD_SERVICE_URL || 'http://fraud-service:8001'}/fraud/transaction/analyze`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...internalHeaders() },
-          body: JSON.stringify({
-            transaction_id: saved.id,
-            buyer_id: saved.buyer_id,
-            seller_id: saved.seller_id,
-            price: 0, // Mock or fetch from listing if needed
-            buyer_account_age_days: 30, // Mock or calculate if user info available
-            seller_account_age_days: 30, // Mock
-            buyer_completed_transactions: 1, // Mock
-          }),
-        }).catch(err => {
-          this.logger.error(`Failed to send transaction fraud analysis: ${err.message}`);
-        });
-      });
+      // Fire-and-forget: completing a sale never waits for, or fails on, the fraud analysis.
+      setImmediate(() => void this.sendFraudAnalysis(saved));
     }
 
     return saved;
+  }
+
+  /**
+   * Sends a completed sale to fraud-service with the listing's real price, currency and
+   * category (the transaction itself stores none of them). Failures are logged, never thrown.
+   */
+  async sendFraudAnalysis(tx: Transaction): Promise<void> {
+    try {
+      const listingsUrl = `${process.env.LISTINGS_SERVICE_URL || 'http://listings-service:3002'}/listings/batch`;
+      const res = await lastValueFrom(
+        this.httpService.post(listingsUrl, { ids: [tx.listing_id] }, { headers: internalHeaders(), timeout: 5000 }),
+      );
+      const listing: { price?: string | number; currency?: string; categoryId?: string } | undefined = Array.isArray(res.data) ? res.data[0] : undefined;
+      const amount = Number(listing?.price);
+      if (!listing || !Number.isFinite(amount)) {
+        this.logger.warn(`Fraud analysis skipped: no price for listing ${tx.listing_id}`);
+        return;
+      }
+      const fraudUrl = `${process.env.FRAUD_SERVICE_URL || 'http://fraud-service:8001'}/fraud/transaction/analyze`;
+      const fraudRes = await fetch(fraudUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...internalHeaders() },
+        body: JSON.stringify({
+          transaction_id: tx.id,
+          user_id: tx.buyer_id,
+          amount,
+          currency: listing.currency || 'USD',
+          // A C2C sale has no card merchant: the listing category plays that role.
+          merchant_category_code: listing.categoryId || 'uncategorized',
+          location_country: process.env.MARKET_COUNTRY || 'SY',
+          timestamp: new Date().toISOString(),
+        }),
+      });
+      // fetch only rejects on network errors: a refused request (4xx/5xx) must be logged too.
+      if (!fraudRes.ok) this.logger.warn(`Transaction fraud analysis refused: HTTP ${fraudRes.status}`);
+    } catch (err) {
+      this.logger.error(`Failed to send transaction fraud analysis: ${(err as Error).message}`);
+    }
   }
 
   async cancel(id: string, userId: string, dto: CancelTransactionDto): Promise<Transaction> {

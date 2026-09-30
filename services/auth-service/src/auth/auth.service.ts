@@ -60,7 +60,7 @@ export class AuthService {
     }
   }
 
-  async register(registerDto: RegisterDto, ipAddress: string = ''): Promise<AuthResponseDto> {
+  async register(registerDto: RegisterDto, ipAddress: string = '', userAgent?: string): Promise<AuthResponseDto> {
     const { email, phone, fullName, password, fingerprint_hash } = registerDto;
 
     if (!email && !phone) {
@@ -95,24 +95,36 @@ export class AuthService {
 
     const tokens = await this.generateTokensForUser(user);
 
-    // Fire-and-forget fraud check
-    const fraudServiceUrl = this.configService.get<string>('FRAUD_SERVICE_URL', 'http://fraud-service:8001');
-    const fraudHeaders = { 'Content-Type': 'application/json', ...internalHeaders() };
-    setImmediate(() => {
-      fetch(`${fraudServiceUrl}/fraud/device/check`, {
-        method: 'POST',
-        headers: fraudHeaders,
-        body: JSON.stringify({
-          fingerprint_hash: fingerprint_hash || null,
-          ip_address: ipAddress,
-          user_id: user.id,
-        }),
-      }).catch(err => {
-        this.logger.warn(`Failed to send fraud device check: ${err.message}`);
-      });
-    });
+    // Fire-and-forget: registration never waits for, or fails on, the fraud check.
+    setImmediate(() => void this.sendDeviceCheck(user.id, fingerprint_hash, ipAddress, userAgent));
 
     return this.buildAuthResponse(user, tokens);
+  }
+
+  /**
+   * Records the (device, account) pair with fraud-service, which flags devices shared by
+   * several accounts. Without a fingerprint there is nothing to link: a placeholder device ID
+   * would tie unrelated users together, so no check is sent.
+   */
+  async sendDeviceCheck(userId: string, fingerprintHash: string | undefined, ipAddress: string, userAgent?: string): Promise<void> {
+    if (!fingerprintHash) return;
+    const fraudServiceUrl = this.configService.get<string>('FRAUD_SERVICE_URL', 'http://fraud-service:8001');
+    try {
+      const res = await fetch(`${fraudServiceUrl}/fraud/device/check`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...internalHeaders() },
+        body: JSON.stringify({
+          user_id: userId,
+          device_id: fingerprintHash,
+          ip_address: ipAddress,
+          user_agent: userAgent?.slice(0, 500) || null,
+        }),
+      });
+      // fetch only rejects on network errors: a refused request (4xx/5xx) must be logged too.
+      if (!res.ok) this.logger.warn(`Fraud device check refused: HTTP ${res.status}`);
+    } catch (err) {
+      this.logger.warn(`Failed to send fraud device check: ${(err as Error).message}`);
+    }
   }
 
   async login(loginDto: LoginDto, ipAddress = 'unknown'): Promise<AuthResponseDto> {

@@ -115,3 +115,12 @@ def test_ingestion_requires_internal_secret():
     assert client.post("/fraud/device/check", json=payload).status_code == 401
     wrong = {"x-internal-secret": "marad-internal-secret-for-webhooks"}
     assert client.post("/fraud/device/check", json=payload, headers=wrong).status_code == 401
+
+
+def test_categorical_features_are_stable_across_processes():
+    import subprocess
+    import sys
+
+    code = "from services.anomaly_detection_service import _stable_bucket; print(_stable_bucket('22262686-09c7-4139-904c-2b95d6064200'), _stable_bucket('SY'))"
+    runs = {subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, env={**__import__('os').environ, "PYTHONHASHSEED": seed}).stdout.strip().splitlines()[-1] for seed in ("1", "2")}
+    assert len(runs) == 1

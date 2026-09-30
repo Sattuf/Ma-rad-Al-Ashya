@@ -1,4 +1,4 @@
-import { TtlCache, dailySeries, sumLast, windowStart } from './stats';
+import { TtlCache, dailySeries, sumLast, windowStart, parseStatsWindow, seriesDays, WindowedCache } from './stats';
 
 describe('common/stats', () => {
   const now = new Date('2026-03-10T15:30:00Z');
@@ -46,4 +46,26 @@ describe('common/stats', () => {
       await expect(cache.get(compute, 1)).resolves.toBe(2);
     });
   });
+
+  it('parseStatsWindow accepts only the offered windows', () => {
+    expect(parseStatsWindow('7')).toBe(7);
+    expect(parseStatsWindow(90)).toBe(90);
+    for (const bad of [undefined, '', '0', '365', '30.5', 'abc', '-7']) expect(parseStatsWindow(bad)).toBe(30);
+  });
+
+  it('seriesDays always covers two weeks for week-over-week numbers', () => {
+    expect(seriesDays(7)).toBe(14);
+    expect(seriesDays(30)).toBe(30);
+    expect(seriesDays(90)).toBe(90);
+  });
+
+  it('WindowedCache keeps one cache per window', async () => {
+    const cache = new WindowedCache<number>(60_000);
+    const compute = jest.fn().mockImplementation(async () => compute.mock.calls.length);
+    expect(await cache.get(7, compute)).toBe(1);
+    expect(await cache.get(7, compute)).toBe(1);
+    expect(await cache.get(30, compute)).toBe(2);
+    expect(compute).toHaveBeenCalledTimes(2);
+  });
 });
+

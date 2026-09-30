@@ -35,7 +35,7 @@ describe('RankingService', () => {
   it('should return same AB variant for same user', async () => {
     jest.spyOn(service['redisClient'], 'get').mockResolvedValue('A');
     jest.spyOn(service['redisClient'], 'set').mockResolvedValue('OK');
-    const variant1 = await service.getABVariant('user123', null);
+    const variant1 = await service.getABVariant('user123', undefined);
     expect(variant1).toBe('A');
   });
 

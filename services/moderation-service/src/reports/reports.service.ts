@@ -9,7 +9,7 @@ import { Queue } from 'bull';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { internalHeaders } from '../common/security';
-import { TtlCache, dailySeries, windowStart } from '../common/stats';
+import { WindowedCache, dailySeries, windowStart } from '../common/stats';
 
 const REVIEW_STATUSES = ['pending', 'reviewed', 'resolved', 'dismissed'];
 const REVIEW_ACTIONS = ['none', 'warning', 'listing_removed', 'user_suspended', 'user_banned'];
@@ -17,7 +17,7 @@ const REVIEW_ACTIONS = ['none', 'warning', 'listing_removed', 'user_suspended', 
 @Injectable()
 export class ReportsService {
   private readonly logger = new Logger(ReportsService.name);
-  private readonly statsCache = new TtlCache<Awaited<ReturnType<ReportsService['computeAdminStats']>>>(30_000);
+  private readonly statsCache = new WindowedCache<Awaited<ReturnType<ReportsService['computeAdminStats']>>>(30_000);
 
   constructor(
     @InjectRepository(Report)
@@ -190,16 +190,16 @@ export class ReportsService {
   }
 
   /**
-   * Admin dashboard numbers. Bounded queries (30-day window, LIMIT on rankings), cached
+   * Admin dashboard numbers. Bounded queries (7/30/90-day window, LIMIT on rankings), cached
    * 30s: short enough that the queue count follows the moderators' work closely.
    */
-  getAdminStats() {
-    return this.statsCache.get(() => this.computeAdminStats());
+  getAdminStats(days: number) {
+    return this.statsCache.get(days, () => this.computeAdminStats(days));
   }
 
-  private async computeAdminStats() {
+  private async computeAdminStats(days: number) {
     // reports.created_at / reviewed_at are TIMESTAMP (no zone) written in UTC.
-    const since = windowStart().toISOString().slice(0, 19).replace('T', ' ');
+    const since = windowStart(days).toISOString().slice(0, 19).replace('T', ' ');
     const today = new Date().toISOString().slice(0, 10);
     const q = (sql: string, params: unknown[] = []) => this.reportsRepository.query(sql, params);
 
@@ -228,15 +228,16 @@ export class ReportsService {
     const t = totals[0] ?? {};
     const round1 = (v: number | null) => (v == null ? null : Math.round(v * 10) / 10);
     return {
+      window_days: days,
       pending_reports: t.pending ?? 0,
       total_reports: t.total ?? 0,
       reports_today: t.today ?? 0,
       resolved_today: t.handled_today ?? 0,
       oldest_pending_hours: round1(t.oldest_pending_hours),
-      avg_review_hours_30d: round1(t.avg_review_hours),
-      created_daily: dailySeries(created),
-      handled_daily: dailySeries(handled),
-      reasons_30d: reasons,
+      avg_review_hours: round1(t.avg_review_hours),
+      created_daily: dailySeries(created, days),
+      handled_daily: dailySeries(handled, days),
+      reasons,
       top_reported_listings: topListings,
       top_reported_users: topUsers,
     };

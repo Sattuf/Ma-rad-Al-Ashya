@@ -8,6 +8,8 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import * as Sentry from '@sentry/node';
 import { SentryExceptionFilter } from './filters/sentry-exception.filter';
 import { JsonLogger, installRequestIdPropagation, requestContextMiddleware, scrubSentryEvent } from './common/logging';
+import { registerPoolMetrics } from './common/database';
+import { DataSource } from 'typeorm';
 import { assertRequiredSecrets, corsOrigins, isProduction } from './common/security';
 
 async function bootstrap() {
@@ -17,6 +19,7 @@ async function bootstrap() {
   // First middleware: every later step, including body parsing errors, has the request ID.
   app.use(requestContextMiddleware(jsonLogger));
   installRequestIdPropagation();
+  registerPoolMetrics(app.get(DataSource));
   
   Sentry.init({
     dsn: process.env.SENTRY_DSN,

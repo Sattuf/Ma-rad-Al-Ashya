@@ -59,3 +59,14 @@ groups:
         annotations:
           summary: "Disk {{ $labels.device }} is almost full ({{ $value | humanizePercentage }} free)"
           description: "Free space: docker image prune -f; docker builder prune -af; old logs and uploads."
+
+      # The moderation queue: a report waiting over a day means a scam or abuse stays online.
+      # A warning, not a page: someone should act today, not at 3 a.m.
+      - alert: ReportsWaitingTooLong
+        expr: max by (service) (moderation_oldest_open_report_age_seconds) > 86400
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "A user report has waited {{ $value | humanizeDuration }} for a moderator"
+          description: "The oldest open report is over 24 hours old. Open the admin dashboard (/admin) → reports queue."

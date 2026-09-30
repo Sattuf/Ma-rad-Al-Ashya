@@ -7,8 +7,22 @@
  * database one set of aggregate queries per TTL, per instance.
  */
 
-/** Days covered by daily series. Aggregate queries must filter on this window. */
+/** Default days covered by daily series. Aggregate queries must filter on the window. */
 export const STATS_WINDOW_DAYS = 30;
+
+/** Windows the dashboard may ask for (`?days=`). A fixed set keeps caches and query cost bounded. */
+export const STATS_WINDOWS = [7, 30, 90] as const;
+
+/** `?days=` → one of STATS_WINDOWS; anything else falls back to the default. */
+export function parseStatsWindow(raw: unknown): number {
+  const days = Number(raw);
+  return (STATS_WINDOWS as readonly number[]).includes(days) ? days : STATS_WINDOW_DAYS;
+}
+
+/** Week-over-week KPIs need 14 days of series whatever the window shown. */
+export function seriesDays(windowDays: number): number {
+  return Math.max(windowDays, 14);
+}
 
 export interface DailyPoint {
   /** UTC calendar day, YYYY-MM-DD. */
@@ -61,5 +75,21 @@ export class TtlCache<T> {
     });
     this.value = { at: now, promise };
     return promise;
+  }
+}
+
+/** One TtlCache per window (at most STATS_WINDOWS.length entries). */
+export class WindowedCache<T> {
+  private readonly caches = new Map<number, TtlCache<T>>();
+
+  constructor(private readonly ttlMs = 60_000) {}
+
+  get(days: number, compute: () => Promise<T>): Promise<T> {
+    let cache = this.caches.get(days);
+    if (!cache) {
+      cache = new TtlCache<T>(this.ttlMs);
+      this.caches.set(days, cache);
+    }
+    return cache.get(compute);
   }
 }

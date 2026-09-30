@@ -9,6 +9,7 @@ import {
   HttpStatus,
   BadRequestException,
   Ip,
+  Headers,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
@@ -31,8 +32,8 @@ export class AuthController {
   @ApiResponse({ status: 201, type: AuthResponseDto, description: 'تم إنشاء الحساب بنجاح' })
   @ApiResponse({ status: 400, description: 'بيانات غير صالحة' })
   @ApiResponse({ status: 409, description: 'البريد الإلكتروني أو الهاتف مستخدم بالفعل' })
-  async register(@Body() registerDto: RegisterDto, @Ip() ipAddress: string) {
-    return this.authService.register(registerDto, ipAddress);
+  async register(@Body() registerDto: RegisterDto, @Ip() ipAddress: string, @Headers('user-agent') userAgent?: string) {
+    return this.authService.register(registerDto, ipAddress, userAgent);
   }
 
   @Post('login')

@@ -349,6 +349,7 @@ export class SearchService implements OnModuleDestroy {
    */
   async indexListing(action: 'create' | 'update' | 'delete', listing: any) {
     try {
+      await this.esService.whenReady();
       if (action === 'delete') {
         await this.esService.client.delete({
           index: this.indexName,
@@ -407,6 +408,7 @@ export class SearchService implements OnModuleDestroy {
 
   async boostListing(id: string, boostMultiplier: number, expiresAt: string) {
     try {
+      await this.esService.whenReady();
       await this.esService.client.update({
         index: this.indexName,
         id: id.toString(),

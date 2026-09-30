@@ -44,6 +44,7 @@ describe('SearchService', () => {
         {
           provide: ElasticsearchService,
           useValue: {
+            whenReady: jest.fn().mockResolvedValue(undefined),
             client: {
               search: jest.fn(),
               index: jest.fn(),
